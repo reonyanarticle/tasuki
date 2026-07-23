@@ -8,12 +8,8 @@ budgets:
   max_inner_loop: 5
   wip_limit_prs: 3
 
-models:
-  orchestrator: fable
-  decomposer: sonnet
-  worker: sonnet
-  verifier: sonnet
-  escalation_arbiter: fable
+# モデルは agent 定義に固定されている(worker/verifier = sonnet、gate-reviewer は haiku/sonnet/opus の3変種)。
+# reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 phases:
   - name: problem-definition      # 課題定義(親 issue)
@@ -96,6 +92,7 @@ gates:
     model: haiku
     escalate_to: sonnet
     preflight: template-fields
+    criteria_skills: []           # 判定基準に加える導入先プロジェクトの skill 名(任意)
   - id: gm-lint
     kind: mechanical
     provider: lint
@@ -119,6 +116,7 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    criteria_skills: []
   - id: g4
     kind: abstraction
     reviewer: gate-reviewer

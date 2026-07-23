@@ -33,7 +33,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *)
 - assignee と `loop:in-progress` から worker 割り当て
 - 関連 PR の状態(draft / ready / CI 結果)を `gh pr list` と check-runs から
 
-## 3. メトリクス(docs/OPERATIONS.md)
+## 3. メトリクス
 
 issue コメントの verdict JSON を集計して表示する。
 
@@ -48,4 +48,4 @@ issue コメントの verdict JSON を集計して表示する。
 
 ## 4. WIP 状態
 
-未レビュー PR 数と契約の `wip_limit_prs` を並べて表示し、超過している場合は「新規 worker は起動されない。ボトルネックは人間レビュー帯域」と明示する(観点 #24)。
+`loop:pr` ラベルの付いた open PR 数と契約の `wip_limit_prs` を並べて表示し、超過している場合は「新規 worker は起動されない。ボトルネックは人間レビュー帯域」と明示する(観点 #24)。

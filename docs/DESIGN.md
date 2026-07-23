@@ -12,7 +12,7 @@ core(言語非依存)
 ├── ゲート分類・verdict スキーマ・契約スキーマ
 ├── orchestrator ロジック(レイヤー実行・差し戻し管理・エスカレーション)
 ├── 質問ルーティング
-├── findings 判定器(SARIF / JUnit XML のみを読む)
+├── findings 判定器(SARIF / JUnit XML を読む)
 └── テンプレ生成器(契約 → issue テンプレ / CI workflow)
 
 language pack(v1: python)
@@ -24,8 +24,9 @@ repo override(プロジェクト固有)
 └── コマンド・閾値・待ち位置定義の上書きのみ
 ```
 
-core の findings 判定器が SARIF / JUnit XML のみを読む点が、言語非依存を成立させる要である。
-ツール固有の出力形式は pack の normalizer が吸収する。
+core の findings 判定器は SARIF / JUnit XML を正とし、ツール固有の出力形式は pack の normalizer が吸収する。
+どちらも出せない provider(整形チェックの exit-code、外部 Action の PR コメント)は、CI の job 成否のみで判定する。
+判定器が個々のツールを知らないこの構造が、言語非依存を成立させる要である。
 
 ## plugin ディレクトリ構成
 
@@ -63,6 +64,14 @@ Claude Code の subagent は既定で別の subagent を起動できないため
 命名規約として、plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切る(衝突判定の対象はファイル名ではなく `name:`)。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。
 
+## 導入先プロジェクトの subagent との連携
+
+orchestrator はメインセッションなので、導入先リポジトリの `.claude/agents/` にある subagent をそのまま呼べる。
+契約の `gates[].reviewer` にプロジェクト agent 名を指定すれば、ゲート判定はその agent に委譲される(入出力契約は verdict JSON のまま)。
+worker などの plugin agent からプロジェクト subagent を呼ぶことは、既定ではできない(subagent は子 subagent を起動できない)。
+導入先の `.claude/settings.json` の `env` に `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` を設定した場合のみ有効になり、`/tasuki:loop-init` が棚卸し時にこの設定を提案する。
+tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わない。ループの構造は orchestrator だけが管理する。
+
 ## 状態管理
 
 ループの状態はすべて GitHub 上に置き、plugin はローカル状態ファイルを持たない。
@@ -99,6 +108,7 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 依存の循環はエラーとして検出し、報告して停止する。
 
 deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
+レイヤー並列はフェーズ3で有効化する。フェーズ1と2の `/tasuki:loop` は、依存解決済みの子 issue を1件ずつ逐次処理する([ROADMAP.md](ROADMAP.md))。
 
 ## レイヤードレート構造(モデル選択)
 

@@ -55,13 +55,13 @@ model: (判定に使ったモデル。回帰テストと bandit 化の入力)
 ```
 
 gate-reviewer に fixture を判定させ、人間ラベルと4/5件以上一致するまで契約(シグナル)側を直す。
-fixture は回帰テストの初期データを兼ねる(docs/OPERATIONS.md)。
+fixture は回帰テストの初期データを兼ねる。
 
 ## repo override(.claude/loop/)
 
 プロジェクト固有の上書きは対象リポジトリの `.claude/loop/` に置き、plugin の profiles/ は編集しない。
 上書きできるのはコマンド、閾値、待ち位置定義のみ。
-名前解決は project > repo override > language pack > plugin デフォルトの順(docs/INTEGRATION.md)。
+名前解決は project > repo override > language pack > plugin デフォルトの順。
 
 ## 契約変更(axis-question)の手順
 

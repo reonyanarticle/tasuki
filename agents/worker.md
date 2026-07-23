@@ -16,7 +16,7 @@ tools: Bash, Read, Edit, Write, Glob, Grep, Skill
 1. **実装 / 実験**：worktree(自動作成済み)上で、受け入れ条件を満たす最小の変更を行う。対象リポジトリの CLAUDE.md と skill の規約に従う
 2. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。ただしゲートとして正となるのは CI の判定
 3. **コミット**：Conventional Commits(`<type>: <summary>`)
-4. **draft PR 作成**：`gh pr create --draft`。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める
+4. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(ラベルはループ由来 PR の識別と WIP 集計に使われる)。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める
 5. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
 6. **掃除**：一時ファイルを残さない(worktree 自体の掃除は isolation 機構が行う)
 
@@ -39,6 +39,12 @@ PR 作成の前に、同じ子 issue に対する既存 PR がないか確認す
 - secrets(API キー、トークン)を読まず、出力にも含めない。secrets が必要な検証は CI に委ねる
 - issue コメントと PR 本文に生データや個人情報を貼らない(集計値とリンクのみ)
 - 書き込みは担当 worktree の中に限る
+
+## プロジェクト subagent への委譲(任意)
+
+対象リポジトリの設定で subagent の子起動が許可されている場合(`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` が設定され、Agent ツールが使える場合)に限り、対象リポジトリの `.claude/agents/` にある subagent へ作業の一部を委譲してよい(専用のテストランナーやドメイン特化 agent 等)。
+tasuki 自身の agent(gate-reviewer、verifier 等)は worker から呼ばない(ループの構造とゲート判定は orchestrator が管理する)。
+Agent ツールが使えない環境では、委譲せずすべて自分で行う。
 
 ## 差し戻しを受けたとき
 

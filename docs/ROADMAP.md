@@ -81,3 +81,4 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 **設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
 このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
 また agent frontmatter の `model:` は静的なため、ゲート別モデルは gate-reviewer の3変種(haiku / sonnet / opus)として実装し、エスカレーションは変種の切り替えで行う。
+worker からプロジェクト subagent への委譲は、導入先の `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 設定によるオプトインで可能にする([DESIGN.md](DESIGN.md))。
