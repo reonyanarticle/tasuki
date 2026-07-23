@@ -38,13 +38,13 @@ description: tasuki の契約(プロファイル YAML の waiting_level / too_*_
 ## 初期 fixture の手書き(運用開始前に必須)
 
 `waiting_level` は自然言語の抽象であり、書いた人間と読む gate-reviewer の目盛りは最初必ずズレている。
-運用開始前に判定例を5件程度手書きし、契約と同じリポジトリの `.claude/loop/fixtures/` に置く。
+運用開始前に判定例を5件程度手書きし、契約と同じリポジトリの `.tasuki/fixtures/` に置く。
 
 構成の目安は PASS 2件、TOO_ABSTRACT 2件、TOO_CONCRETE 1件。
 各 fixture は次の形式で書く。
 
 ```yaml
-# .claude/loop/fixtures/g2-001.yaml
+# .tasuki/fixtures/g2-001.yaml
 gate: g2
 input: |
   (子 issue 本文をそのまま貼る)
@@ -57,9 +57,9 @@ model: (判定に使ったモデル。回帰テストと bandit 化の入力)
 gate-reviewer に fixture を判定させ、人間ラベルと4/5件以上一致するまで契約(シグナル)側を直す。
 fixture は回帰テストの初期データを兼ねる。
 
-## repo override(.claude/loop/)
+## repo override(.tasuki/)
 
-プロジェクト固有の上書きは対象リポジトリの `.claude/loop/` に置き、plugin の profiles/ は編集しない。
+プロジェクト固有の上書きは対象リポジトリの `.tasuki/` に置き、plugin の profiles/ は編集しない。
 上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
 名前解決は project > repo override > language pack > plugin デフォルトの順。
 

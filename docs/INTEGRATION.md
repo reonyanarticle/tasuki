@@ -28,7 +28,7 @@ worker からプロジェクト subagent へ直接委譲する場合は、導入
 
 ### 2. 優先順位
 
-名前解決は project > repo override(`.claude/loop/`)> language pack > plugin デフォルトの順とする。
+名前解決は project > repo override(`.tasuki/`)> language pack > plugin デフォルトの順とする。
 Claude Code のネイティブな衝突解決(プロジェクト定義がグローバルを上書き)に揃える。
 plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切り(ファイル名ではなく `name:` が衝突判定の対象)、プロジェクトの既存 agent と衝突させない。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。

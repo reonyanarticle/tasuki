@@ -2,7 +2,7 @@
 # providers.yaml が単一ソースであり、CI workflow(loop-gates.yml)はここからの射影(docs/OPERATIONS.md)。
 # worker はプッシュ前に同じコマンドをローカル実行できるが、ゲートとして正となるのは CI の判定。
 # デフォルトのツール選定は lint = Ruff / 整形 = Black / 型 = basedpyright / テスト = pytest。
-# 対象リポジトリは repo override(.claude/loop/)でコマンドを変更できる。
+# 対象リポジトリは repo override(.tasuki/)でコマンドを変更できる。
 # 前提: 対象リポジトリの dev 依存に ruff / black / basedpyright / pytest があること(/tasuki:loop-init が確認する)。
 detect: ["pyproject.toml"]
 

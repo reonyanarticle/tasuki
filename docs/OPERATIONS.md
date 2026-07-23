@@ -7,7 +7,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 
 1. 言語検出 → language pack 選択(`pyproject.toml` → python)。前提ツールの dev 依存と `uv.lock` を整備する(lockfile が無ければ生成。CI の `uv sync --frozen` の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
-3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.claude/loop/`)
+3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、GM + G3 通過で ready 化する
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - lint / typecheck job は SARIF 出力をアップロードする(basedpyright は normalizer で SARIF 化)

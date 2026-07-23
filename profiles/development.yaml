@@ -1,6 +1,6 @@
 # tasuki 契約プロファイル: development(開発ループ)
 # スキーマの解説は docs/CONTRACTS.md を参照。
-# プロジェクト固有の上書きは対象リポジトリの .claude/loop/ に置く(このファイルは編集しない)。
+# プロジェクト固有の上書きは対象リポジトリの .tasuki/ に置く(このファイルは編集しない)。
 profile: development
 
 budgets:
