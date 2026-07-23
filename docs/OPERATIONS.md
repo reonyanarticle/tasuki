@@ -25,9 +25,10 @@ providers.yaml が単一ソースであり、CI workflow はそこからの射�
 worker はプッシュ前に同じコマンドをローカル実行できる(高速フィードバック)が、**ゲートとして正となるのは CI の判定** である。
 orchestrator は `gh api` で check-runs を読み、GM の verdict に変換する。
 
-security-review Action の制約は3つある(2026-07 時点の README とドキュメントで確認)。
+security-review Action の制約は4つある(2026-07 時点の README とドキュメントで確認)。
 
 - `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点 #15)
+- この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。キーを用意しない運用では `/tasuki:loop-init` が security job を生成せず `enabled_gates` からも外す(明示的な縮退。条件スキップによる見かけの成功は作らない)
 - 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。GM の判定には action outputs の findings 件数を使う
 - Action の参照はコミット SHA に固定する(ブランチやタグの参照は差し替え可能で supply-chain リスクになる)
 - プロンプトインジェクション対策が施されておらず、信頼できる PR のみを対象とする。本ループの PR は自リポジトリの worker が生成するため v1 では許容するが、外部コントリビューションを受けるリポジトリへの転用時は要再検討
