@@ -1,0 +1,22 @@
+# tasuki language pack: python
+# providers.yaml が単一ソースであり、CI workflow(loop-gates.yml)はここからの射影(docs/OPERATIONS.md)。
+# worker はプッシュ前に同じコマンドをローカル実行できるが、ゲートとして正となるのは CI の判定。
+detect: ["pyproject.toml"]
+
+providers:
+  lint:
+    command: "uv run ruff check --output-format sarif --output-file ruff.sarif ."
+    output: sarif
+    output_file: ruff.sarif
+  typecheck:
+    command: "uv run mypy . --junit-xml mypy-junit.xml"
+    output: junit
+    output_file: mypy-junit.xml
+    normalizer: normalizers/mypy_junit_to_sarif.py   # JUnit XML → SARIF 変換
+  test:
+    command: "uv run pytest --junitxml=pytest-junit.xml"
+    output: junit
+    output_file: pytest-junit.xml
+  security:
+    action: "anthropics/claude-code-security-review"  # GitHub Action として実行(docs/OPERATIONS.md)
+    output: pr-comment

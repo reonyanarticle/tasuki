@@ -11,6 +11,13 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 ゲートは「この出力は、受け手が追加の解釈なしに受け取れる抽象度か」を、受け手が契約で宣言した待ち位置と照合し、`PASS` / `TOO_ABSTRACT` / `TOO_CONCRETE` の3値で判定する。
 検証(実験)と開発の両方で使える汎用構成とし、まず Python を対象に実装する。
 
+## 使い方
+
+1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する(契約プロファイル、issue / PR テンプレ、CI workflow、ラベルを生成)
+2. 運用開始前に判定例 fixture を5件程度手書きする(`tasuki:baton-contract` skill が手順)
+3. 親 issue の配下に子 issue を起票し、`/tasuki:loop <親 issue 番号>` で自走させる
+4. `/tasuki:loop-status` で triage inbox(人間の裁定待ち)と進行状況を確認する。**マージは常に人間が実行する**
+
 ## ドキュメント
 
 - [tasuki-spec.md](tasuki-spec.md)：仕様の原典(v0.9)
@@ -18,8 +25,8 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 
 ## ステータス
 
-仕様策定段階。
-実装は [docs/ROADMAP.md](docs/ROADMAP.md) の段階導入(フェーズ1: G2 + GM のみ)から始める。
+段階導入のフェーズ1(G2 着手ゲート+ GM 形式ゲートのみ有効)を実装中。
+段階の定義と受け入れ条件は [docs/ROADMAP.md](docs/ROADMAP.md) を参照。
 
 ## License
 
