@@ -18,4 +18,5 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 - plugin agent の `name:` には `tasuki-` 接頭辞を付ける(プロジェクト agent との衝突回避。衝突判定はファイル名ではなく `name:`)
 - コミットは Conventional Commits(`<type>: <summary>`)
 - 言語固有の情報は `packs/` の中にのみ置く(core は言語非依存を保つ)
+- このリポジトリの Python コードは [docs/PYTHON.md](docs/PYTHON.md) に従う(lint = Ruff、整形 = Black、型 = basedpyright、uv 管理)
 - ドキュメントの文体は一文一行とし、日本語の並列に中黒(・)を使わない

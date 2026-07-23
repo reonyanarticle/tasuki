@@ -100,6 +100,9 @@ gates:
     kind: mechanical
     provider: lint
     blocking_threshold: error
+  - id: gm-format
+    kind: mechanical
+    provider: format
   - id: gm-typecheck
     kind: mechanical
     provider: typecheck
@@ -121,7 +124,7 @@ gates:
     reviewer: gate-reviewer
     model: opus
 
-enabled_gates: [g2, gm-lint, gm-typecheck, gm-test, gm-security]
+enabled_gates: [g2, gm-lint, gm-format, gm-typecheck, gm-test, gm-security]
 
 model_selection: static
 

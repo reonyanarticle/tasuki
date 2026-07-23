@@ -16,7 +16,7 @@ core(言語非依存)
 └── テンプレ生成器(契約 → issue テンプレ / CI workflow)
 
 language pack(v1: python)
-├── providers.yaml(lint / typecheck / test / security のコマンド定義)
+├── providers.yaml(lint / format / typecheck / test / security のコマンド定義)
 ├── 言語検出条件(pyproject.toml の存在)
 └── normalizer(SARIF 非対応ツールの出力変換)
 

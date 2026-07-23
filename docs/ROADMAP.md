@@ -13,7 +13,7 @@
 | CI | plugin が生成する前提。既存 CI は前提にしない |
 | 質問ルーティング | task-question / axis-question の型付けと宛先分離 |
 | 橋渡し | 外部の subagent、skill、検査ツールを接続するインターフェース |
-| language pack | python(uv / ruff / mypy / pytest) |
+| language pack | python(uv / ruff / black / basedpyright / pytest) |
 
 ### 含まない
 

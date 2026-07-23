@@ -10,7 +10,8 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.claude/loop/`)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、GM + G3 通過で ready 化する
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
-   - lint / typecheck job は SARIF 出力をアップロードする
+   - lint / typecheck job は SARIF 出力をアップロードする(basedpyright は normalizer で SARIF 化)
+   - format job は `black --check` の exit code で判定する
    - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip、アサーション弱化の diff チェック、観点 #18)を行う
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュ、テスト並列化、paths-ignore をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点 #17)

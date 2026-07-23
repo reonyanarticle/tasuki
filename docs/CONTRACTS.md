@@ -72,6 +72,9 @@ gates:
     kind: mechanical
     provider: lint                # pack の providers.yaml を参照
     blocking_threshold: error     # SARIF level
+  - id: gm-format
+    kind: mechanical
+    provider: format              # exit-code 判定(black --check)
   - id: gm-typecheck
     kind: mechanical
     provider: typecheck
@@ -94,7 +97,7 @@ gates:
     model: opus
 
 # 段階導入(ROADMAP.md)。フェーズ1では g2 と gm-* のみ有効化する
-enabled_gates: [g2, gm-lint, gm-typecheck, gm-test, gm-security]
+enabled_gates: [g2, gm-lint, gm-format, gm-typecheck, gm-test, gm-security]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
@@ -113,6 +116,9 @@ experiment.yaml と development.yaml の差分は次の3点のみで、ゲート
 
 ### language pack の providers.yaml
 
+デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest。
+対象リポジトリは repo override でコマンドを変更できる。
+
 ```yaml
 # packs/python/providers.yaml
 detect: ["pyproject.toml"]
@@ -121,11 +127,14 @@ providers:
     command: "uv run ruff check --output-format sarif --output-file ruff.sarif ."
     output: sarif
     output_file: ruff.sarif
+  format:
+    command: "uv run black --check ."
+    output: exit-code
   typecheck:
-    command: "uv run mypy . --junit-xml mypy-junit.xml"
-    output: junit
-    output_file: mypy-junit.xml
-    normalizer: normalizers/mypy_junit_to_sarif.py   # JUnit XML → SARIF 変換
+    command: "uv run basedpyright --outputjson > basedpyright.json"
+    output: json
+    output_file: basedpyright.json
+    normalizer: normalizers/basedpyright_json_to_sarif.py   # pyright JSON → SARIF 変換
   test:
     command: "uv run pytest --junitxml=pytest-junit.xml"
     output: junit
