@@ -55,11 +55,14 @@ pack の前提ツール(ruff / black / basedpyright / pytest)が dev 依存に�
 
 ### 5. CI workflow の生成
 
-まず security provider の扱いをユーザーに確認する。
-security job は Anthropic API キー(`CLAUDE_API_KEY` secret)で Claude API を直接呼ぶため、**Claude Code の契約とは別の API 課金**が発生する(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。
+security job は **オプトイン(既定では生成しない)**。
+ユーザーに導入するか確認してから生成する。
+security job(`anthropics/claude-code-security-review` Action)は Anthropic API キー(`CLAUDE_API_KEY` secret)で Claude API を直接呼ぶため、**Claude Code の契約とは別の API 課金**が発生する(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。
 
-- キーを設定する → security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内する
-- キーを設定しない → **security job を生成せず、`.claude/loop/profile.yaml` の `enabled_gates` から `gm-security` を外し、`notify-success` の `needs` からも除く**。GM の検査範囲が lint / format / typecheck / test に縮むことを完了報告に明記する(job を残して条件スキップする形は「成功に見える素通り」になるため使わない)
+- **既定(オプトインしない)**：security job を生成しない。GM は lint / format / typecheck / test の4ゲート。`notify-success` の `needs` にも入れない
+- **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.claude/loop/profile.yaml` の `enabled_gates` に `gm-security` を追加する
+
+job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
 providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生成する。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
