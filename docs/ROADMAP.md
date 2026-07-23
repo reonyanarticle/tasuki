@@ -57,7 +57,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 追加の運用ギャップ2件(差し戻し再入の編集検知は timeline ではなく GraphQL の lastEditedAt を使う、変更済み worker worktree は自動掃除されないため orchestrator が終了時に削除する)も E2E で発見して修正した。
 GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入、worker による前提不在の検出(実在しない関数を前提とした issue への task-question)も実地で動作確認済み。
 
-### フェーズ2: G3(成果ゲート)を追加(着手中)
+### フェーズ2: G3(成果ゲート)を追加
 
 昇る側の対応表検証を回す。
 
@@ -68,6 +68,18 @@ GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入
 - 対応表または結論を欠くレポートが TOO_ABSTRACT、生ログ貼り付けが TOO_CONCRETE で差し戻される
 - 書き方の不足の差し戻しでは、worker が実装に触れずレポートのみを新規セッションで再出力する
 - G3 PASS 後にのみ ready 化される(GM-ci と併せて)
+
+### フェーズ2の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリ)
+
+| 受け入れ条件 | 結果 |
+|---|---|
+| verifier met 後に G3(sonnet)がレポートを照合 | 達成(#8 で実レポートを PASS / high 判定。対応表の N対1 と孤児なしを reasons で確認) |
+| G3 fixture 3件で3件一致 | 達成(較正の往復2回を経て4 fixture 全一致。不一致2回はいずれも fixture 側の欠陥で、reviewer は孤児検出と「両シグナル該当時は抽象側優先」規則を正しく適用していた) |
+| 対応表・結論の欠如が TOO_ABSTRACT、生ログ貼り付けが TOO_CONCRETE | 達成(fixture 検証) |
+| 書き方の不足はレポートのみ再出力 | 手順の規定と worker への指示まで。実ループでは worker のレポートが初回で G3 を通過したため、再出力経路は**未発火(未検証)** |
+| G3 PASS 後にのみ ready 化 | 達成(gate:g3-passed → GM-ci → ready の順序を確認) |
+
+副次の実地確認:WIP 制限(観点 #24)が ready PR 3件の滞留で発火し、worker 起動を正しく保留した。親 issue の予算欄(子3件)と実子4件の不一致も orchestrator が人間に指摘した。
 
 ### フェーズ3: G0 / G1 / G4 とレイヤー並列実行
 
