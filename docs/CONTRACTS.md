@@ -40,13 +40,13 @@ phases:
     receives:
       from: implementation
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
-      too_abstract_signals: ["対応表なし", "結論なし"]
-      too_concrete_signals: ["生ログ・生データの本文貼り付け"]
+      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
+      too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
 
 templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
-  report_required_fields: [要件⇔結果の対応表, 結論, 再現手順, 生データへのリンク]
+  report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク]
   pr_required_fields: [概要, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
 
 gates:
@@ -88,6 +88,7 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    preflight: report-fields      # 門前払い(report_required_fields の機械チェック)
     criteria_skills: []
   - id: g4
     kind: abstraction
@@ -112,6 +113,9 @@ experiment.yaml と development.yaml の差分は次の3点のみで、ゲート
 - phases の名称(課題定義→実験計画→実行→分析→報告)
 - `exit_criteria_required` の中身(評価指標、データセット、seed)
 - G2 必須欄(実験条件、データ版数)
+
+experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
+analysis 単独の受け渡し照合はフェーズ3のロール分割とあわせて再検討する。
 
 ### language pack の providers.yaml
 

@@ -33,7 +33,7 @@ phases:
       to: analysis
       exit_criteria_required: true
       exit_criteria_fields: ["評価指標", "データセット(dev/test)", "seed"]
-  - name: analysis                # 分析
+  - name: analysis                # 分析(v1 では独立ロールを持たず、worker のレポート作成に畳む。独立化はフェーズ3で再検討)
     receives:
       from: execution
       waiting_level: "全実験条件の実行結果と再現情報(seed・環境・データ版数)が揃い、解釈は未付与"
@@ -45,8 +45,8 @@ phases:
     receives:
       from: analysis
       waiting_level: "要件⇔結果の対応表と結論。数字の由来セット(dev/test)を明記。生データは添付リンクのみ"
-      too_abstract_signals: ["対応表なし", "結論なし", "数字の由来セット不明"]
-      too_concrete_signals: ["生ログ・生データの本文貼り付け"]
+      too_abstract_signals: ["対応表なし", "結論なし", "数字の由来セット不明", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
+      too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
 
 templates:
   parent_issue_required_fields:
@@ -67,6 +67,7 @@ templates:
   report_required_fields:
     - 要件⇔結果の対応表
     - 結論
+    - 期待値の根拠
     - 数字の由来セット(dev/test)
     - 再現手順
     - 生データへのリンク
@@ -116,6 +117,7 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    preflight: report-fields      # 門前払い(report_required_fields の機械チェック)
     criteria_skills: []
   - id: g4
     kind: abstraction

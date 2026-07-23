@@ -36,8 +36,8 @@ phases:
     receives:
       from: implementation
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
-      too_abstract_signals: ["対応表なし", "結論なし"]
-      too_concrete_signals: ["生ログ・生データの本文貼り付け"]
+      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
+      too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
 
 templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
   parent_issue_required_fields:
@@ -56,6 +56,7 @@ templates:                        # issue テンプレの必須欄(G2 門前払�
   report_required_fields:
     - 要件⇔結果の対応表
     - 結論
+    - 期待値の根拠
     - 再現手順
     - 生データへのリンク
   pr_required_fields:
@@ -104,6 +105,7 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    preflight: report-fields      # 門前払い(report_required_fields の機械チェック)
     criteria_skills: []
   - id: g4
     kind: abstraction

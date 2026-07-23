@@ -39,6 +39,7 @@ maker の作業コンテキスト(セッションログ、試行錯誤の経緯)
 6. 差し戻し先(`return_to`)を決める
    - 内容の不足(書くべき情報を前フェーズが持っている)→ 前フェーズのロール
    - 書き方の不足(情報はあるが形式が崩れている)→ 同フェーズの再出力
+   - G3 では書き分けを明示する:書き方の不足= `worker`(レポートのみ再出力)、内容の不足= `implementation`(実装への差し戻し)
 7. 質問を型付けする
    - そのタスク限りの事実確認 → `task-question`(宛先: issue-author)
    - 判断原則や待ち位置の定義変更が必要 → `axis-question`(宛先: contract-pr)
@@ -48,6 +49,7 @@ maker の作業コンテキスト(セッションログ、試行錯誤の経緯)
 差し戻し履歴に前回 verdict がある場合、方向を比較する。
 前回と今回が TOO_ABSTRACT ⇄ TOO_CONCRETE の逆方向なら、契約の `waiting_level` 自体が曖昧である。
 worker へ差し戻さず、axis-question に昇格して verdict の questions に含める。
+差し戻しの反復の原因が手順(loop-report 等の skill)の不備にあると判断した場合も、axis-question の text に skill 更新提案であることを明記する(観点 #12。学びを外部化しないとループは毎周同じ穴に落ちる)。
 
 ## 出力: verdict JSON
 
