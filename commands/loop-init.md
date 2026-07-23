@@ -13,7 +13,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 ## 前提チェック(失敗したら中断して報告)
 
 1. git リポジトリであり、GitHub リモート(origin)があること
-2. `gh auth status` が通ること。token に `workflow` scope があること(`.github/workflows/` への push に必須。なければ `gh auth refresh -s workflow` を案内)
+2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する
 
 ## 手順
@@ -39,13 +39,13 @@ pack の前提ツール(ruff / black / basedpyright / pytest)が dev 依存に�
 
 ### 3. 契約プロファイルの配置
 
-引数(`$ARGUMENTS`)または対話で development / experiment を選び、plugin の `profiles/<選択>.yaml` を `.claude/loop/profile.yaml` にコピーする。
-以後このリポジトリでの契約の正は `.claude/loop/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
-あわせて pack の normalizer を `.claude/loop/normalizers/` にコピーする(CI から実行するため)。
+引数(`$ARGUMENTS`)または対話で development / experiment を選び、plugin の `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
+以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
+あわせて pack の normalizer を `.tasuki/normalizers/` にコピーする(CI から実行するため)。
 
 ### 4. issue / PR テンプレートの生成
 
-`.claude/loop/profile.yaml` の `templates:` セクションから生成する(プロファイルの必須欄と一字一句対応させる)。
+`.tasuki/profile.yaml` の `templates:` セクションから生成する(プロファイルの必須欄と一字一句対応させる)。
 
 - `.github/ISSUE_TEMPLATE/loop-parent.md`：`parent_issue_required_fields` の各項目を `## 見出し` にする
 - `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする
@@ -60,7 +60,7 @@ security job は **オプトイン(既定では生成しない)**。
 security job(`anthropics/claude-code-security-review` Action)は Anthropic API キー(`CLAUDE_API_KEY` secret)で Claude API を直接呼ぶため、**Claude Code の契約とは別の API 課金**が発生する(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。
 
 - **既定(オプトインしない)**：security job を生成しない。GM は lint / format / typecheck / test の4ゲート。`notify-success` の `needs` にも入れない
-- **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.claude/loop/profile.yaml` の `enabled_gates` に `gm-security` を追加する
+- **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.tasuki/profile.yaml` の `enabled_gates` に `gm-security` を追加する
 
 job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
@@ -89,6 +89,7 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.lint.command>
       - if: always()
+        continue-on-error: true    # SARIF 可視化は best-effort(private リポジトリは GHAS なしだと失敗する)。ゲート判定は上の lint コマンドの exit code
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: <providers.lint.output_file>, category: lint }
   format:
@@ -114,8 +115,9 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.typecheck.command>
         continue-on-error: true    # 失敗の判定は下の gate ステップが行う
-      - run: python .claude/loop/normalizers/basedpyright_json_to_sarif.py <providers.typecheck.output_file> basedpyright.sarif
+      - run: python .tasuki/normalizers/basedpyright_json_to_sarif.py <providers.typecheck.output_file> basedpyright.sarif
       - if: always()
+        continue-on-error: true    # 同上。ゲート判定は下の typecheck gate ステップ
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: basedpyright.sarif, category: typecheck }
       - name: typecheck gate
@@ -172,11 +174,13 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "loop-gates: all green ✅"
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "loop-gates: all green"
 ```
 
 生成時の注意:
 
+- **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
@@ -197,8 +201,8 @@ jobs:
 
 ### 7. バジェット確認と fixture の案内
 
-`.claude/loop/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
-最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.claude/loop/fixtures/`)。
+`.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
+最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
 
 ## 完了報告
 

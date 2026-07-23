@@ -41,6 +41,22 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 - G2 通過の子 issue を worker が worktree 上で実装し、draft PR 作成、GM(CI)実行まで到達する
 - 差し戻し2連続で sonnet へのエスカレーションが発火する
 
+### フェーズ1の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリで headless 実行)
+
+| 受け入れ条件 | 結果 |
+|---|---|
+| loop-init が素の Python リポジトリに契約雛形、テンプレ、`loop-gates.yml`、ラベルを生成 | 達成(uv.lock 生成、security オプトアウト構成を含む) |
+| 必須欄が空の子 issue が門前払いで差し戻される(LLM なし) | 達成(親 issue の門前払いも動作) |
+| 手書き fixture 5件で gate-reviewer(haiku)が4件以上一致 | 達成(5/5、confidence すべて high) |
+| 差し戻し verdict が issue コメントに JSON で記録 | 達成 |
+| G2 通過の子 issue を worker が実装し draft PR 作成、GM 実行到達 | 達成(GM 緑 → verifier met → PR ready 化まで完走) |
+| 差し戻し2連続で sonnet エスカレーション発火 | 達成(verdict 履歴 haiku → haiku → sonnet。昇格後の判定で PASS し、worker が issue 予算内で完走) |
+
+E2E で発見し修正した不具合:workflow scope 前提の過剰要求(SSH では不要)、`.claude/loop/` の機密ファイルガード衝突(`.tasuki/` へ移設)、CI テンプレートの YAML 不正(notify の `: ` )、SARIF アップロードの GHAS 依存(best-effort 化)。
+check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉したことも確認した。
+追加の運用ギャップ2件(差し戻し再入の編集検知は timeline ではなく GraphQL の lastEditedAt を使う、変更済み worker worktree は自動掃除されないため orchestrator が終了時に削除する)も E2E で発見して修正した。
+GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入、worker による前提不在の検出(実在しない関数を前提とした issue への task-question)も実地で動作確認済み。
+
 ### フェーズ2: G3(成果ゲート)を追加
 
 昇る側の対応表検証を回す。
@@ -76,7 +92,7 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools: Bash(gh *)` で絞る
 5. **差異あり**：組み込みコマンドは `claude -p` から呼べない。対応として GM の security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
 6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0(2026-06)からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
-7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる
+7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記(2026-07-23)**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
 
 **設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
 このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。

@@ -7,7 +7,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 
 1. 言語検出 → language pack 選択(`pyproject.toml` → python)。前提ツールの dev 依存と `uv.lock` を整備する(lockfile が無ければ生成。CI の `uv sync --frozen` の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
-3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.claude/loop/`)
+3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、GM + G3 通過で ready 化する
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - lint / typecheck job は SARIF 出力をアップロードする(basedpyright は normalizer で SARIF 化)
@@ -19,11 +19,14 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
 7. `max_iterations` 等バジェットのデフォルト設定
 
-`.github/workflows/` への push には token の `workflow` scope が必要なため、前提チェックで確認する(なければ `gh auth refresh -s workflow` を案内)。
+HTTPS プロトコルで push する場合、`.github/workflows/` への push には token の `workflow` scope が必要になる。
+前提チェックで Git operations protocol を確認し、https のときのみ scope を要求する(SSH 鍵での push には不要。E2E で実地確認済み)。
 
-providers.yaml が単一ソースであり、CI workflow はそこからの射影である。
-worker はプッシュ前に同じコマンドをローカル実行できる(高速フィードバック)が、**ゲートとして正となるのは CI の判定** である。
-orchestrator は `gh api` で check-runs を読み、GM の verdict に変換する。
+providers.yaml が単一ソースであり、CI workflow、orchestrator のローカル実行、worker の self-verify はすべてそこからの射影である。
+GM は2段で実行する(観点 #17)。
+反復中は orchestrator が一時 worktree で providers のコマンドを直接実行して即時判定し(GM-local。worker の自己申告は使わない)、CI の往復を待たない。
+**マージ判断の正は CI** であり、verifier の met 後に最終コミットの check-runs 全成功を確認してから PR を ready 化する(GM-ci)。
+工程内検査を手元に置き、出荷検査を CI に置く分担である。
 
 security-review Action の制約は4つある(2026-07 時点の README とドキュメントで確認)。
 

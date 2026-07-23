@@ -18,4 +18,5 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 - コミットは Conventional Commits(`<type>: <summary>`)
 - 言語固有の情報は `packs/` の中にのみ置く(core は言語非依存を保つ)
 - このリポジトリの Python コードは [docs/PYTHON.md](docs/PYTHON.md) に従う(lint = Ruff、整形 = Black、型 = basedpyright、uv 管理)
+- 変更したら `uv run pytest` を実行する(plugin の整合性テスト。CI = validate.yml が PR で強制)
 - ドキュメントの文体は一文一行とし、日本語の並列に中黒(・)を使わない
