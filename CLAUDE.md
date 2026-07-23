@@ -5,8 +5,8 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 
 ## 正とする文書
 
-- 設計文書: [docs/](docs/README.md)(実装の正はこちら)
-- 仕様の原典: [tasuki-spec.md](tasuki-spec.md)(v0.9)。docs と食い違ったら docs を直してから実装する
+- 設計文書：[docs/](docs/README.md)(実装の正はこちら)
+- 仕様の原典：[tasuki-spec.md](tasuki-spec.md)(v0.9)。docs と食い違ったら docs を直してから実装する
 
 ## 実装前の必須確認
 
@@ -18,3 +18,4 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 - plugin agent の `name:` には `tasuki-` 接頭辞を付ける(プロジェクト agent との衝突回避。衝突判定はファイル名ではなく `name:`)
 - コミットは Conventional Commits(`<type>: <summary>`)
 - 言語固有の情報は `packs/` の中にのみ置く(core は言語非依存を保つ)
+- ドキュメントの文体は一文一行とし、日本語の並列に中黒(・)を使わない
