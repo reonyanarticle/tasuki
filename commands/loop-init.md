@@ -22,6 +22,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 `pyproject.toml` があれば python pack(`packs/python/providers.yaml`)を選択する。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
+pack の前提ツール(ruff / black / basedpyright / pytest)が dev 依存にあるか確認し、なければ `uv add --dev` での追加を提案する。
 
 ### 2. プロジェクト資産の棚卸し
 
@@ -78,6 +79,14 @@ jobs:
       - if: always()
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: <providers.lint.output_file>, category: lint }
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - run: <providers.format.command>
   typecheck:
     runs-on: ubuntu-latest
     steps:
@@ -87,10 +96,12 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.typecheck.command>
         continue-on-error: true
-      - run: python .claude/loop/normalizers/mypy_junit_to_sarif.py <providers.typecheck.output_file> mypy.sarif
+      - run: python .claude/loop/normalizers/basedpyright_json_to_sarif.py <providers.typecheck.output_file> basedpyright.sarif
       - if: always()
         uses: github/codeql-action/upload-sarif@v3
-        with: { sarif_file: mypy.sarif, category: typecheck }
+        with: { sarif_file: basedpyright.sarif, category: typecheck }
+      - name: typecheck gate           # normalizer は常に exit 0 のため、ここで error 件数を判定して job を落とす
+        run: test "$(jq -r '.summary.errorCount // 0' <providers.typecheck.output_file>)" -eq 0
   test:
     runs-on: ubuntu-latest
     steps:
@@ -124,7 +135,7 @@ jobs:
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           comment-pr: true
   notify-success:                    # 沈黙と故障を区別するため成功も通知する(観点 #17)
-    needs: [lint, typecheck, test, security]
+    needs: [lint, format, typecheck, test, security]
     runs-on: ubuntu-latest
     steps:
       - env:

@@ -17,6 +17,7 @@
 | [OPERATIONS.md](OPERATIONS.md) | 運用。`/tasuki:loop-init` と CI 生成、コスト管理とエスカレーション、メトリクス、回帰テスト |
 | [INTEGRATION.md](INTEGRATION.md) | 橋渡し。外部の subagent、skill、検査ツールの接続点と、プロジェクト直下アセットとの統合ルール |
 | [ROADMAP.md](ROADMAP.md) | 導入。v1 スコープ、段階導入(フェーズ1〜3)、未決事項、実装時検証事項 |
+| [PYTHON.md](PYTHON.md) | この plugin リポジトリ自身の Python コーディング規約(lint = Ruff、整形 = Black、型 = basedpyright) |
 
 ## 概念の置き場所
 
