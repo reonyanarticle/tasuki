@@ -1,0 +1,41 @@
+[project]
+name = "tasuki"
+version = "0.1.0"
+description = "tasuki plugin の整合性テストとツーリング(plugin 本体は markdown / yaml)"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pyyaml",
+    "ruff",
+    "black",
+    "basedpyright",
+]
+
+# plugin リポジトリはパッケージとして配布しない
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "PTH", "C4", "PIE"]
+# 日本語のコメント/docstring中の全角文字を誤検知するため無効化(docs/PYTHON.md)
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.basedpyright]
+include = ["packs", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,51 @@
+"""ドキュメントの参照整合性。"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+from conftest import ROOT
+
+MD_FILES = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md"))]
+
+_LINK = re.compile(r"\]\(([^)#]+?)(?:#[^)]*)?\)")
+
+
+@pytest.mark.parametrize("path", MD_FILES, ids=lambda p: p.name)
+def test_relative_links_resolve(path: Path) -> None:
+    """markdown の相対リンクが実在ファイルを指すこと。"""
+    broken = []
+    for target in _LINK.findall(path.read_text()):
+        if target.startswith(("http://", "https://")):
+            continue
+        if not (path.parent / target).exists():
+            broken.append(target)
+    assert not broken, broken
+
+
+def test_no_stale_references() -> None:
+    """過去に除去した参照(旧 spec、旧 override 置き場)が復活していないこと。
+
+    ROADMAP.md は E2E の発見記録として旧パス名を歴史的に言及するため除外する。
+    """
+    for path in MD_FILES:
+        text = path.read_text()
+        assert "tasuki-spec" not in text, path.name
+        if path.name != "ROADMAP.md":
+            assert ".claude/loop" not in text, path.name
+
+
+def test_gates_catalog_has_25_perspectives() -> None:
+    """レビュー観点カタログは #1〜#25 が揃っていること。"""
+    text = (ROOT / "docs/GATES.md").read_text()
+    rows = re.findall(r"^\| (\d+) \|", text, re.M)
+    assert [int(n) for n in rows] == list(range(1, 26))
+
+
+def test_gm_is_hybrid() -> None:
+    """GM のハイブリッド化(GM-local / GM-ci)が docs と手順の両方に現れること。"""
+    assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()
+    loop_text = (ROOT / "commands/loop.md").read_text()
+    assert "GM-local" in loop_text and "GM-ci" in loop_text
