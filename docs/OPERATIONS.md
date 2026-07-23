@@ -25,7 +25,7 @@ HTTPS プロトコルで push する場合、`.github/workflows/` への push �
 providers.yaml が単一ソースであり、CI workflow、orchestrator のローカル実行、worker の self-verify はすべてそこからの射影である。
 GM は2段で実行する(観点 #17)。
 反復中は orchestrator が一時 worktree で providers のコマンドを直接実行して即時判定し(GM-local。worker の自己申告は使わない)、CI の往復を待たない。
-**マージ判断の正は CI** であり、verifier の met 後に最終コミットの check-runs 全成功を確認してから PR を ready 化する(GM-ci)。
+**マージ判断の正は CI** であり、verifier の met と G3 の PASS の後に、最終コミットの check-runs 全成功を確認してから PR を ready 化する(GM-ci)。
 工程内検査を手元に置き、出荷検査を CI に置く分担である。
 
 security-review Action の制約は4つある(2026-07 時点の README とドキュメントで確認)。

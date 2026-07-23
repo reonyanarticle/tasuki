@@ -54,6 +54,21 @@ labeled_by: (人間の名前)
 model: (判定に使ったモデル。回帰テストと bandit 化の入力)
 ```
 
+G3(レポート判定)の fixture は、input にレポート本文を置き、対応表の照合先となる子 issue の要件を `requirements:` に併記する(レポート単体では孤児要件の判定ができないため)。
+
+```yaml
+# .tasuki/fixtures/g3-001.yaml
+gate: g3
+requirements: |
+  (子 issue の受け入れ条件・成功基準を AC-1 / SC-1 の採番つきで貼る)
+input: |
+  (レポート本文をそのまま貼る)
+expected_verdict: TOO_ABSTRACT
+expected_reasons: ["対応表なし"]
+labeled_by: (人間の名前)
+model: sonnet
+```
+
 gate-reviewer に fixture を判定させ、人間ラベルと4/5件以上一致するまで契約(シグナル)側を直す。
 fixture は回帰テストの初期データを兼ねる。
 

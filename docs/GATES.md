@@ -28,6 +28,9 @@ abstraction ゲートは二段構成とする。
 | G4 | 統合ゲート | 全子完了→親 | abstraction | 子成果の親要件へのロールアップ、孤児要件なし |
 | — | 最終ゲート | マージ | 人間 | 要件適合の最終判断。**マージは常に人間が実行** |
 
+G3 の判定は、レポートが契約の待ち位置(対応表と結論の形式)にあることの照合であり、人間のレポート読解(観点 #13)を置換しない。マージ前に人間がレポートを読む前提は G3 有効後も変わらない。
+また G3 reviewer(sonnet)は worker と同一モデルであり、判定の独立性はコンテキスト非共有と low-confidence PASS の opus 再判定で担保する(モデル分離が必要なら契約の `reviewer:` 差し替えで行う)。
+
 ### G1 の「良いタスクの4条件」
 
 1. 単独でマージして壊れない
@@ -53,7 +56,7 @@ abstraction ゲートは二段構成とする。
   "confidence": "high",
   "model": "haiku",
   "reasons": ["受け入れ条件が『使いやすく』のまま", "打ち切り条件が未定義"],
-  "return_to": "decomposer | worker",
+  "return_to": "decomposer | worker | implementation",
   "questions": [
     {"type": "task-question", "to": "issue-author", "text": "..."},
     {"type": "axis-question", "to": "contract-pr", "text": "..."}
@@ -62,7 +65,8 @@ abstraction ゲートは二段構成とする。
 ```
 
 差し戻し先は2種類を区別する。
-内容の不足は前フェーズへ、書き方の不足は同フェーズの再出力へ戻す(レポートの書き方の不足も worker の再出力として扱う)。
+内容の不足は前フェーズへ、書き方の不足は同フェーズの再出力へ戻す。
+G3 では `return_to` で書き分ける。書き方の不足は `worker`(レポートのみ再出力)、内容の不足は `implementation`(実装への差し戻し)とする。
 前フェーズのロールが無効な段階(G1 無効時の decomposer 等)では、差し戻しは該当 issue の起票者(人間)宛に読み替える。
 
 **差し戻し再実行は必ず新規セッションで行う。**

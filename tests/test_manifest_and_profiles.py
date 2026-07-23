@@ -32,6 +32,24 @@ class TestProfiles:
         gate_ids = {gate["id"] for gate in profile["gates"]}
         assert set(profile["enabled_gates"]) <= gate_ids
 
+    def test_phase2_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+        """フェーズ2: g2 と g3 が有効であること(ROADMAP の段階導入)。"""
+        profile = request.getfixturevalue(profile_name)
+        assert {"g2", "g3"} <= set(profile["enabled_gates"])
+
+    def test_g3_wiring(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+        """G3 は門前払い(report-fields)を持ち、report signals が判定基準を契約由来にする。"""
+        profile = request.getfixturevalue(profile_name)
+        g3 = next(g for g in profile["gates"] if g["id"] == "g3")
+        assert g3["preflight"] == "report-fields"
+        report = next(p for p in profile["phases"] if p["name"] == "report")
+        signals = report["receives"]["too_abstract_signals"]
+        assert "再現手順の欠落" in signals
+        assert any("期待値の根拠" in s for s in signals)
+        concrete = report["receives"]["too_concrete_signals"]
+        assert any("secrets" in s for s in concrete)
+        assert "期待値の根拠" in profile["templates"]["report_required_fields"]
+
     def test_security_is_opt_in(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """gm-security は定義されつつ、既定の enabled_gates には入らないこと。"""
         profile = request.getfixturevalue(profile_name)

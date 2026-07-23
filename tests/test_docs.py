@@ -44,6 +44,17 @@ def test_gates_catalog_has_25_perspectives() -> None:
     assert [int(n) for n in rows] == list(range(1, 26))
 
 
+def test_g3_flow_wiring() -> None:
+    """G3 の配線: return_to 拡張、g3-returned の付与、ready 化順序の文書整合。"""
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "decomposer | worker | implementation" in gates
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`gate:g3-returned` を付け" in loop
+    assert "1f を再判定" in loop
+    ops = (ROOT / "docs/OPERATIONS.md").read_text()
+    assert "G3 の PASS の後" in ops
+
+
 def test_gm_is_hybrid() -> None:
     """GM のハイブリッド化(GM-local / GM-ci)が docs と手順の両方に現れること。"""
     assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()

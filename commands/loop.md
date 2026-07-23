@@ -12,7 +12,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。
 
-現在は段階導入のフェーズ1であり、有効なゲートは契約の `enabled_gates`(G2 + GM)のみ。
+有効なゲートは契約の `enabled_gates` が決める(フェーズ2既定: G2 + GM + G3)。
 G1 が無効の間、子 issue は人間が起票済みである前提とする。
 
 ## 0. 前提と状態復元(冪等性、観点 #19)
@@ -28,8 +28,10 @@ G1 が無効の間、子 issue は人間が起票済みである前提とする�
 
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
-差し戻し中(`gate:*-returned`)の子 issue は、**最後の verdict コメントより後に issue 本文が編集されている場合のみ** 1a から再入する(未編集ならスキップし、起票者待ちを維持する)。
-編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない。
+差し戻し中の子 issue の再入は、ラベルで区別する。
+
+- `gate:g2-returned`(修正の主体は起票者):最後の verdict コメントより後に issue 本文が編集されている場合のみ、1a から再入する(未編集ならスキップし、起票者待ちを維持する)。編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない
+- `gate:g3-returned`(修正の主体はループ内の worker):起票者待ちにしない。最終 verdict より後に新しい loop-report コメントがあれば 1f の再判定から再入する。無ければ、差し戻し verdict の `return_to` に従って再出力または実装差し戻しの worker を orchestrator 自身が起動する(1a と G2 はやり直さない。実装済みの issue に新規実装を走らせない)
 
 ### 1a. 門前払い(機械チェック、LLM なし)
 
@@ -101,10 +103,46 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 
 `drift_check: aligned` の場合、`status` で分岐する。
 
-- `met` → **GM-ci(出荷ゲート)を確認する**。最終コミットの check-runs を `gh api` で読み、全 job 成功であること(マージ判断の正は CI。**check-run が1件も無い場合は PASS とみなさず**、workflow 未生成・実行スキップ・権限不備を確認して解決できなければ `loop:triage`。fail-closed)。成功していれば PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す(フェーズ2で G3 が入るまでレポート照合は人間に委ねる)
+- `met` → 契約の `enabled_gates` に `g3` が含まれる場合は 1f(成果ゲート)へ。含まれない場合は 1g(ready 化)へ
 - `continue` → 未達項目を新規 worker セッションへ。反復は 1a で決めた有効上限(min(`max_inner_loop`, issue 予算値))まで
 - `abort` → 打ち切り。理由をコメントし `loop:triage` を付け、`loop:in-progress` を外す
 - `waiting` → 長時間ジョブの進行中。停滞と区別し、ポーリング間隔を報告して待つ(観点 #14)
+
+### 1f. G3(成果ゲート、レポート照合)
+
+**判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
+
+まず **G3 の門前払い**(機械チェック、LLM なし)を行う。
+契約の `report_required_fields` の各見出しについて、レポートコメントの該当セクションが空でないかを確認する。
+不足があれば LLM を呼ばずに `gate:g3-returned` を付け、不足欄を列挙したコメントを残して、レポート再出力の worker を起動する。
+
+門前払いを通過したら reviewer へ委譲する。
+解決規則は 1b と同じ(契約の `gates.g3.reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer-sonnet` へ。`escalate_to: opus` は `tasuki-gate-reviewer-opus` へ)。
+
+渡すのは次の3つだけ。
+
+- 判定対象のレポートコメント
+- 契約の report フェーズ `receives` 定義+差し戻し履歴(過去 verdict があれば)
+- 子 issue 本文(受け入れ条件・成功基準。対応表の N対1 照合用)
+
+返った verdict JSON を issue コメントに記録する(冪等)。
+エスカレーション規則は G2 と同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
+発振検知(観点 #25)も同様に適用する。
+
+差し戻しは verdict の `return_to` で2種類を区別し、どちらも `gate:g3-returned` を付ける。
+
+- **`return_to: worker`(書き方の不足。対応表なし、結論なし、生ログ貼り付け等)** → 新規 worker セッションに **レポートの再出力のみ** を依頼し(実装には触れさせない)、再出力後に **1f を再判定する**。反復は `max_iterations_per_gate`(G3 のゲートカウンタ)に計上する
+- **`return_to: implementation`(内容の不足。結果が要件に対応しない、孤児要件がある)** → 実装の未達として新規 worker セッションへ(1c 相当)。反復は内側ループの有効上限に計上し(G3 カウンタには計上しない)、実装後は 1d → 1e → 1f を通り直す
+
+PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、1g へ。
+
+### 1g. ready 化(GM-ci、出荷ゲート)
+
+最終コミットの check-runs を `gh api` で読み、全 job の成否を確認する(マージ判断の正は CI)。
+
+- **check-run が1件も無い** → PASS とみなさない(workflow 未生成・実行スキップ・権限不備を確認し、解決できなければ `loop:triage`。fail-closed)
+- **失敗した job がある** → GM-local と CI の食い違い(環境差、secrets 依存のテスト等)として findings を抽出し、新規 worker セッションへ差し戻す(内側ループ上限に計上)。**実装コミットが変わったら `gate:g3-passed` を外し**、1d から通り直す(古いレポートの PASS で新しい実装を ready 化しない)
+- **全 job 成功** → PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す。完了コメントには「マージ前に人間がレポートを読むこと(観点 #13)」を明記する(G3 PASS はレポートの形式照合であり、内容の承認ではない)
 
 ## 2. 停止装置(ブレーキとシートベルト)
 

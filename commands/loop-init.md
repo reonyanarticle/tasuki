@@ -48,7 +48,7 @@ pack の前提ツール(ruff / black / basedpyright / pytest)が dev 依存に�
 `.tasuki/profile.yaml` の `templates:` セクションから生成する(プロファイルの必須欄と一字一句対応させる)。
 
 - `.github/ISSUE_TEMPLATE/loop-parent.md`：`parent_issue_required_fields` の各項目を `## 見出し` にする
-- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする
+- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の見出し下には AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため)
 - `.github/pull_request_template.md`：`pr_required_fields` の各項目を `## 見出し` にする
 
 見出し直下が空のままの issue は門前払いで差し戻される(親 issue はループ起動時、子 issue は G2 前。この空チェックが機能するよう、見出し文字列を profile と一致させること)。
