@@ -5,8 +5,7 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 
 ## 正とする文書
 
-- 設計文書：[docs/](docs/README.md)(実装の正はこちら)
-- 仕様の原典：[tasuki-spec.md](tasuki-spec.md)(v0.9)。docs と食い違ったら docs を直してから実装する
+- 実装の正は [docs/](docs/README.md)。docs 内で食い違いを見つけたら、docs を直してから実装する
 
 ## 実装前の必須確認
 
