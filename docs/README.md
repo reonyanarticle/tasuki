@@ -1,11 +1,11 @@
 # tasuki ドキュメント
 
-[tasuki-spec.md](../tasuki-spec.md)(v0.9)を分冊した設計文書。
+[tasuki-spec.md](../tasuki-spec.md)(v0.9)を分冊した設計文書である。
 仕様と食い違いを見つけたら、docs を直してから実装する。
 
 ## 読む順序
 
-はじめて読むなら PHILOSOPHY → DESIGN → GATES の順を推奨する。
+はじめて読むなら PHILOSOPHY、DESIGN、GATES の順を推奨する。
 実装に着手するなら、先に ROADMAP の「実装時検証事項」を確認する。
 
 | ドキュメント | 内容 |

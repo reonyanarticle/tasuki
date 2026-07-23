@@ -116,7 +116,7 @@ experiment.yaml と development.yaml の差分は次の3点のみで、ゲート
 
 ### language pack の providers.yaml
 
-デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest。
+デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
 対象リポジトリは repo override でコマンドを変更できる。
 
 ```yaml
