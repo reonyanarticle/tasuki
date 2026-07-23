@@ -14,16 +14,16 @@ worker は対象リポジトリの CLAUDE.md と skill の規約に従う([INTEG
 - **整形 = Black**。参考文献は `ruff format` 単独を推すが、本規約は Black を採用する
 - **型チェッカ = basedpyright**(pyright 系)。`ty` はプレビューのため不採用。**mypy は採用しない**
 - **パッケージと環境の管理は uv を単一の真実の源**とする。pip / virtualenv / pyenv / poetry を混在させない
-- **テスト = pytest**(補助: `pytest-cov`、必要なら `pytest-asyncio` / `hypothesis`)
+- **テスト = pytest**(補助は `pytest-cov`、必要なら `pytest-asyncio` / `hypothesis`)
 - **型定義は `models.py`、グローバル状態と設定は `settings.py`(pydantic-settings)に集約**する。これはアプリケーション規模のコードを書く場合の標準であり、normalizer のような単発スクリプトには適用しない
 
 ## 1. ツールチェーン
 
 - 依存追加は `uv add <pkg>`、開発依存は `uv add --dev <pkg>`、実行は `uv run <cmd>`(手動 activate 不要)
 - Python バージョンは `uv python pin` + `.python-version` でプロジェクト固定。`uv.lock` はコミットし、手動編集しない
-- lint: `uv run ruff check .`(自動修正は `--fix`)。日本語コメント中の全角文字を誤検知する `RUF001`〜`RUF003` は無効化する
-- 整形: `uv run black .`(チェックは `--check`)
-- 型: `uv run basedpyright`。新規プロジェクトは standard で開始し、段階的に厳しくする
+- lint：`uv run ruff check .`(自動修正は `--fix`)。日本語コメント中の全角文字を誤検知する `RUF001`〜`RUF003` は無効化する
+- 整形：`uv run black .`(チェックは `--check`)
+- 型：`uv run basedpyright`。新規プロジェクトは standard で開始し、段階的に厳しくする
 - 設定は `pyproject.toml` に集約する(setup.py / setup.cfg / .flake8 / mypy.ini を新設しない)
 
 ```toml
@@ -48,7 +48,7 @@ testpaths = ["tests"]
 ## 2. 型ヒント(必須)
 
 - 公開 API と重要ロジックには必ず型ヒントを付ける。型はドキュメントではなく、補完、静的解析、実行時検証の基盤である
-- モダン記法を使う: `X | None`(`Optional` 不可)、`list[int]` / `dict[str, int]`(`typing.List` 等不可)。必要に応じ `from __future__ import annotations`
+- モダン記法を使う。`X | None`(`Optional` 不可)、`list[int]` / `dict[str, int]`(`typing.List` 等不可)。必要に応じ `from __future__ import annotations`
 - 構造的部分型は `Protocol` を使う(継承を強制しない)。継承を強制したいときのみ ABC
 - `Any` は最小限にする。動的データ(JSON 等)は早期に具体型へナローイングする
 - 構造化データは TypedDict → dataclass → Pydantic を用途で使い分け、実行時バリデーションが要るなら Pydantic
@@ -80,8 +80,8 @@ testpaths = ["tests"]
 - 辞書の欠損キーは `get` / `setdefault` / `defaultdict` を使い分ける
 - `map` / `filter` より内包表記。ただし3段以上ネストする内包表記は通常ループに展開する
 - 大きなデータはジェネレータ(`yield`)で逐次処理する
-- 可変デフォルト引数の罠: デフォルトに `[]` / `{}` / 現在時刻を使わず `None` を番兵にする
-- 並行性は用途で使い分ける: ブロッキング I/O は `Thread`、CPU バウンドは `Process`、高水準は `concurrent.futures`。性能は推測でなく計測(`cProfile`)
+- 可変デフォルト引数の罠に注意する。デフォルトに `[]` / `{}` / 現在時刻を使わず `None` を番兵にする
+- 並行性は用途で使い分ける。ブロッキング I/O は `Thread`、CPU バウンドは `Process`、高水準は `concurrent.futures`。性能は推測でなく計測(`cProfile`)
 
 ## 6. 運用と品質
 
