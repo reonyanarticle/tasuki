@@ -32,10 +32,10 @@ class TestProfiles:
         gate_ids = {gate["id"] for gate in profile["gates"]}
         assert set(profile["enabled_gates"]) <= gate_ids
 
-    def test_phase2_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
-        """フェーズ2: g2 と g3 が有効であること(ROADMAP の段階導入)。"""
+    def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+        """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
         profile = request.getfixturevalue(profile_name)
-        assert {"g2", "g3"} <= set(profile["enabled_gates"])
+        assert {"g0", "g1", "g2", "g3", "g4"} <= set(profile["enabled_gates"])
 
     def test_g3_wiring(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """G3 は門前払い(report-fields)を持ち、report signals が判定基準を契約由来にする。"""

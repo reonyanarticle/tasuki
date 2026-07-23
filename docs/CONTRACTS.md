@@ -95,9 +95,9 @@ gates:
     reviewer: gate-reviewer
     model: opus
 
-# 段階導入(ROADMAP.md)。フェーズ2では g2・g3 と gm-* を有効化する
+# 段階導入(ROADMAP.md)。フェーズ3では全 abstraction ゲートと gm-* を有効化する
 # gm-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
-enabled_gates: [g2, g3, gm-lint, gm-format, gm-typecheck, gm-test]
+enabled_gates: [g0, g1, g2, g3, g4, gm-lint, gm-format, gm-typecheck, gm-test]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
