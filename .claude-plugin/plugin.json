@@ -1,0 +1,10 @@
+{
+  "name": "tasuki",
+  "description": "AI エージェント間のタスク受け渡しを抽象度ゲートで検めながら、GitHub issue を自走で完走させるループフレームワーク",
+  "version": "0.1.0",
+  "author": {
+    "name": "reonyanarticle"
+  },
+  "repository": "https://github.com/reonyanarticle/tasuki",
+  "license": "MIT"
+}
