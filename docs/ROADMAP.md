@@ -57,9 +57,17 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 追加の運用ギャップ2件(差し戻し再入の編集検知は timeline ではなく GraphQL の lastEditedAt を使う、変更済み worker worktree は自動掃除されないため orchestrator が終了時に削除する)も E2E で発見して修正した。
 GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入、worker による前提不在の検出(実在しない関数を前提とした issue への task-question)も実地で動作確認済み。
 
-### フェーズ2: G3(成果ゲート)を追加
+### フェーズ2: G3(成果ゲート)を追加(着手中)
 
 昇る側の対応表検証を回す。
+
+**フェーズ2の受け入れ条件(完了の定義)**：
+
+- `enabled_gates` に `g3` を含む契約で、verifier の met 後に worker のレポートが G3(sonnet)で照合される
+- G3 の判定例 fixture 3件(PASS / TOO_ABSTRACT / TOO_CONCRETE)で、gate-reviewer-sonnet の判定が人間の正解ラベルと3件中3件一致する(目盛り合わせ)
+- 対応表または結論を欠くレポートが TOO_ABSTRACT、生ログ貼り付けが TOO_CONCRETE で差し戻される
+- 書き方の不足の差し戻しでは、worker が実装に触れずレポートのみを新規セッションで再出力する
+- G3 PASS 後にのみ ready 化される(GM-ci と併せて)
 
 ### フェーズ3: G0 / G1 / G4 とレイヤー並列実行
 

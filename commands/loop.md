@@ -12,7 +12,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。
 
-現在は段階導入のフェーズ1であり、有効なゲートは契約の `enabled_gates`(G2 + GM)のみ。
+有効なゲートは契約の `enabled_gates` が決める(フェーズ2既定: G2 + GM + G3)。
 G1 が無効の間、子 issue は人間が起票済みである前提とする。
 
 ## 0. 前提と状態復元(冪等性、観点 #19)
@@ -101,10 +101,37 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 
 `drift_check: aligned` の場合、`status` で分岐する。
 
-- `met` → **GM-ci(出荷ゲート)を確認する**。最終コミットの check-runs を `gh api` で読み、全 job 成功であること(マージ判断の正は CI。**check-run が1件も無い場合は PASS とみなさず**、workflow 未生成・実行スキップ・権限不備を確認して解決できなければ `loop:triage`。fail-closed)。成功していれば PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す(フェーズ2で G3 が入るまでレポート照合は人間に委ねる)
+- `met` → 契約の `enabled_gates` に `g3` が含まれる場合は 1f(成果ゲート)へ。含まれない場合は 1g(ready 化)へ
 - `continue` → 未達項目を新規 worker セッションへ。反復は 1a で決めた有効上限(min(`max_inner_loop`, issue 予算値))まで
 - `abort` → 打ち切り。理由をコメントし `loop:triage` を付け、`loop:in-progress` を外す
 - `waiting` → 長時間ジョブの進行中。停滞と区別し、ポーリング間隔を報告して待つ(観点 #14)
+
+### 1f. G3(成果ゲート、レポート照合)
+
+worker のレポート(loop-report 形式の issue コメント)を、契約の report フェーズ `receives` 定義と照合する。
+reviewer の解決規則は 1b と同じ(契約の `gates.g3.reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer-sonnet` へ。`escalate_to: opus` は `tasuki-gate-reviewer-opus` へ)。
+
+渡すのは次の3つだけ。
+
+- worker のレポート(issue コメント)
+- 契約の report フェーズ `receives` 定義+差し戻し履歴(過去 verdict があれば)
+- 子 issue 本文(受け入れ条件・成功基準。対応表の N対1 照合用)
+
+返った verdict JSON を issue コメントに記録する(冪等)。
+エスカレーション規則は G2 と同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
+発振検知(観点 #25)も同様に適用する。
+
+差し戻しの扱いは2種類を区別する。
+
+- **書き方の不足**(対応表なし、結論なし、生ログ貼り付け)→ 新規 worker セッションに **レポートの再出力のみ** を依頼する(実装には触れさせない)
+- **内容の不足**(結果が要件に対応しない、孤児要件がある)→ 実装の未達として新規 worker セッションへ(1c 相当。内側ループ上限で管理)
+
+PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、1g へ。
+
+### 1g. ready 化(GM-ci、出荷ゲート)
+
+最終コミットの check-runs を `gh api` で読み、全 job 成功であることを確認する(マージ判断の正は CI。**check-run が1件も無い場合は PASS とみなさず**、workflow 未生成・実行スキップ・権限不備を確認して解決できなければ `loop:triage`。fail-closed)。
+成功していれば PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す。
 
 ## 2. 停止装置(ブレーキとシートベルト)
 
