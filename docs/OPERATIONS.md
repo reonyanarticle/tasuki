@@ -19,7 +19,8 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
 7. `max_iterations` 等バジェットのデフォルト設定
 
-`.github/workflows/` への push には token の `workflow` scope が必要なため、前提チェックで確認する(なければ `gh auth refresh -s workflow` を案内)。
+HTTPS プロトコルで push する場合、`.github/workflows/` への push には token の `workflow` scope が必要になる。
+前提チェックで Git operations protocol を確認し、https のときのみ scope を要求する(SSH 鍵での push には不要。E2E で実地確認済み)。
 
 providers.yaml が単一ソースであり、CI workflow はそこからの射影である。
 worker はプッシュ前に同じコマンドをローカル実行できる(高速フィードバック)が、**ゲートとして正となるのは CI の判定** である。

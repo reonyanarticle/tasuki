@@ -13,7 +13,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 ## 前提チェック(失敗したら中断して報告)
 
 1. git リポジトリであり、GitHub リモート(origin)があること
-2. `gh auth status` が通ること。token に `workflow` scope があること(`.github/workflows/` への push に必須。なければ `gh auth refresh -s workflow` を案内)
+2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する
 
 ## 手順
