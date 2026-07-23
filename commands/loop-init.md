@@ -89,6 +89,7 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.lint.command>
       - if: always()
+        continue-on-error: true    # SARIF 可視化は best-effort(private リポジトリは GHAS なしだと失敗する)。ゲート判定は上の lint コマンドの exit code
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: <providers.lint.output_file>, category: lint }
   format:
@@ -116,6 +117,7 @@ jobs:
         continue-on-error: true    # 失敗の判定は下の gate ステップが行う
       - run: python .tasuki/normalizers/basedpyright_json_to_sarif.py <providers.typecheck.output_file> basedpyright.sarif
       - if: always()
+        continue-on-error: true    # 同上。ゲート判定は下の typecheck gate ステップ
         uses: github/codeql-action/upload-sarif@v3
         with: { sarif_file: basedpyright.sarif, category: typecheck }
       - name: typecheck gate
