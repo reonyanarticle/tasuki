@@ -37,14 +37,15 @@ tasuki/
 │   ├── baton-contract/SKILL.md   # 契約(待ち位置)の書き方・読み方
 │   └── loop-report/SKILL.md      # レポート作成手順(対応表必須)
 ├── agents/
-│   ├── orchestrator.md
 │   ├── decomposer.md
-│   ├── gate-reviewer.md          # コンテキスト非共有・読み取り専用
+│   ├── gate-reviewer.md          # haiku(G2 標準)。コンテキスト非共有・読み取り専用
+│   ├── gate-reviewer-sonnet.md   # sonnet(G3 標準、G2 エスカレーション先)
+│   ├── gate-reviewer-opus.md     # opus(G0/G1/G4 標準、G3 エスカレーション先)
 │   ├── worker.md                 # isolation: worktree
 │   └── verifier.md
 ├── commands/
 │   ├── loop-init.md              # ブートストラップ
-│   ├── loop.md                   # ループ起動(親 issue 指定)
+│   ├── loop.md                   # ループ起動(親 issue 指定)。実行セッション= orchestrator
 │   └── loop-status.md            # 進行状況・メトリクス表示
 ├── packs/
 │   └── python/
@@ -54,6 +55,10 @@ tasuki/
     ├── experiment.yaml
     └── development.yaml
 ```
+
+orchestrator は agent としては存在しない。
+Claude Code の subagent は既定で別の subagent を起動できないため([ROADMAP.md](ROADMAP.md) 検証結果)、orchestrator は `/tasuki:loop` を実行するメインセッションが務める。
+また agent frontmatter の `model:` は起動ごとに変えられないため、ゲート別モデル(後述のレイヤードレート構造)は gate-reviewer のモデル固定3変種として実装する。
 
 命名規約として、plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切る(衝突判定の対象はファイル名ではなく `name:`)。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。
@@ -109,6 +114,9 @@ Fable 5 が計画と委譲を行い、作業は下位レートの worker(Sonnet)
 | 中頻度判定 | G3 reviewer / decomposer | Sonnet(G3 は Opus へ昇格可) | 意味検証だが毎反復発生 |
 | 高頻度照合 | G2 reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
 | 物量 | worker / verifier | Sonnet | トークンの大半。worker レート課金の主戦場 |
+
+実装上、reviewer のモデルは gate-reviewer の3変種(`tasuki-gate-reviewer` = haiku、`-sonnet`、`-opus`)への振り分けで決まり、昇格は変種の切り替えである。
+orchestrator のモデルはメインセッションのモデルそのものであり、plugin からは強制できない(`/tasuki:loop` の実行時に Fable 5 を選ぶことを推奨とする)。
 
 ### エスカレーション規則(非対称ルール)
 

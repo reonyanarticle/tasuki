@@ -15,15 +15,20 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュ、テスト並列化、paths-ignore をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点 #17)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
-6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認
+6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
 7. `max_iterations` 等バジェットのデフォルト設定
+
+`.github/workflows/` への push には token の `workflow` scope が必要なため、前提チェックで確認する(なければ `gh auth refresh -s workflow` を案内)。
 
 providers.yaml が単一ソースであり、CI workflow はそこからの射影である。
 worker はプッシュ前に同じコマンドをローカル実行できる(高速フィードバック)が、**ゲートとして正となるのは CI の判定** である。
 orchestrator は `gh api` で check-runs を読み、GM の verdict に変換する。
 
-制約事項として、security-review Action はプロンプトインジェクション対策が施されておらず、信頼できる PR のみを対象とする。
-本ループの PR は自リポジトリの worker が生成するため v1 では許容するが、外部コントリビューションを受けるリポジトリへの転用時は要再検討。
+security-review Action の制約は3つある(2026-07 時点の README とドキュメントで確認)。
+
+- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点 #15)
+- 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。GM の判定には action outputs の findings 件数を使う
+- プロンプトインジェクション対策が施されておらず、信頼できる PR のみを対象とする。本ループの PR は自リポジトリの worker が生成するため v1 では許容するが、外部コントリビューションを受けるリポジトリへの転用時は要再検討
 
 ## コスト管理とエスカレーション
 

@@ -47,6 +47,12 @@ phases:
       too_abstract_signals: ["対応表なし", "結論なし"]
       too_concrete_signals: ["生ログ・生データの本文貼り付け"]
 
+templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
+  parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
+  child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
+  report_required_fields: [要件⇔結果の対応表, 結論, 再現手順, 生データへのリンク]
+  pr_required_fields: [概要, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
+
 gates:
   - id: g0
     kind: abstraction
@@ -75,7 +81,7 @@ gates:
     provider: test                # JUnit XML: failures == 0
   - id: gm-security
     kind: mechanical
-    provider: security-review
+    provider: security            # providers.yaml のキーと一致させる
     blocking_threshold: high
   - id: g3
     kind: abstraction
@@ -86,6 +92,9 @@ gates:
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
+
+# 段階導入(ROADMAP.md)。フェーズ1では g2 と gm-* のみ有効化する
+enabled_gates: [g2, gm-lint, gm-typecheck, gm-test, gm-security]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
@@ -108,11 +117,26 @@ experiment.yaml と development.yaml の差分は次の3点のみで、ゲート
 # packs/python/providers.yaml
 detect: ["pyproject.toml"]
 providers:
-  lint:      "uv run ruff check --output-format sarif ."
-  typecheck: "uv run mypy . --junit-xml mypy.xml"   # normalizer で SARIF 化
-  test:      "uv run pytest --junitxml=junit.xml"
-  security:  "claude-code-security-review"           # GitHub Action(OPERATIONS.md)
+  lint:
+    command: "uv run ruff check --output-format sarif --output-file ruff.sarif ."
+    output: sarif
+    output_file: ruff.sarif
+  typecheck:
+    command: "uv run mypy . --junit-xml mypy-junit.xml"
+    output: junit
+    output_file: mypy-junit.xml
+    normalizer: normalizers/mypy_junit_to_sarif.py   # JUnit XML → SARIF 変換
+  test:
+    command: "uv run pytest --junitxml=pytest-junit.xml"
+    output: junit
+    output_file: pytest-junit.xml
+  security:
+    action: "anthropics/claude-code-security-review"  # GitHub Action(OPERATIONS.md)
+    output: pr-comment
 ```
+
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:` の3キーは実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするために足した。
 
 ## issue テンプレート仕様
 

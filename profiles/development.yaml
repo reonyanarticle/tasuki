@@ -1,0 +1,119 @@
+# tasuki 契約プロファイル: development(開発ループ)
+# スキーマの解説は docs/CONTRACTS.md を参照。
+# プロジェクト固有の上書きは対象リポジトリの .claude/loop/ に置く(このファイルは編集しない)。
+profile: development
+
+budgets:
+  max_iterations_per_gate: 3      # 超過で人間にエスカレーション
+  max_inner_loop: 5               # verifier の打ち切り上限デフォルト
+  wip_limit_prs: 3                # 未レビュー PR の上限(観点 #24)。超過で新規 worker 起動を停止
+
+models:                           # レイヤードレート構造(docs/DESIGN.md)
+  orchestrator: fable
+  decomposer: sonnet
+  worker: sonnet
+  verifier: sonnet
+  escalation_arbiter: fable       # 差し戻し上限超過時の裁定
+
+phases:
+  - name: requirements            # 親 issue
+    hands_off:
+      to: decomposition
+  - name: decomposition
+    receives:
+      from: requirements
+      waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
+      too_abstract_signals: ["価値の記載なし", "予算欄が空"]
+      too_concrete_signals: ["子タスクの実装方式まで指定"]
+    hands_off:
+      to: implementation
+  - name: implementation
+    receives:
+      from: decomposition
+      waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
+      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落"]
+      too_concrete_signals: ["特定ライブラリ・実装方式の指定"]
+    hands_off:
+      to: report
+      exit_criteria_required: true
+  - name: report
+    receives:
+      from: implementation
+      waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
+      too_abstract_signals: ["対応表なし", "結論なし"]
+      too_concrete_signals: ["生ログ・生データの本文貼り付け"]
+
+templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
+  parent_issue_required_fields:
+    - 背景
+    - 目的
+    - 価値
+    - 予算(コスト上限)
+    - 完了の定義
+  child_issue_required_fields:
+    - 対応する親要件
+    - 目的
+    - 受け入れ条件
+    - 成功基準
+    - 打ち切り条件
+    - 予算(max_iterations)
+  report_required_fields:
+    - 要件⇔結果の対応表
+    - 結論
+    - 再現手順
+    - 生データへのリンク
+  pr_required_fields:
+    - 概要
+    - 変更点
+    - 影響範囲と revert 可否
+    - 対応 issue
+    - 検証方法
+
+gates:
+  - id: g0
+    kind: abstraction
+    reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能(docs/INTEGRATION.md)
+    model: opus                   # 低頻度・高レバレッジ
+  - id: g1
+    kind: abstraction
+    reviewer: gate-reviewer
+    model: opus
+  - id: g2
+    kind: abstraction
+    reviewer: gate-reviewer
+    model: haiku                  # 高頻度・照合型
+    escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
+    preflight: template-fields    # 門前払い(機械チェック)
+  - id: gm-lint
+    kind: mechanical
+    provider: lint                # pack の providers.yaml を参照
+    blocking_threshold: error     # SARIF level
+  - id: gm-typecheck
+    kind: mechanical
+    provider: typecheck
+    blocking_threshold: error
+  - id: gm-test
+    kind: mechanical
+    provider: test                # JUnit XML: failures == 0
+  - id: gm-security
+    kind: mechanical
+    provider: security
+    blocking_threshold: high
+  - id: g3
+    kind: abstraction
+    reviewer: gate-reviewer
+    model: sonnet
+    escalate_to: opus
+  - id: g4
+    kind: abstraction
+    reviewer: gate-reviewer
+    model: opus
+
+# 段階導入(docs/ROADMAP.md)。フェーズ1では g2 と gm-* のみ有効化する。
+enabled_gates: [g2, gm-lint, gm-typecheck, gm-test, gm-security]
+
+model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
+
+question_routing:
+  task-question: issue-comment    # 起票者へ。回答で issue 本文を更新
+  axis-question: contract-pr      # 契約ファイル変更 PR として起票。人間が承認
