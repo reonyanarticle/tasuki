@@ -50,10 +50,12 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 | 手書き fixture 5件で gate-reviewer(haiku)が4件以上一致 | 達成(5/5、confidence すべて high) |
 | 差し戻し verdict が issue コメントに JSON で記録 | 達成 |
 | G2 通過の子 issue を worker が実装し draft PR 作成、GM 実行到達 | 達成(GM 緑 → verifier met → PR ready 化まで完走) |
-| 差し戻し2連続で sonnet エスカレーション発火 | **未検証**(2連続差し戻しのシナリオを未実施) |
+| 差し戻し2連続で sonnet エスカレーション発火 | 達成(verdict 履歴 haiku → haiku → sonnet。昇格後の判定で PASS し、worker が issue 予算内で完走) |
 
 E2E で発見し修正した不具合:workflow scope 前提の過剰要求(SSH では不要)、`.claude/loop/` の機密ファイルガード衝突(`.tasuki/` へ移設)、CI テンプレートの YAML 不正(notify の `: ` )、SARIF アップロードの GHAS 依存(best-effort 化)。
 check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉したことも確認した。
+追加の運用ギャップ2件(差し戻し再入の編集検知は timeline ではなく GraphQL の lastEditedAt を使う、変更済み worker worktree は自動掃除されないため orchestrator が終了時に削除する)も E2E で発見して修正した。
+GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入、worker による前提不在の検出(実在しない関数を前提とした issue への task-question)も実地で動作確認済み。
 
 ### フェーズ2: G3(成果ゲート)を追加
 
