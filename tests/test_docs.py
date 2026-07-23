@@ -50,9 +50,27 @@ def test_g3_flow_wiring() -> None:
     assert "decomposer | worker | implementation" in gates
     loop = (ROOT / "commands/loop.md").read_text()
     assert "`gate:g3-returned` を付け" in loop
-    assert "1f を再判定" in loop
+    assert "2f を再判定" in loop
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
     assert "G3 の PASS の後" in ops
+
+
+def test_phase3_full_loop_wiring() -> None:
+    """フェーズ3の配線: G0、decomposer 起動と起票、循環検出、レイヤー合流、G4。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "G0(受理ゲート)" in loop
+    assert "`tasuki-decomposer` へ委譲" in loop
+    assert "via tasuki-decomposer" in loop
+    assert "循環を検出したらエラー" in loop
+    assert "すべて人間にマージされるまで進まない" in loop
+    assert "G4(統合ゲート)" in loop
+    assert "親 issue の close は人間が行う" in loop
+    # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
+    assert "遡及適用しない" in loop
+    assert "分割案 YAML を全文添付" in loop
+    assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
+    assert "不採用クローズ" in loop
+    assert "integration フェーズ" in loop
 
 
 def test_gm_is_hybrid() -> None:

@@ -23,7 +23,7 @@ phases:
     receives:
       from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
-      too_abstract_signals: ["価値の記載なし", "予算欄が空"]
+      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ・環境・権限)が読み取れない"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
     hands_off:
       to: implementation
@@ -31,7 +31,7 @@ phases:
     receives:
       from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
-      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落"]
+      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)"]
       too_concrete_signals: ["特定ライブラリ・実装方式の指定"]
     hands_off:
       to: report
@@ -42,6 +42,14 @@ phases:
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
       too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
       too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
+    hands_off:
+      to: integration
+  - name: integration             # 全子完了→親。G4 が照合する昇りの最終待ち位置
+    receives:
+      from: report
+      waiting_level: "全親要件⇔子成果の対応が明示され、孤児の親要件が無い"
+      too_abstract_signals: ["親要件の孤児(対応する子成果なし)", "対応の明示なし"]
+      too_concrete_signals: ["子レポートの生転載"]
 
 templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
@@ -58,6 +66,10 @@ gates:
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
+    set_signals:                  # 分割の集合レベル基準(G1 固有)
+      - 依存の循環
+      - 親要件の孤児(どの子 issue にも対応しない)
+      - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
   - id: g2
     kind: abstraction
     reviewer: gate-reviewer
@@ -95,9 +107,9 @@ gates:
     reviewer: gate-reviewer
     model: opus
 
-# 段階導入(ROADMAP.md)。フェーズ2では g2・g3 と gm-* を有効化する
+# 段階導入(ROADMAP.md)。フェーズ3では全 abstraction ゲートと gm-* を有効化する
 # gm-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
-enabled_gates: [g2, g3, gm-lint, gm-format, gm-typecheck, gm-test]
+enabled_gates: [g0, g1, g2, g3, g4, gm-lint, gm-format, gm-typecheck, gm-test]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
@@ -147,8 +159,8 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:` の4キーは実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるために足した。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:` の5キーは実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は G1 の集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。
 
 ## issue テンプレート仕様
 
