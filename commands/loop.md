@@ -28,6 +28,7 @@ G1 が無効の間、子 issue は人間が起票済みである前提とする�
 
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
+差し戻し中(`gate:*-returned`)の子 issue は、**最後の verdict コメントより後に issue 本文が編集されている場合のみ** 1a から再入する(未編集ならスキップし、起票者待ちを維持する)。
 
 ### 1a. 門前払い(機械チェック、LLM なし)
 
@@ -116,4 +117,5 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 ## 3. 終了報告
 
 レイヤー(依存解決済みの子 issue 群)の処理が終わるごとに、親 issue に進行サマリ(通過 / 差し戻し中 / triage / 完了)をコメントする。
+終了前に、完了(met / abort)した worker の worktree が残っていれば削除する(isolation の自動掃除は変更が無い worktree だけを対象とするため、実装を行った worktree は残留する)。
 **マージは常に人間が実行する。** ready 化した PR の一覧と、`loop:triage` の一覧を最後に報告して終了する。

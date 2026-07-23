@@ -18,7 +18,7 @@ tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent はネスト�
 3. **コミット**：Conventional Commits(`<type>: <summary>`)
 4. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(ラベルはループ由来 PR の識別と WIP 集計に使われる)。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める
 5. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
-6. **掃除**：一時ファイルを残さない(worktree 自体の掃除は isolation 機構が行う)
+6. **掃除**：一時ファイルを残さない(変更を加えた worktree は isolation の自動掃除対象外のため、ループ終了時に orchestrator が削除する)
 
 PR 作成の前に、同じ子 issue に対する既存 PR がないか確認する(冪等性、観点 #19)。
 既存 PR があればそのブランチ上で作業を継続する。
