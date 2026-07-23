@@ -65,6 +65,12 @@ def test_phase3_full_loop_wiring() -> None:
     assert "すべて人間にマージされるまで進まない" in loop
     assert "G4(統合ゲート)" in loop
     assert "親 issue の close は人間が行う" in loop
+    # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
+    assert "遡及適用しない" in loop
+    assert "分割案 YAML を全文添付" in loop
+    assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
+    assert "不採用クローズ" in loop
+    assert "integration フェーズ" in loop
 
 
 def test_gm_is_hybrid() -> None:

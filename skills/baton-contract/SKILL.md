@@ -55,6 +55,9 @@ model: (判定に使ったモデル。回帰テストと bandit 化の入力)
 ```
 
 G3(レポート判定)の fixture は、input にレポート本文を置き、対応表の照合先となる子 issue の要件を `requirements:` に併記する(レポート単体では孤児要件の判定ができないため)。
+G1 は `requirements:` に親 issue 本文、input に分割案 YAML(または既存子 issue 群の本文)を置く。
+G4 は `requirements:` に親要件と完了の定義、input に子 issue の完了状態とレポート要旨を置く。
+照合先を要する判定(G1 / G3 / G4)は requirements 無しでは孤児判定ができないため、必ず併記する。
 
 ```yaml
 # .tasuki/fixtures/g3-001.yaml
@@ -69,7 +72,7 @@ labeled_by: (人間の名前)
 model: sonnet
 ```
 
-gate-reviewer に fixture を判定させ、人間ラベルと4/5件以上一致するまで契約(シグナル)側を直す。
+gate-reviewer に fixture を判定させ、一致するまで契約(シグナル)側か fixture 側のどちらが正かを判断して直す(初期較正の目安は G2 の5件で4/5以上、それ以外のゲートは件数が少ないため全一致)。
 fixture は回帰テストの初期データを兼ねる。
 
 ## repo override(.tasuki/)

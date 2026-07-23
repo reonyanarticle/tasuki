@@ -32,6 +32,19 @@ class TestProfiles:
         gate_ids = {gate["id"] for gate in profile["gates"]}
         assert set(profile["enabled_gates"]) <= gate_ids
 
+    def test_phase3_review_fixes(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+        """フェーズ3レビュー修正: integration フェーズ、g1 set_signals、分割・前提シグナル。"""
+        profile = request.getfixturevalue(profile_name)
+        names = [ph["name"] for ph in profile["phases"]]
+        assert names[-1] == "integration"
+        integration = profile["phases"][-1]
+        assert any("孤児" in s for s in integration["receives"]["too_abstract_signals"])
+        g1 = next(g for g in profile["gates"] if g["id"] == "g1")
+        assert any("循環" in s for s in g1["set_signals"])
+        assert any("親予算" in s for s in g1["set_signals"])
+        second = profile["phases"][1]["receives"]["too_abstract_signals"]
+        assert any("実現可能性" in s for s in second)
+
     def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
         profile = request.getfixturevalue(profile_name)

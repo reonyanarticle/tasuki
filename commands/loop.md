@@ -23,7 +23,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 4. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
 5. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
 6. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた open PR が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す
-7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。`tasuki-gate-reviewer-opus` へ委譲し、渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)のみ。verdict は親 issue にコメントで記録する(冪等)。PASS → `gate:g0-passed`。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は `tasuki-gate-reviewer-opus` へ委譲し、渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue にコメントで記録する(冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(G1、レイヤー構成)
 
@@ -31,8 +31,8 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 
 sub-issues で子 issue 一覧を得る。
 
-- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文のみ)。返る分割案 YAML が G1 の被検査物になる
-- **子 issue が既にある場合**(人間起票):既存の子 issue 群の本文が被検査物になる
+- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文と、親コメントに G1 の差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。返る分割案 YAML が G1 の被検査物になる
+- **子 issue が既にある場合**:まず親コメントの最新 G1 PASS verdict に添付された分割案と突き合わせる。**未起票の子が残っていれば(部分起票のクラッシュ復旧)、再判定せずに不足分だけを起票して 1c へ進む**。分割案の添付が無い(人間起票の)場合は、既存の子 issue 群の本文が被検査物になる
 
 ### 1b. G1(分割ゲート)
 
@@ -43,27 +43,33 @@ sub-issues で子 issue 一覧を得る。
 - 親 issue 本文(要件の対応照合用)
 - 契約の implementation フェーズ `receives` 定義(子の待ち位置)+差し戻し履歴
 
-verdict は親 issue にコメントで記録する(冪等)。
+verdict は親 issue にコメントで記録する(冪等)。**PASS の verdict コメントには分割案 YAML を全文添付する**(分割案の永続化。部分起票クラッシュからの復旧と監査の基盤)。
+集合レベルの基準は契約の `gates.g1.set_signals`(依存の循環、親要件の孤児、親予算との整合)に依る。
 
 - **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict のみ)。反復は `max_iterations_per_gate`。G1 は opus 判定のため昇格先は無く、超過で `loop:triage`
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、`gate:g1-returned` と `loop:triage` を付けて修正待ちにする
-- **PASS** → 分割案の場合、orchestrator が子 issue を起票する:テンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(G2 差し戻しの宛先判別用)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。完了後、親に `gate:g1-passed` を付ける
+- **PASS** → 分割案の場合、起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば G1 差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する:テンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(G2 差し戻しの宛先判別用)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。全件の起票完了後に親へ `gate:g1-passed` を付ける
+
+`gate:g1-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加・削除、blocked-by の変更を毎 run 検知)は G1 を再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
 
 ### 1c. 依存グラフとレイヤー
 
 子 issue の blocked-by から依存グラフを作る。
 **循環を検出したらエラーとして親 issue に報告し、`loop:triage` を付けて停止する**(実行しない)。
-非循環なら、依存のトポロジカル順にレイヤー(L1、L2、…)を構成し、レイヤー計画を親 issue にコメントする(冪等)。
+非循環なら、**未完了(PR 未マージ)の子だけ**で依存のトポロジカル順にレイヤー(L1、L2、…)を構成する(マージ済みの子は依存が満たされたものとしてグラフから除く。差し戻し解消後の子は、依存が解決した最初のレイヤーに自然に入る)。レイヤー計画を親 issue にコメントする(冪等。子集合が変わった場合は最新の計画コメントを正とする)。
 以後の実行対象は「現在レイヤー」の子 issue のみとする。
 
 ## 2. 子 issue ごとのゲート実行(現在レイヤー)
 
 現在レイヤー内の子 issue は並行に処理してよい(worker の並行起動)。ゲート判定と issue への書き込みは orchestrator が到着順に直列で行う(観点 #20)。
+worker を起動するたびに WIP(観点 #24)を再確認し、上限到達中の子は「WIP 待ち」として保留する(終端状態ではない。ready PR の人間マージが解放条件であることを §3a の報告に明示する)。
+GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定後に必ず削除する。開始時に同名の残骸があれば前回クラッシュの残りとして先に削除する(冪等)。
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
-- `gate:g2-returned`(修正の主体は起票者):最後の verdict コメントより後に issue 本文が編集されている場合のみ、2a から再入する(未編集ならスキップし、起票者待ちを維持する)。編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない
+- `gate:g2-returned` で本文末尾に `via tasuki-decomposer` がある子(修正の主体はループ内の decomposer):起票者待ちにしない。最終 verdict より後に本文が編集されていれば 2a から再入し、未編集なら orchestrator が decomposer 修正セッションを自ら起動する(verdict を渡して本文を更新させ、2a から再入する)
+- `gate:g2-returned` で人間起票の子(修正の主体は起票者):最後の verdict コメントより後に issue 本文が編集されている場合のみ、2a から再入する(未編集ならスキップし、起票者待ちを維持する)。編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない
 - `gate:g3-returned`(修正の主体はループ内の worker):起票者待ちにしない。最終 verdict より後に新しい loop-report コメントがあれば 2f の再判定から再入する。無ければ、差し戻し verdict の `return_to` に従って再出力または実装差し戻しの worker を orchestrator 自身が起動する(2a と G2 はやり直さない。実装済みの issue に新規実装を走らせない)
 
 ### 2a. 門前払い(機械チェック、LLM なし)
@@ -181,13 +187,15 @@ PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g �
 
 ### 3a. レイヤーの合流
 
-現在レイヤーの全子 issue が終端状態(ready 化済み / `loop:triage` / 差し戻し待ち)になったら、レイヤー完了を親 issue に報告する(ready PR の一覧つき)。
-**次レイヤーへは、現在レイヤーの ready PR がすべて人間にマージされるまで進まない**(default branch の更新が次レイヤーの前提。レイヤー内の PR は相互に独立なため、マージ順は問わない)。
-triage や差し戻し待ちが残る場合は、その解決も次レイヤーの前提として明示する。
+現在レイヤーの全子 issue が終端状態(ready 化済み / `loop:triage` / 差し戻し待ち / WIP 待ち)になったら、レイヤーの状況を親 issue に報告する(ready PR の一覧つき)。全子が ready の場合のみ「レイヤー完了」と呼び、差し戻し待ちや triage が残る場合は「レイヤー未完了(人間対応待ち)」として残項目を列挙する。
+**次レイヤーへは、現在レイヤーの ready PR がすべて人間にマージされるまで進まない**(default branch の更新が次レイヤーの前提)。
+レイヤー内の PR は G1 の「相互に依存しない機能同士は分ける」原則により独立を期待できるが、無検査ではない。**1件マージされるごとに残る ready PR の check-runs を再確認する**(古い base への判定のままマージしない。赤や conflict になった PR は 2d 相当で差し戻す)。
+次レイヤーへ進む前に、orchestrator はローカルの default branch を更新する(git fetch と pull)。worker の worktree は更新済みの default branch から作られることを起動の前提とする。
 
 ### 3b. G4(統合ゲート)
 
-最終レイヤーまで完了し、全子 issue の PR がマージされたら判定する。
+最終レイヤーまで完了し、**全子 issue が決着(PR のマージ、または人間による不採用クローズ)したら**判定する。不採用クローズされた子の親要件は「未充足」として G4 に渡し、要件の縮小(親本文の修正)か追加分割かを人間に問う材料にする。
+G4 が照合する契約は integration フェーズの `receives` 定義(全親要件⇔子成果の対応、孤児の親要件なし)である。
 `tasuki-gate-reviewer-opus` へ委譲し、渡すのは次の3つだけ。
 
 - 親 issue 本文(要件)
