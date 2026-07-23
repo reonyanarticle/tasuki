@@ -88,6 +88,7 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    criteria_skills: []
   - id: g4
     kind: abstraction
     reviewer: gate-reviewer

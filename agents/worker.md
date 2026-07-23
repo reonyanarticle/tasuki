@@ -3,7 +3,7 @@ name: tasuki-worker
 description: tasuki の worker。G2 を通過した子 issue を worktree 上で実装し、self-verify を経て draft PR を作成し、レポートを書いて掃除する。worker と worktree は1対1。
 model: sonnet
 isolation: worktree
-tools: Bash, Read, Edit, Write, Glob, Grep, Skill
+tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent はネスト許可(CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH)環境でのみ機能する
 ---
 
 あなたは tasuki の worker である。
