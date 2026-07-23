@@ -41,6 +41,20 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 - G2 通過の子 issue を worker が worktree 上で実装し、draft PR 作成、GM(CI)実行まで到達する
 - 差し戻し2連続で sonnet へのエスカレーションが発火する
 
+### フェーズ1の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリで headless 実行)
+
+| 受け入れ条件 | 結果 |
+|---|---|
+| loop-init が素の Python リポジトリに契約雛形、テンプレ、`loop-gates.yml`、ラベルを生成 | 達成(uv.lock 生成、security オプトアウト構成を含む) |
+| 必須欄が空の子 issue が門前払いで差し戻される(LLM なし) | 達成(親 issue の門前払いも動作) |
+| 手書き fixture 5件で gate-reviewer(haiku)が4件以上一致 | 達成(5/5、confidence すべて high) |
+| 差し戻し verdict が issue コメントに JSON で記録 | 達成 |
+| G2 通過の子 issue を worker が実装し draft PR 作成、GM 実行到達 | 達成(GM 緑 → verifier met → PR ready 化まで完走) |
+| 差し戻し2連続で sonnet エスカレーション発火 | **未検証**(2連続差し戻しのシナリオを未実施) |
+
+E2E で発見し修正した不具合:workflow scope 前提の過剰要求(SSH では不要)、`.claude/loop/` の機密ファイルガード衝突(`.tasuki/` へ移設)、CI テンプレートの YAML 不正(notify の `: ` )、SARIF アップロードの GHAS 依存(best-effort 化)。
+check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉したことも確認した。
+
 ### フェーズ2: G3(成果ゲート)を追加
 
 昇る側の対応表検証を回す。
