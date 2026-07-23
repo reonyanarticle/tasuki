@@ -76,13 +76,18 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 差し戻し再実行は **必ず新規の worker セッション** で行う(観点 #16)。
 前セッションを継続せず、渡すのは子 issue 本文+差し戻し verdict(または CI findings、verifier の未達項目)のみ。
 
-### 1d. GM(CI)
+### 1d. GM-local(形式ゲート、反復判定)
 
-worker の draft PR に対する check-runs を `gh api` で読む(`loop-gates.yml` の判定が正)。
+反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点 #17)。
 
-- **check-run が1件も無い場合は PASS とみなさない**(workflow 未生成・実行スキップ・権限不備のいずれか)。原因を確認し、解決できなければ `loop:triage` を付けて人間に回す(fail-closed)
-- 全 job 成功 → GM PASS。verifier(1e)へ
-- 失敗 → findings(失敗 job と要点)を抽出し、新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
+1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
+2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)をそのまま実行し、exit code で合否を読む(worker の自己申告は使わない)
+3. テスト改変検知(base との diff に対する削除・skip/xfail・設定変更のチェック。CI テンプレートと同じ基準)も行う
+4. 一時 worktree を削除する
+5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
+6. 全て成功 → verifier(1e)へ
+
+反復中の push でも CI は走るが、orchestrator は反復判定で CI を待たない(workflow の concurrency が旧 run を打ち切る)。
 
 ### 1e. 内側ループの出口(verifier)
 
@@ -94,7 +99,7 @@ worker の draft PR に対する check-runs を `gh api` で読む(`loop-gates.y
 
 `drift_check: aligned` の場合、`status` で分岐する。
 
-- `met` → PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す(フェーズ2で G3 が入るまでレポート照合は人間に委ねる)
+- `met` → **GM-ci(出荷ゲート)を確認する**。最終コミットの check-runs を `gh api` で読み、全 job 成功であること(マージ判断の正は CI。**check-run が1件も無い場合は PASS とみなさず**、workflow 未生成・実行スキップ・権限不備を確認して解決できなければ `loop:triage`。fail-closed)。成功していれば PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す(フェーズ2で G3 が入るまでレポート照合は人間に委ねる)
 - `continue` → 未達項目を新規 worker セッションへ。反復は 1a で決めた有効上限(min(`max_inner_loop`, issue 予算値))まで
 - `abort` → 打ち切り。理由をコメントし `loop:triage` を付け、`loop:in-progress` を外す
 - `waiting` → 長時間ジョブの進行中。停滞と区別し、ポーリング間隔を報告して待つ(観点 #14)

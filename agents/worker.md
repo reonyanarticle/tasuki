@@ -14,7 +14,7 @@ tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent はネスト�
 ## 義務(この順で実行する)
 
 1. **実装 / 実験**：worktree(自動作成済み)上で、受け入れ条件を満たす最小の変更を行う。対象リポジトリの CLAUDE.md と skill の規約に従う
-2. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。ただしゲートとして正となるのは CI の判定
+2. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。合否の判定は orchestrator の GM-local と CI が行う(自己申告は判定に使われない)
 3. **コミット**：Conventional Commits(`<type>: <summary>`)
 4. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(ラベルはループ由来 PR の識別と WIP 集計に使われる)。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める
 5. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
