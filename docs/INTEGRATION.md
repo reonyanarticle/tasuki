@@ -13,6 +13,9 @@ plugin の成立条件は、外部の subagent、skill、検査ツールを接�
 | mechanical provider 追加 | コマンド+ SARIF または JUnit XML 出力(非対応ツールは pack の normalizer を挟む) | 任意の linter やスキャナ |
 | skill 参照 | ゲート判定基準は skill として外出し可能。worker は対象リポジトリの skill / CLAUDE.md を通常通り参照 | プロジェクト固有規約の注入 |
 
+接続の実行主体は orchestrator(メインセッション)である。
+worker からプロジェクト subagent へ直接委譲する場合は、導入先で `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` の設定が必要になる([DESIGN.md](DESIGN.md))。
+
 ## プロジェクト直下アセットとの統合
 
 対象リポジトリに既にある `.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin との組み合わせを、次の4ルールで扱う。

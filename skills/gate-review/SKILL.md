@@ -51,7 +51,7 @@ worker へ差し戻さず、axis-question に昇格して verdict の questions 
 
 ## 出力: verdict JSON
 
-issue コメントに記録される。スキーマは docs/GATES.md と同一。
+issue コメントに記録される。スキーマは次のとおり。
 
 ```json
 {

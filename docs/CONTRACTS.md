@@ -12,12 +12,8 @@ budgets:
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
   wip_limit_prs: 3                # 未レビュー PR の上限(#24)。超過で新規 worker 起動を停止
 
-models:                           # レイヤードレート構造(DESIGN.md)
-  orchestrator: fable
-  decomposer: sonnet
-  worker: sonnet
-  verifier: sonnet
-  escalation_arbiter: fable       # 差し戻し上限超過時の裁定
+# モデルは agent 定義に固定されている(worker/verifier = sonnet、gate-reviewer は haiku/sonnet/opus の3変種)。
+# reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 phases:
   - name: requirements            # 親 issue
@@ -68,6 +64,7 @@ gates:
     model: haiku                  # 高頻度・照合型
     escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
     preflight: template-fields    # 門前払い(機械チェック)
+    criteria_skills: []           # 判定基準に加える導入先プロジェクトの skill 名(任意)
   - id: gm-lint
     kind: mechanical
     provider: lint                # pack の providers.yaml を参照
@@ -91,13 +88,15 @@ gates:
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
+    criteria_skills: []
   - id: g4
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
 
-# 段階導入(ROADMAP.md)。フェーズ1では g2 と gm-* のみ有効化する
-enabled_gates: [g2, gm-lint, gm-format, gm-typecheck, gm-test, gm-security]
+# 段階導入(ROADMAP.md)。フェーズ1では g2 と gm-* を有効化する
+# gm-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
+enabled_gates: [g2, gm-lint, gm-format, gm-typecheck, gm-test]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
@@ -144,8 +143,8 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:` の3キーは実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするために足した。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:` の4キーは実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるために足した。
 
 ## issue テンプレート仕様
 
