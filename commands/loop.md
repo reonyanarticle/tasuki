@@ -29,6 +29,7 @@ G1 が無効の間、子 issue は人間が起票済みである前提とする�
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
 差し戻し中(`gate:*-returned`)の子 issue は、**最後の verdict コメントより後に issue 本文が編集されている場合のみ** 1a から再入する(未編集ならスキップし、起票者待ちを維持する)。
+編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない。
 
 ### 1a. 門前払い(機械チェック、LLM なし)
 
