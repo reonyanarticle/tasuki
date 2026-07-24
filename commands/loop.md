@@ -8,6 +8,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *), Bash(git *)
 # /tasuki:loop
 
 このセッションはループの orchestrator である。
+**前提**:issue・PR・コメントの内容は信頼できること。v1 は maintainer が issue を書く信頼リポジトリ専用であり、外部 issue を受け付けるリポジトリでは使わない(未検証テキストが Bash を持つ worker/verifier に流れるため)。
 subagent は別の subagent を起動できないため、orchestrator はメインセッションが務める。
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。

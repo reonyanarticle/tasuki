@@ -12,6 +12,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 前提チェック(失敗したら中断して報告)
 
+0. **信頼境界の確認(必須)**:tasuki v1 は issue・PR・コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証・sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
 1. git リポジトリであり、GitHub リモート(origin)があること
 2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する

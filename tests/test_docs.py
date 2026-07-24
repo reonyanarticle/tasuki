@@ -73,6 +73,16 @@ def test_phase3_full_loop_wiring() -> None:
     assert "integration フェーズ" in loop
 
 
+def test_security_threat_model_documented() -> None:
+    """信頼境界(v1 は信頼 issue 限定)が SECURITY.md と loop-init に明記されていること。"""
+    sec = (ROOT / "docs/SECURITY.md").read_text()
+    assert "信頼できるリポジトリでのみ使う" in sec
+    assert "sandbox" in sec  # v2 ハードニングの言及
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "信頼境界の確認" in init
+    assert "worker/verifier に流れる" in init
+
+
 def test_gm_is_hybrid() -> None:
     """GM のハイブリッド化(GM-local / GM-ci)が docs と手順の両方に現れること。"""
     assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()
