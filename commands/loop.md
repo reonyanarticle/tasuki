@@ -12,6 +12,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *), Bash(git *)
 subagent は別の subagent を起動できないため、orchestrator はメインセッションが務める。
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。
+**issue に残すコメントは人間可読の markdown を主とし、機械可読の JSON / YAML は `<details>` に畳む**(生の JSON / YAML をそのまま貼らない。状態復元は畳んだ JSON を読む。書式は `tasuki:gate-review` skill)。
 
 有効なゲートは契約の `enabled_gates` が決める(フェーズ3既定: G0 / G1 / G2 / GM / G3 / G4 の全ゲート)。
 子 issue が無ければ decomposer が親を分割し、既にあれば G1 がその分割を検査する(§1)。
@@ -78,7 +79,7 @@ GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定
 ### 2a. 門前払い(機械チェック、LLM なし)
 
 契約の `child_issue_required_fields` の各見出しについて、issue 本文の該当セクションが空でないかを確認する。
-空欄があれば、LLM を呼ばずに差し戻す。不足欄を列挙したコメントを issue に残し、`gate:g2-returned` ラベルを付ける。
+空欄があれば、LLM を呼ばずに差し戻す。不足欄を人間可読の markdown(箇条書き)で列挙したコメントを issue に残し、`gate:g2-returned` ラベルを付ける。
 同じ内容のコメントが既にあれば再投稿しない(冪等)。
 
 あわせて **予算欄の値を読み取る**。子 issue の `予算(max_iterations)` の値を、この issue の内側ループ上限として採用する(有効上限= min(契約の `max_inner_loop`, issue の予算値)。パースできない場合は差し戻し対象)。
@@ -95,7 +96,7 @@ reviewer へ委譲する。
 - 親 issue の要件セクション(「対応する親要件」の実在と方向一致の照合用)
 
 契約の `gates[].criteria_skills` に skill 名があれば、判定基準として読み込むよう reviewer への指示に含める。
-返った verdict JSON を issue コメントに記録する(既存の同一 verdict がないことを確認してから)。
+返った verdict を issue コメントに記録する(人間可読の markdown +畳んだ JSON。`tasuki:gate-review` skill の書式。既存の同一 verdict がないことを確認してから)。
 
 **エスカレーション規則**：
 
@@ -168,7 +169,7 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 - 契約の report フェーズ `receives` 定義+差し戻し履歴(過去 verdict があれば)
 - 子 issue 本文(受け入れ条件・成功基準。対応表の N対1 照合用)
 
-返った verdict JSON を issue コメントに記録する(冪等)。
+返った verdict を issue コメントに記録する(人間可読の markdown +畳んだ JSON。冪等)。
 エスカレーション規則は G2 と同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
 発振検知(観点 #25)も同様に適用する。
 

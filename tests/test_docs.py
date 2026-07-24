@@ -92,6 +92,15 @@ def test_readme_has_flow_and_install() -> None:
     assert "## 前提" in r
 
 
+def test_verdict_comment_human_readable() -> None:
+    """verdict コメントは人間可読 markdown を主とし JSON を details に畳む書式を定めること。"""
+    sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "人間可読" in sk
+    assert "<details>" in sk
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "<details>" in loop and "生の JSON / YAML をそのまま貼らない" in loop
+
+
 def test_plan_diagram_skill() -> None:
     """計画可視化 skill が用途別の図種選択(flowchart/stateDiagram、gantt 不採用)を定めること。"""
     sk = (ROOT / "skills/plan-diagram/SKILL.md").read_text()

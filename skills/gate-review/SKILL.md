@@ -54,7 +54,7 @@ worker へ差し戻さず、axis-question に昇格して verdict の questions 
 
 ## 出力: verdict JSON
 
-issue コメントに記録される。スキーマは次のとおり。
+reviewer(agent)の最終出力は次のスキーマの JSON とする(orchestrator が機械的に読む)。
 
 ```json
 {
@@ -69,6 +69,35 @@ issue コメントに記録される。スキーマは次のとおり。
   ]
 }
 ```
+
+## issue コメントの書式(人間可読を主にする)
+
+orchestrator がこの verdict を issue コメントに残すときは、**人間が読める markdown を主**とし、機械可読の JSON は末尾の `<details>` に畳む。
+生の JSON や YAML をそのまま貼らない(人間が読めないため)。
+状態復元は畳んだ JSON を読めば従来どおりできる。
+
+```markdown
+## G2 着手ゲート: 🔴 差し戻し TOO_ABSTRACT
+opus / confidence high
+
+**理由**
+- 受け入れ条件が「使いやすく」のまま
+- 打ち切り条件が未定義
+
+**次の一手**: 起票者へ。上記を測定可能な形に直して再実行してください。
+
+**質問**
+- (起票者へ)想定する応答時間の上限はありますか
+
+<details><summary>machine verdict (JSON)</summary>
+
+（ここに上記の verdict JSON をそのまま入れる）
+
+</details>
+```
+
+verdict が PASS のときは見出しを「✅ PASS」にし、理由を箇条書きで残す(質問と次の一手は不要なら省く)。
+gate の絵文字は使わなくてよいが、PASS=✅、差し戻し=🔴、triage=🟣 のように状態が一目で分かる印を先頭に付ける。
 
 ## 差し戻し文の書式
 
