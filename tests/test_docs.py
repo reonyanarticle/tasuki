@@ -67,7 +67,7 @@ def test_phase3_full_loop_wiring() -> None:
     assert "親 issue の close は人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
     assert "遡及適用しない" in loop
-    assert "分割案 YAML を全文添付" in loop
+    assert "分割案 YAML は `<details>` に畳む" in loop and "分割案の永続化" in loop
     assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
     assert "不採用クローズ" in loop
     assert "integration フェーズ" in loop
@@ -88,7 +88,7 @@ def test_readme_has_flow_and_install() -> None:
     r = (ROOT / "README.md").read_text()
     assert "```mermaid" in r
     assert "flowchart" in r
-    assert "--plugin-dir" in r      # 導入方法
+    assert "--plugin-dir" in r  # 導入方法
     assert "## 前提" in r
 
 
@@ -99,6 +99,12 @@ def test_verdict_comment_human_readable() -> None:
     assert "<details>" in sk
     loop = (ROOT / "commands/loop.md").read_text()
     assert "<details>" in loop and "生の JSON / YAML をそのまま貼らない" in loop
+    # G0/G1/G4 の verdict 記録も人間可読へ揃え、旧表現(生コメント記録)を残さないこと
+    assert "verdict は親 issue にコメントで記録する(冪等)。" not in loop
+    # 分割案 YAML を生で全文添付しないこと(details に畳む)
+    assert "分割案 YAML を全文添付" not in loop
+    # verifier の JSON をそのまま貼らない旨を定めること
+    assert "そのまま issue に貼らない" in loop
 
 
 def test_plan_diagram_skill() -> None:

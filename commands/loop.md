@@ -25,7 +25,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 4. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
 5. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
 6. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた open PR が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す
-7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は `tasuki-gate-reviewer-opus` へ委譲し、渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue にコメントで記録する(冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は `tasuki-gate-reviewer-opus` へ委譲し、渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(G1、レイヤー構成)
 
@@ -45,7 +45,7 @@ sub-issues で子 issue 一覧を得る。
 - 親 issue 本文(要件の対応照合用)
 - 契約の implementation フェーズ `receives` 定義(子の待ち位置)+差し戻し履歴
 
-verdict は親 issue にコメントで記録する(冪等)。**PASS の verdict コメントには分割案 YAML を全文添付する**(分割案の永続化。部分起票クラッシュからの復旧と監査の基盤)。
+verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。**PASS の verdict コメントには、人間可読の子一覧(各子のタイトルと対応する親要件)を主として残し、機械可読の分割案 YAML は `<details>` に畳む**(全文を生で貼らない。畳んだ YAML が分割案の永続化=部分起票クラッシュからの復旧と監査の基盤)。
 集合レベルの基準は契約の `gates.g1.set_signals`(依存の循環、親要件の孤児、親予算との整合)に依る。
 
 - **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict のみ)。反復は `max_iterations_per_gate`。G1 は opus 判定のため昇格先は無く、超過で `loop:triage`
@@ -141,6 +141,7 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 
 `tasuki-verifier` へ委譲する。
 渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準・打ち切り条件のみ。
+verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。
 
 まず verifier の `drift_check` を確認する。
 **`drift_check: drifting` なら、status の値に関わらず** 作業が元要件からずれているため、G2 相当の再照合(2b)に戻す(観点 #21)。
@@ -207,7 +208,7 @@ G4 が照合する契約は integration フェーズの `receives` 定義(全親
 - 各子 issue の最終レポート(リンクと要旨)
 - 子 issue の完了状態一覧
 
-verdict は親 issue にコメントで記録する(冪等)。
+verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。
 
 - **PASS** → `gate:g4-passed` を付け、親要件⇔子成果のロールアップ表を親 issue にコメントする。**親 issue の close は人間が行う**(完了の定義への最終適合は人間の判断)
 - **差し戻し** → 孤児の親要件(どの子成果にも対応しない要件)を列挙し、`gate:g4-returned` と `loop:triage` を付ける。不足を埋める追加子 issue の分割案を decomposer に作らせ、提案として親にコメントする(起票は人間承認後)
