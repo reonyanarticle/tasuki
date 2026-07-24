@@ -83,6 +83,15 @@ def test_security_threat_model_documented() -> None:
     assert "worker/verifier に流れる" in init
 
 
+def test_readme_has_flow_and_install() -> None:
+    """README に処理フローの mermaid 図と、導入・前提の節があること。"""
+    r = (ROOT / "README.md").read_text()
+    assert "```mermaid" in r
+    assert "flowchart" in r
+    assert "--plugin-dir" in r      # 導入方法
+    assert "## 前提" in r
+
+
 def test_plan_diagram_skill() -> None:
     """計画可視化 skill が用途別の図種選択(flowchart/stateDiagram、gantt 不採用)を定めること。"""
     sk = (ROOT / "skills/plan-diagram/SKILL.md").read_text()

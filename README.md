@@ -26,6 +26,64 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 
 検証(実験)と開発の両方で使える汎用構成とし、まず Python を対象に実装している。
 
+## 処理の流れ
+
+人間が書くのは親 issue とマージだけで、あいだのレビューと実装はゲートと agent が回す。
+差し戻しは triage として人間に返る。
+
+```mermaid
+flowchart TD
+    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    classDef gate fill:#8250df,stroke:#6639ba,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+
+    H0["人間: 親 issue を書く"]:::human --> L["/tasuki:loop"]
+    L --> G0{"G0 受理"}:::gate
+    G0 -->|"曖昧"| T["人間: triage で issue を直す"]:::human
+    T --> L
+    G0 -->|"OK"| D["decomposer が分割"]:::work
+    D --> G1{"G1 分割"}:::gate
+    G1 -->|"NG"| T
+    G1 -->|"OK"| C["子 issue を起票しレイヤー化"]:::work
+
+    subgraph CHILD["各子 issue(レイヤー内は並行)"]
+        direction TB
+        G2{"G2 着手"}:::gate -->|"曖昧/詳しすぎ"| TT["人間へ差し戻し"]:::human
+        G2 -->|"OK"| W["worker が実装"]:::work
+        W --> GM{"GM 形式(lint/型/テスト)"}:::gate
+        GM -->|"NG"| W
+        GM -->|"OK"| V["verifier が成功基準を照合"]:::work
+        V --> G3{"G3 成果(レポート照合)"}:::gate
+        G3 -->|"NG"| W
+        G3 -->|"OK"| R["draft PR を ready 化"]:::work
+    end
+
+    C --> G2
+    R --> HM["人間: PR をマージ"]:::human
+    HM --> G4{"G4 統合"}:::gate
+    G4 -->|"孤児要件あり"| T
+    G4 -->|"OK"| HC["人間: 親 issue を close"]:::human
+```
+
+## 前提
+
+- git リポジトリと GitHub リモート
+- `gh` CLI(sub-issues / issue dependencies を使うため v2.94.0 以上を推奨。未満は `gh api` フォールバック)
+- Python プロジェクト(`pyproject.toml`)と `uv`
+- CI は plugin が生成する(既存 CI は前提にしない)
+
+## 導入
+
+Claude Code に plugin として読み込む。
+開発や試用は `--plugin-dir` で直接読む。
+
+```bash
+claude --plugin-dir /path/to/tasuki
+```
+
+常用する場合は `.claude-plugin/marketplace.json` を用意し、`/plugin marketplace add <パス>` で登録する。
+読み込めたら `/plugin` の一覧に tasuki が出る。
+
 ## 使い方
 
 1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
