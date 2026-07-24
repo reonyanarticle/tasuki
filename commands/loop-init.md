@@ -12,6 +12,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 前提チェック(失敗したら中断して報告)
 
+0. **信頼境界の確認(必須)**:tasuki v1 は issue・PR・コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証・sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
 1. git リポジトリであり、GitHub リモート(origin)があること
 2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する
@@ -136,8 +137,10 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.test.command>
       - name: test-tampering check   # 観点 #18。機械検知できる範囲: 削除・skip/xfail・設定による除外
+        env:
+          BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
-          base="origin/${{ github.base_ref }}"
+          base="origin/$BASE_REF"
           git diff "$base"...HEAD -- 'tests/' '**/test_*.py' '**/*_test.py' > /tmp/test.diff
           if grep -E '^\-.*def test_' /tmp/test.diff; then
             echo '::error::既存テストの削除を検出。仕様と矛盾する場合は task-question にすること'; exit 1
@@ -145,13 +148,20 @@ jobs:
           if grep -E '^\+.*(pytest\.mark\.(skip|xfail)|unittest\.skip|importorskip)' /tmp/test.diff; then
             echo '::error::テストの skip / xfail 追加を検出'; exit 1
           fi
-          git diff "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg conftest.py > /tmp/conf.diff
-          if grep -E '^\+.*(addopts|--deselect|--ignore|collect_ignore|\[tool\.basedpyright\]|typeCheckingMode)' /tmp/conf.diff; then
-            echo '::error::テスト・型チェック設定の変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          # 型/テスト設定ファイル(pyproject を使う project では通常不要)の新規追加は一律で差し戻す
+          if git diff --name-status "$base"...HEAD -- tox.ini pyrightconfig.json setup.cfg | grep -qE '^A'; then
+            echo '::error::設定ファイル(tox.ini / pyrightconfig.json / setup.cfg)の新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          fi
+          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
+          git diff "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg tox.ini pyrightconfig.json '**/conftest.py' > /tmp/conf.diff
+          if grep -E '^\+.*(addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\s*=|\[tool\.(ruff|black|basedpyright|pytest))' /tmp/conf.diff; then
+            echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if ! git diff --quiet "origin/${{ github.base_ref }}"...HEAD -- uv.lock; then
+          if ! git diff --quiet "origin/$BASE_REF"...HEAD -- uv.lock; then
             echo '::warning::依存の変更を検出(uv.lock)。PR 本文の変更点に理由があるか確認'
           fi
   security:
@@ -175,7 +185,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "loop-gates: all green"
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "loop-gates: all green"
 ```
 
 生成時の注意:
@@ -184,7 +194,7 @@ jobs:
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
-- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ・タグ参照は差し替え可能で supply-chain リスクになる
+- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ・タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
