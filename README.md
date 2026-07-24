@@ -29,20 +29,28 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 ## 使い方
 
 1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
-2. 運用開始前に、判定例の fixture を5件程度手書きする。手順は `tasuki:baton-contract` skill が案内する
-3. 親 issue の配下に子 issue を起票し、`/tasuki:loop <親 issue 番号>` で自走させる
-4. `/tasuki:loop-status` で、人間の裁定待ち(triage inbox)と進行状況を確認する。**マージは常に人間が実行する**
+2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景・目的・価値・予算・完了の定義を埋める)。子 issue は自分で書かない
+3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理(G0)→分割(G1)→着手(G2)の順にゲートを通し、通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
+4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。分割・依存・状態は mermaid の計画図で俯瞰できる
+5. **マージは常に人間が実行する**。ゲートが行うのはレビューまでで、最終判断は人間に残る
+
+レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
+issue を書く前に別途レビューさせる工程は要らない。
+
+補足(任意だが推奨):ゲートのレビュアーは契約の「待ち位置」という自然言語で判定するため、最初は人間の感覚とズレる。
+「この issue は PASS のはず」「これは差し戻しのはず」という判定例を数件書いて目盛りを合わせると、初回から判定が安定する。
+手順は `tasuki:baton-contract` skill が案内する。
+
+## 安全に使える範囲
+
+v1 は issue・PR・コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。
+外部からの issue を受け付けるリポジトリでは、未検証テキストが agent に流れるため使わない。
+詳細と v2 のハードニングは [docs/SECURITY.md](docs/SECURITY.md) にある。
 
 ## ドキュメント
 
 設計文書は [docs/](docs/README.md) にまとまっており、読む順序と索引は [docs/README.md](docs/README.md) が案内する。
-
-## ステータス
-
-段階導入のフェーズ3まで完了しており、有効なゲートは全 abstraction ゲート(G0 受理、G1 分割、G2 着手、G3 成果、G4 統合)と GM 形式ゲートである。
-各フェーズの受け入れ条件と E2E の実施結果は [docs/ROADMAP.md](docs/ROADMAP.md) に記録している。
-
-**セキュリティ上の前提**:v1 は issue・PR・コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。外部 issue を受け付けるリポジトリでは使わない。詳細と v2 ハードニングは [docs/SECURITY.md](docs/SECURITY.md)。
+実装の到達状況(段階導入と E2E 結果)は [docs/ROADMAP.md](docs/ROADMAP.md) にある。
 
 ## License
 
