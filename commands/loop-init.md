@@ -136,8 +136,10 @@ jobs:
       - run: uv sync --frozen
       - run: <providers.test.command>
       - name: test-tampering check   # 観点 #18。機械検知できる範囲: 削除・skip/xfail・設定による除外
+        env:
+          BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
-          base="origin/${{ github.base_ref }}"
+          base="origin/$BASE_REF"
           git diff "$base"...HEAD -- 'tests/' '**/test_*.py' '**/*_test.py' > /tmp/test.diff
           if grep -E '^\-.*def test_' /tmp/test.diff; then
             echo '::error::既存テストの削除を検出。仕様と矛盾する場合は task-question にすること'; exit 1
@@ -145,13 +147,15 @@ jobs:
           if grep -E '^\+.*(pytest\.mark\.(skip|xfail)|unittest\.skip|importorskip)' /tmp/test.diff; then
             echo '::error::テストの skip / xfail 追加を検出'; exit 1
           fi
-          git diff "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg conftest.py > /tmp/conf.diff
-          if grep -E '^\+.*(addopts|--deselect|--ignore|collect_ignore|\[tool\.basedpyright\]|typeCheckingMode)' /tmp/conf.diff; then
-            echo '::error::テスト・型チェック設定の変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          # lint/format/typecheck/test の設定ソースを網羅的に対象化し、追加・変更は一律で人間承認へ回す
+          if ! git diff --quiet "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg tox.ini pyrightconfig.json '**/conftest.py'; then
+            echo '::error::テスト・lint・型チェックの設定ファイルの変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if ! git diff --quiet "origin/${{ github.base_ref }}"...HEAD -- uv.lock; then
+          if ! git diff --quiet "origin/$BASE_REF"...HEAD -- uv.lock; then
             echo '::warning::依存の変更を検出(uv.lock)。PR 本文の変更点に理由があるか確認'
           fi
   security:
@@ -175,7 +179,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "loop-gates: all green"
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "loop-gates: all green"
 ```
 
 生成時の注意:
@@ -184,7 +188,7 @@ jobs:
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
-- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ・タグ参照は差し替え可能で supply-chain リスクになる
+- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ・タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
