@@ -83,6 +83,17 @@ def test_security_threat_model_documented() -> None:
     assert "worker/verifier に流れる" in init
 
 
+def test_plan_diagram_skill() -> None:
+    """計画可視化 skill が用途別の図種選択(flowchart/stateDiagram、gantt 不採用)を定めること。"""
+    sk = (ROOT / "skills/plan-diagram/SKILL.md").read_text()
+    assert "flowchart LR" in sk
+    assert "stateDiagram-v2" in sk
+    assert "gantt" in sk and "使わない" in sk
+    assert "maxEdges" in sk
+    assert "tasuki:plan-diagram" in (ROOT / "commands/loop.md").read_text()
+    assert "tasuki:plan-diagram" in (ROOT / "commands/loop-status.md").read_text()
+
+
 def test_gm_is_hybrid() -> None:
     """GM のハイブリッド化(GM-local / GM-ci)が docs と手順の両方に現れること。"""
     assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()

@@ -36,7 +36,8 @@ tasuki/
 ├── skills/
 │   ├── gate-review/SKILL.md      # ゲート判定手順(3値判定・差し戻し文の書式)
 │   ├── baton-contract/SKILL.md   # 契約(待ち位置)の書き方・読み方
-│   └── loop-report/SKILL.md      # レポート作成手順(対応表必須)
+│   ├── loop-report/SKILL.md      # レポート作成手順(対応表必須)
+│   └── plan-diagram/SKILL.md     # 実装計画・進行の mermaid 可視化(用途別図種)
 ├── agents/
 │   ├── decomposer.md
 │   ├── gate-reviewer.md          # haiku(G2 標準)。コンテキスト非共有・読み取り専用

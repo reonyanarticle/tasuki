@@ -33,6 +33,8 @@ allowed-tools: Read, Grep, Glob, Bash(gh *)
 - assignee と `loop:in-progress` から worker 割り当て
 - 関連 PR の状態(draft / ready / CI 結果)を `gh pr list` と check-runs から
 
+`$ARGUMENTS` に親 issue を指定した場合は、`tasuki:plan-diagram` skill の手順で **mermaid の計画図(flowchart)** を出力し、依存とレイヤーと各子の状態を俯瞰できるようにする(ラベルから状態色を決める)。図は表示のみで、issue への書き込みはしない。
+
 ## 3. メトリクス
 
 issue コメントの verdict JSON を集計して表示する。
