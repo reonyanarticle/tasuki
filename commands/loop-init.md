@@ -148,9 +148,14 @@ jobs:
           if grep -E '^\+.*(pytest\.mark\.(skip|xfail)|unittest\.skip|importorskip)' /tmp/test.diff; then
             echo '::error::テストの skip / xfail 追加を検出'; exit 1
           fi
-          # lint/format/typecheck/test の設定ソースを網羅的に対象化し、追加・変更は一律で人間承認へ回す
-          if ! git diff --quiet "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg tox.ini pyrightconfig.json '**/conftest.py'; then
-            echo '::error::テスト・lint・型チェックの設定ファイルの変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          # 型/テスト設定ファイル(pyproject を使う project では通常不要)の新規追加は一律で差し戻す
+          if git diff --name-status "$base"...HEAD -- tox.ini pyrightconfig.json setup.cfg | grep -qE '^A'; then
+            echo '::error::設定ファイル(tox.ini / pyrightconfig.json / setup.cfg)の新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          fi
+          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
+          git diff "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg tox.ini pyrightconfig.json '**/conftest.py' > /tmp/conf.diff
+          if grep -E '^\+.*(addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\s*=|\[tool\.(ruff|black|basedpyright|pytest))' /tmp/conf.diff; then
+            echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
         env:
