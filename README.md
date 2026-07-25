@@ -131,6 +131,32 @@ tasuki は次の4つで止める。
 止まったものは `loop:triage` ラベルが付いて人間の判断待ちになる。
 `/tasuki:loop-status` がその一覧(アンドン)を最初に表示する。
 
+### ブランチはこう流れる
+
+```mermaid
+gitGraph
+    commit id: "main"
+    branch loop/parent-1
+    commit id: "統合ブランチ開始"
+    branch child-2
+    commit id: "#2 基盤"
+    checkout loop/parent-1
+    merge child-2 id: "ループが取り込む"
+    branch child-3
+    commit id: "#3"
+    checkout loop/parent-1
+    branch child-4
+    commit id: "#4"
+    checkout loop/parent-1
+    merge child-3 id: "取り込み(並行)"
+    merge child-4 id: "取り込み(並行) "
+    checkout main
+    merge loop/parent-1 id: "親PR: 人間がマージ" type: HIGHLIGHT
+```
+
+子 PR は統合ブランチ(`loop/parent-1`)へ合流し、ループが取り込む。
+main に入る経路は**親 PR の人間マージただ1つ**である(図の強調印)。
+
 ### 検査が二段になっている
 
 同じ検査を、手元と CI の二か所で走らせる。
