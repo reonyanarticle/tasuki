@@ -152,3 +152,20 @@ def test_binary_input_does_not_raise(tmp_path: Path) -> None:
     out = tmp_path / "out.sarif"
     assert normalizer.convert(src, out) == 0
     assert json.loads(out.read_text())["version"] == "2.1.0"
+
+
+def test_infinite_line_number_does_not_raise(tmp_path: Path) -> None:
+    """行番号が inf でも例外を投げないこと(JSON の 1e400 は inf になる)。"""
+    src = tmp_path / "in.json"
+    src.write_text(
+        '{"generalDiagnostics": [{"file":"a.py","severity":"error","message":"m",'
+        '"range":{"start":{"line":1e400,"character":0}}}]}'
+    )
+    out = tmp_path / "out.sarif"
+    assert normalizer.convert(src, out) == 1
+    assert (
+        json.loads(out.read_text())["runs"][0]["results"][0]["locations"][0]["physicalLocation"][
+            "region"
+        ]["startLine"]
+        == 1
+    )

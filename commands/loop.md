@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を G2 ゲートと GM(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh *), Bash(git *)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Bash
 ---
 
 # /tasuki:loop
@@ -21,11 +21,11 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 
 1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する
 2. `$ARGUMENTS` の親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る(gh < 2.94.0 なら `gh api` フォールバック)
-3. **親 issue の門前払い(機械チェック、LLM なし)**：契約の `parent_issue_required_fields` の各見出しについて、親 issue 本文の該当セクションが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:g0-returned` と `loop:triage` を付けて中断する(G0 の LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
+3. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.7 の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:g0-returned` と `loop:triage` を付けて中断する(G0 の LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
 4. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
 5. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
 6. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた open PR が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す
-7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は `tasuki-gate-reviewer-opus` へ委譲し、渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(契約の `gates.g0.reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer-opus` へ。それ以外の名前ならその導入先プロジェクト agent へ)。渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(G1、レイヤー構成)
 
@@ -34,12 +34,13 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 sub-issues で子 issue 一覧を得る。
 
 - **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文と、親コメントに G1 の差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。返る分割案 YAML が G1 の被検査物になる
-- **子 issue が既にある場合**:まず親コメントの最新 G1 PASS verdict に添付された分割案と突き合わせる。**未起票の子が残っていれば(部分起票のクラッシュ復旧)、再判定せずに不足分だけを起票して 1c へ進む**。分割案の添付が無い(人間起票の)場合は、既存の子 issue 群の本文が被検査物になる
+- **子 issue が既にある場合**:まず親コメントの最新 G1 PASS verdict に添付された分割案と突き合わせる。**未起票の子が残っていれば(部分起票のクラッシュ復旧)、再判定せずに §1b の PASS 経路の残りを完了させる**:不足分の起票、依存(blocked_by)の設定、`gate:g1-passed` の付与の3つをすべて行ってから 1c へ進む(依存を設定せずに進むと、前提が入っていない default branch から worker が実装する)。分割案の添付が無い(人間起票の)場合は、既存の子 issue 群の本文が被検査物になる
+  - **例外**:親に `loop:triage` が付いている場合はこの補完を行わない。G1 が分割案の欠陥(依存の循環等)を理由に停止させた状態であり、補完すると欠陥のある分割をそのまま完成させてしまう。分割案自体を decomposer に作り直させる
 
 ### 1b. G1(分割ゲート)
 
 親 issue に `gate:g1-passed` が無ければ判定する。
-`tasuki-gate-reviewer-opus` へ委譲し、渡すのは次の3つだけ。
+**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer-opus`)。渡すのは次の3つだけ。
 
 - 被検査物(分割案 YAML または既存子 issue 群の本文)
 - 親 issue 本文(要件の対応照合用)
@@ -66,11 +67,13 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 ## 2. 子 issue ごとのゲート実行(現在レイヤー)
 
 現在レイヤー内の子 issue は並行に処理してよい(worker の並行起動)。ゲート判定と issue への書き込みは orchestrator が到着順に直列で行う(観点 #20)。
-worker を起動するたびに WIP(観点 #24)を再確認し、上限到達中の子は「WIP 待ち」として保留する(終端状態ではない。ready PR の人間マージが解放条件であることを §3a の報告に明示する)。
+worker を起動するたびに WIP(観点 #24)を再確認し、上限到達中の子は「WIP 待ち」として保留する。WIP 待ちは**終端状態ではない停止状態**である。同一 run 内で人間のマージを待たず、run を終了して報告する(次の run で解放されていれば着手する)。解放条件が ready PR の人間マージであることを §3a の報告に明示する。
 GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定後に必ず削除する。開始時に同名の残骸があれば前回クラッシュの残りとして先に削除する(冪等)。
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
-ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、最後のループ由来コメント(verdict、レポート、質問、回収コメント)から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
+ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、**基準時刻**から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
+基準時刻は「最後のループ由来コメント(verdict、レポート、質問、回収コメント)の時刻」とし、**ループ由来コメントが1件も無い場合は assignee が設定された時刻(timeline の `assigned` イベント)を使う**(2a や 2b でコメントを残す前にクラッシュした場合、これが唯一の基準点になる)。
+**誤回収を避けるため、worker 委譲中は生存を示す**。`loop:in-progress` が付いている子については、worker が長時間動き続ける場合があるため、orchestrator は委譲中に定期的な進捗コメントを残すか、回収前に対象 PR の最終コミット時刻も基準時刻の候補に含める(直近のコミットがあれば稼働中とみなす)。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
 この回収が無いと、クラッシュした実行が担当した子 issue は以後すべての run から永久にスキップされ、`loop:triage` にも上がらないまま停止する。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
@@ -151,7 +154,7 @@ verifier の返す JSON は orchestrator が機械的に読むための内部デ
 
 `drift_check: aligned` の場合、`status` で分岐する。
 
-- `met` → 契約の `enabled_gates` に `g3` が含まれる場合は 2f(成果ゲート)へ。含まれない場合は 2g(ready 化)へ
+- `met` → 契約の `enabled_gates` に `g3` が含まれる場合は 2f(成果ゲート)へ。含まれない場合は 2h(ready 化)へ
 - `continue` → 未達項目を新規 worker セッションへ。反復は 2a で決めた有効上限(min(`max_inner_loop`, issue 予算値))まで
 - `abort` → 打ち切り。理由をコメントし `loop:triage` を付け、`loop:in-progress` を外す
 - `waiting` → 長時間ジョブの進行中。停滞と区別し、ポーリング間隔を報告して待つ(観点 #14)
@@ -184,13 +187,41 @@ verifier の返す JSON は orchestrator が機械的に読むための内部デ
 
 PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g へ。
 
-### 2g. ready 化(GM-ci、出荷ゲート)
+### 2g. 出荷前レビュー(最終コード評価)
+
+**実行条件**:G3 が PASS し、GM-ci が全 job 成功していること。
+反復のたびには行わない。実装が固まってから1回だけ行う(差し戻しで実装が変わったら、その回のぶんは無効になり再実行する)。
+
+**これは人間が起動するコマンドである。** orchestrator は自分で起動せず、実行を促して結果を待つ(課金と実行時間が人間の判断に属するため)。
+
+1. **`/code-review` を下表の5観点で回す。** 一度に全部を渡さず、**1観点ずつ指定して5回に分ける**(一度に渡すと観点が薄まり、指摘が表層に寄る)
+2. 返った所見を**そのまま信じない**。対象コードを読み、再現条件を確かめ、**実在するものだけ**を採用する(古いツリーに対する所見や、仕様どおりの挙動を欠陥と誤認した所見が混ざる)
+3. 採用した所見に修正が要るなら、新規の worker セッションへ差し戻す(内側ループ上限に計上する)。修正後は 2d から通り直す
+4. **セキュリティ**:変更が認証、権限、外部入力、秘密情報、CI 設定のいずれかに触れる場合、または契約の `enabled_gates` に `gm-security` がある場合は、`/claude-security:claude-security` を回す。所見の扱いは 2 と同じ
+5. 人間が結果を確認し、問題が無ければ 2h(ready 化)へ進む
+
+**レビュー観点(5つ)**
+
+Google のコードレビュー指針(design を最重要とし、functionality、complexity、tests、naming と続く)を、tasuki の1子 issue ぶんの変更に合わせて5つへ畳んだもの。
+
+| # | 観点 | 見るもの |
+|---|---|---|
+| 1 | 設計と統合 | 変更を置いた場所と抽象の粒度。既存との重複、責務のはみ出し、三層構造(core / pack / repo override)の越境 |
+| 2 | 正しさと境界条件 | 子 issue の受け入れ条件を実際に満たすか。エラー経路、空と null、冪等性、並行時の競合、失敗時の後始末 |
+| 3 | テストの妥当性 | AC / SC に対応するテストがあるか。実装出力を写しただけの期待値になっていないか。**実装を壊したときに落ちるか** |
+| 4 | 複雑さと可読性 | 過剰な一般化、次に読む人が追えるか、命名とコメントが「なぜ」を語っているか |
+| 5 | 運用影響 | revert 可否、移行と後方互換、失敗が観測できるか、性能と費用の非機能要件を満たすか |
+
+観点を増やしたくなったら、増やす前に「その観点で過去に見逃した実例があるか」を確認する(観点は多いほど薄まる)。
+
+### 2h. ready 化(GM-ci、出荷ゲート)
 
 最終コミットの check-runs を `gh api` で読み、全 job の成否を確認する(マージ判断の正は CI)。
 
 - **check-run が1件も無い** → PASS とみなさない(workflow 未生成、実行スキップ、権限不備を確認し、解決できなければ `loop:triage`。fail-closed)
 - **未完了の job がある**(`status` が `queued` または `in_progress`) → まだ判定しない。完了までポーリングして待つ(差し戻しに数えない。`gh pr create` 直後と push 直後は必ずこの状態を通る)
-- **`cancelled` または `skipped` の job がある** → 失敗として扱わない。反復中の push で `concurrency` が旧 run を打ち切った結果であることが多いため、最新コミットの run を確認し直す。最新コミットに対する完了 run が無ければ `gh run rerun` で走らせ直し、それでも `cancelled` が残る場合のみ `loop:triage`(打ち切られた run を差し戻し理由にすると、欠陥が無いまま `max_iterations_per_gate` を溶かす)
+- **`cancelled` の job がある** → 失敗として扱わない。反復中の push で `concurrency` が旧 run を打ち切った結果であることが多いため、最新コミットの run を確認し直す。最新コミットに対する完了 run が無ければ `gh run rerun` で1回だけ走らせ直し、それでも `cancelled` が残る場合は `loop:triage`(打ち切られた run を差し戻し理由にすると、欠陥が無いまま `max_iterations_per_gate` を溶かす)
+- **`skipped` の job がある** → **PASS とみなさない**(fail-closed)。`skipped` は concurrency の打ち切りでは発生せず、`if:` 条件や `needs` の不成立で job が実行されなかったことを意味する。形式ゲートを一度も通っていない実装を出荷判定に通さない。workflow の条件を確認し、解決できなければ `loop:triage`
 - **失敗した job がある** → GM-local と CI の食い違い(環境差、secrets 依存のテスト等)として findings を抽出し、新規 worker セッションへ差し戻す(内側ループ上限に計上)。**実装コミットが変わったら `gate:g3-passed` を外し**、2d から通り直す(古いレポートの PASS で新しい実装を ready 化しない)
 - **全 job 成功** → PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す。完了コメントには「マージ前に人間がレポートを読むこと(観点 #13)」を明記する(G3 PASS はレポートの形式照合であり、内容の承認ではない)
 
@@ -198,7 +229,7 @@ PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g �
 
 ### 3a. レイヤーの合流
 
-現在レイヤーの全子 issue が終端状態(ready 化済み / `loop:triage` / 差し戻し待ち / WIP 待ち)になったら、レイヤーの状況を親 issue に報告する(ready PR の一覧つき)。あわせて §1c の計画コメントを最新の状態に更新する(図を描いている場合は状態色も含めて更新する)。全子が ready の場合のみ「レイヤー完了」と呼び、差し戻し待ちや triage が残る場合は「レイヤー未完了(人間対応待ち)」として残項目を列挙する。
+現在レイヤーの全子 issue が停止状態(ready 化済み / `loop:triage` / 差し戻し待ち / WIP 待ち)になったら、レイヤーの状況を親 issue に報告する(ready PR の一覧つき)。あわせて §1c の計画コメントを最新の状態に更新する(図を描いている場合は状態色も含めて更新する)。全子が ready の場合のみ「レイヤー完了」と呼び、差し戻し待ちや triage が残る場合は「レイヤー未完了(人間対応待ち)」として残項目を列挙する。
 **次レイヤーへは、現在レイヤーの ready PR がすべて人間にマージされるまで進まない**(default branch の更新が次レイヤーの前提)。
 レイヤー内の PR は G1 の「相互に依存しない機能同士は分ける」原則により独立を期待できるが、無検査ではない。**1件マージされるごとに残る ready PR の check-runs を再確認する**(古い base への判定のままマージしない。赤や conflict になった PR は 2d 相当で差し戻す)。
 次レイヤーへ進む前に、orchestrator はローカルの default branch を更新する(git fetch と pull)。worker の worktree は更新済みの default branch から作られることを起動の前提とする。
@@ -207,7 +238,7 @@ PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g �
 
 最終レイヤーまで完了し、**全子 issue が決着(PR のマージ、または人間による不採用クローズ)したら**判定する。不採用クローズされた子の親要件は「未充足」として G4 に渡し、要件の縮小(親本文の修正)か追加分割かを人間に問う材料にする。
 G4 が照合する契約は integration フェーズの `receives` 定義(全親要件⇔子成果の対応、孤児の親要件なし)である。
-`tasuki-gate-reviewer-opus` へ委譲し、渡すのは次の3つだけ。
+**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer-opus`)。渡すのは次の3つだけ。
 
 - 親 issue 本文(要件)
 - 各子 issue の最終レポート(リンクと要旨)

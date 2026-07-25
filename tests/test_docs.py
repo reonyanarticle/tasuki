@@ -198,3 +198,32 @@ def test_baton_contract_covers_set_signals() -> None:
     assert "set_signals" in sk
     for token in ("依存の循環", "孤児", "親予算"):
         assert token in sk, token
+
+
+def test_preship_review_phase_defined() -> None:
+    """出荷前レビュー(5観点)と security スキャンの実施フェーズが定義されていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "### 2g. 出荷前レビュー" in loop
+    assert "/code-review" in loop
+    assert "/claude-security:claude-security" in loop
+    assert "1観点ずつ指定して5回に分ける" in loop  # 一度に回さない
+    for kanten in (
+        "設計と統合",
+        "正しさと境界条件",
+        "テストの妥当性",
+        "複雑さと可読性",
+        "運用影響",
+    ):
+        assert kanten in loop, kanten
+    # 所見を鵜呑みにしない指示(古いツリー由来の所見が混ざるため)
+    assert "そのまま信じない" in loop
+    # このリポジトリ自身の開発フローにも同じ関門があること
+    claude_md = (ROOT / "CLAUDE.md").read_text()
+    assert "PR を作る前の関門" in claude_md
+    assert "/code-review" in claude_md and "/claude-security:claude-security" in claude_md
+
+
+def test_security_review_slash_command_removed() -> None:
+    """組み込みの /security-review への参照を残さないこと(claude-security に統一)。"""
+    for path in _WRITING_TARGETS:
+        assert "/security-review" not in path.read_text(), path.name

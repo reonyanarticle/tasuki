@@ -26,7 +26,8 @@ def _int_or_zero(value: object) -> int:
     """0 始まりの行・桁を安全に読む(null や非数値は 0 とみなす)。"""
     try:
         return int(value)  # pyright: ignore[reportArgumentType]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError は inf(JSON の 1e400 等)を int にするときに出る。
         return 0
 
 

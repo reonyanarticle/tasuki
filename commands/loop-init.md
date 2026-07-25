@@ -21,7 +21,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ### 1. 言語検出と依存の整備
 
-`pyproject.toml` があれば python pack(`packs/python/providers.yaml`)を選択する。
+各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 は python pack のみ同梱)。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
 pack の `ci.lockfile` が無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須)。
@@ -116,11 +116,11 @@ jobs:
       - run: <pack.ci.setup.install>
       - run: <providers.typecheck.command>
         continue-on-error: true    # 失敗の判定は下の gate ステップが行う
-      - run: <pack.ci.normalizer_runtime> .tasuki/<providers.typecheck.normalizer> <providers.typecheck.output_file> <providers.typecheck.output_file の SARIF 版>
+      - run: <pack.ci.normalizer_runtime> .tasuki/<providers.typecheck.normalizer> <providers.typecheck.output_file> <pack.ci.sarif_file.typecheck>
       - if: always()
         continue-on-error: true    # 同上。ゲート判定は下の typecheck gate ステップ
         uses: github/codeql-action/upload-sarif@v3
-        with: { sarif_file: <typecheck の SARIF ファイル>, category: typecheck }
+        with: { sarif_file: <pack.ci.sarif_file.typecheck>, category: typecheck }
       - name: typecheck gate
         # jq -e により、summary が欠けた JSON・空ファイル・欠損ファイルはすべて job 失敗になる(fail-closed)
         run: |
@@ -148,9 +148,9 @@ jobs:
           if grep -E "^\+.*(<pack.ci.test_tampering.added_line_pattern>)" /tmp/test.diff; then
             echo '::error::テストの skip / xfail 追加を検出'; exit 1
           fi
-          # 型/テスト設定ファイル(pyproject を使う project では通常不要)の新規追加は一律で差し戻す
-          if git diff --name-status "$base"...HEAD -- tox.ini pyrightconfig.json setup.cfg | grep -qE '^A'; then
-            echo '::error::設定ファイル(tox.ini / pyrightconfig.json / setup.cfg)の新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
+          # 検査設定ファイルの新規追加は一律で差し戻す(対象は pack が持つ)
+          if git diff --name-status "$base"...HEAD -- <pack.ci.new_config_files> | grep -qE '^A'; then
+            echo '::error::検査設定ファイルの新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
           # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
           git diff "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
@@ -204,11 +204,12 @@ jobs:
 
 生成時の注意:
 
+- **pathspec のリストは各要素をシングルクォートで囲んで展開する。** 囲まないとシェルが glob 展開し、削除済みファイルが pathspec から落ちてテスト削除の検知が静かに効かなくなる
 - **`<...>` は生成時に展開するプレースホルダである。** `<providers.*>` は pack の `providers`、`<pack.ci.*>` は pack の `ci` から読む。テンプレートに言語固有のコマンドを直接書かない(core を言語非依存に保ち、2言語目を pack の追加だけで通すため)
 
 - **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
-- **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
+- **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフックや、import 時に実行されるテスト設定)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
 - **security job を生成するなら、契約の `gates.gm-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)

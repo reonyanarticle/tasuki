@@ -23,7 +23,7 @@ worker からプロジェクト subagent へ直接委譲する場合は、導入
 ### 1. 発見
 
 `/tasuki:loop-init` がプロジェクト直下と導入済み plugin を棚卸しし、接続候補を提案する。
-レビュアー系 agent はゲート reviewer / GM への割り当てを、コマンド提供 plugin(`/security-review` 等)は provider 登録を提案する。
+レビュアー系 agent はゲート reviewer / GM への割り当てを、コマンド提供 plugin は provider 登録を提案する。
 採用結果は契約 YAML に書き込まれる。
 
 ### 2. 優先順位

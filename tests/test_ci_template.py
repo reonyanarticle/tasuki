@@ -86,7 +86,19 @@ def test_core_template_has_no_language_specifics() -> None:
     2言語目を pack の追加だけで通すための不変条件。
     """
     text = (ROOT / "commands/loop-init.md").read_text()
-    forbidden = ["setup-uv", "uv sync", "uv.lock", "basedpyright", "errorCount", "pytest.ini"]
+    forbidden = [
+        "setup-uv",
+        "uv sync",
+        "uv.lock",
+        "basedpyright",
+        "errorCount",
+        "pytest.ini",
+        "pyrightconfig",  # basedpyright の部分文字列では拾えないため個別に禁止
+        "tox.ini",
+        "setup.cfg",
+        "conftest.py",
+        "pyproject",
+    ]
     found = [tok for tok in forbidden if tok in text]
     assert not found, found
 
@@ -102,3 +114,16 @@ def test_security_action_not_on_mutable_ref(template: dict) -> None:
 def test_notify_needs_all_gates(template: dict) -> None:
     needs = set(template["jobs"]["notify-success"]["needs"])
     assert CODE_EXECUTING_JOBS | {"security"} == needs
+
+
+def test_conftest_pathspec_matches_repo_root() -> None:
+    """conftest.py の改変検知が直下のファイルも対象にすること。
+
+    git の pathspec は `**/conftest.py` では直下の conftest.py にマッチしない。
+    SECURITY.md が「全 conftest.py を対象にする」と掲げているため、ここで固定する。
+    """
+    pack = yaml.safe_load((ROOT / "packs/python/providers.yaml").read_text())
+    paths = pack["ci"]["config_tampering"]["paths"]
+    assert "conftest.py" in paths, paths  # 直下
+    assert any(p.startswith(":(glob)") and p.endswith("conftest.py") for p in paths), paths
+    assert "conftest.py" in pack["ci"]["new_config_files"]
