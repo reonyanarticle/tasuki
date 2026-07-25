@@ -135,6 +135,8 @@ tasuki は次の4つで止める。
 
 ```mermaid
 gitGraph
+    accTitle: ブランチの流れ
+    accDescr: 子 PR は統合ブランチへ合流し、ループが取り込む。main に入る経路は親 PR の人間マージただ1つである。
     commit id: "main"
     branch loop/parent-1
     commit id: "統合ブランチ開始"
