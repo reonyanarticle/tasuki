@@ -187,3 +187,14 @@ def test_no_nakaguro_in_parallel_enumeration(path: Path) -> None:
         if "・" in line and not any(tok in line for tok in _NAKAGURO_ALLOWED)
     ]
     assert not offenders, offenders
+
+
+def test_baton_contract_covers_set_signals() -> None:
+    """契約の書き方 skill が G1 の集合レベル基準(set_signals)も教えること。
+
+    too_*_signals だけでは、依存の循環や孤児要件のような集合の欠陥を書けない。
+    """
+    sk = (ROOT / "skills/baton-contract/SKILL.md").read_text()
+    assert "set_signals" in sk
+    for token in ("依存の循環", "孤児", "親予算"):
+        assert token in sk, token

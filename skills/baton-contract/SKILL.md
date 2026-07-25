@@ -30,6 +30,20 @@ description: tasuki の契約(プロファイル YAML の waiting_level / too_*_
 シグナルにない不一致を gate-reviewer が検知した場合は `confidence: low` になり、上位モデルで再判定される。
 同じ low 判定が繰り返されるなら、そのパターンをシグナルに追加する契約 PR を出す(観点 #12 知識還流)。
 
+## set_signals の書き方(G1 固有)
+
+too_*_signals が個々の出力を検査するのに対し、`gates.g1.set_signals` は**分割全体**を検査する。
+1件ずつ見ても分からず、集合として見て初めて分かる欠陥を書く。
+
+既定では次の3つを置く。
+
+- 依存の循環(子どうしの blocked_by が閉路を作る)
+- 親要件の孤児(どの子にも対応づかない親要件が残る)
+- 親予算との不整合(子の件数と `max_iterations` の合計が親のコスト上限と矛盾する)
+
+個々の子の粒度に関する基準をここに書かない(それは implementation フェーズの too_*_signals である)。
+逆に、集合の欠陥を too_*_signals 側に書くと、子を1件ずつ見る判定では検出できない。
+
 ## 予算欄
 
 親 issue にはコスト上限、子 issue には `max_iterations` を必須で書く。

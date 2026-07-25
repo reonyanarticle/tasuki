@@ -33,38 +33,46 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 
 ```mermaid
 flowchart TD
-    accTitle: tasuki の処理の流れ
-    accDescr: 人間が親 issue を書くと、G0 受理と G1 分割を経て子 issue に分かれる。各子は G2 着手、実装、GM 形式検査、G3 成果照合を通り、draft PR が ready になる。人間がマージした後、G4 統合を経て人間が親 issue を close する。各ゲートの差し戻しは triage として人間に戻る。
+    accTitle: tasuki の全体の流れ
+    accDescr: 人間が親 issue を書くと、G0 受理と G1 分割を経て子 issue に分かれる。各子はループが実装と検査を行い ready PR になる。人間がマージし、G4 統合を経て人間が親 issue を close する。ゲートの差し戻しは triage として人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
 
-    H0["人間: 親 issue を書く"]:::human --> L["/tasuki:loop"]
-    L --> G0{"G0 受理"}:::gate
-    G0 -->|"曖昧"| T["人間: triage で issue を直す"]:::human
-    T --> L
-    G0 -->|"OK"| D["decomposer が分割"]:::work
+    H0["人間: 親 issue を書く"]:::human --> G0{"G0 受理"}:::gate
+    G0 -->|OK| D["decomposer が分割"]:::work
     D --> G1{"G1 分割"}:::gate
-    G1 -->|"NG"| T
-    G1 -->|"OK"| C["子 issue を起票しレイヤー化"]:::work
-
-    subgraph CHILD["各子 issue(レイヤー内は並行)"]
-        direction TB
-        G2{"G2 着手"}:::gate -->|"曖昧/詳しすぎ"| TT["人間へ差し戻し"]:::human
-        G2 -->|"OK"| W["worker が実装"]:::work
-        W --> GM{"GM 形式(lint/型/テスト)"}:::gate
-        GM -->|"NG"| W
-        GM -->|"OK"| V["verifier が成功基準を照合"]:::work
-        V --> G3{"G3 成果(レポート照合)"}:::gate
-        G3 -->|"NG"| W
-        G3 -->|"OK"| R["draft PR を ready 化"]:::work
-    end
-
-    C --> G2
-    R --> HM["人間: PR をマージ"]:::human
+    G1 -->|OK| C["子 issue を起票"]:::work
+    C --> IN["各子 issue: 実装と検査<br/>(下図。ready PR になる)"]:::work
+    IN --> HM["人間: PR をマージ"]:::human
     HM --> G4{"G4 統合"}:::gate
-    G4 -->|"孤児要件あり"| T
-    G4 -->|"OK"| HC["人間: 親 issue を close"]:::human
+    G4 -->|OK| HC["人間: 親 issue を close"]:::human
+
+    T["人間: triage で issue を直す"]:::human
+    G0 -.->|差し戻し| T
+    G1 -.-> T
+    G4 -.->|孤児要件| T
+```
+
+各子 issue の内側は、着手ゲートから ready PR までを次の順に通る。
+形式(GM)と成果(G3)の差し戻しは worker に戻り、着手(G2)の差し戻しだけが人間に返る。
+
+```mermaid
+flowchart TD
+    accTitle: 子 issue 1件がゲートを通る流れ
+    accDescr: G2 着手ゲートを通ると worker が実装し、GM 形式検査と verifier の基準照合を経て G3 成果ゲートに至り、draft PR が ready になる。GM と G3 の差し戻しは worker に戻り、G2 の差し戻しは人間に戻る。
+    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    classDef gate fill:#8250df,stroke:#6639ba,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+
+    G2{"G2 着手"}:::gate -->|OK| W["worker が実装"]:::work
+    W --> GM{"GM 形式"}:::gate
+    GM -->|OK| V["verifier が基準照合"]:::work
+    V --> G3{"G3 成果"}:::gate
+    G3 -->|OK| R["draft PR を ready 化"]:::work
+    GM -.->|NG| W
+    G3 -.->|NG| W
+    G2 -.->|差し戻し| T["人間へ"]:::human
 ```
 
 ## 前提
