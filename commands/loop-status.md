@@ -25,7 +25,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh *)
 
 ## 2. 進行状況
 
-子 issue ごとに1行で表示する。
+子 issue ごとに1行で表示する。**取り込み済みの子は close されている**ため、open だけを拾うと消える。親の sub-issues から closed も含めて列挙する。
 
 ```
 #123 [gate:start-passed] [loop:in-progress] PR #45 (draft, CI: running) タイトル

@@ -277,6 +277,11 @@ def test_readme_documents_model_assignment() -> None:
         assert f"model: {model}" in text, (name, model)
     # 配分を選んだ理由が書かれていること(根拠なく変えられないようにする)
     assert "コストの支配項を worker レートに留める" in r
+    # DESIGN のモデル表も同じ配分を指すこと(README と DESIGN の二重管理 drift の検出。
+    # worker のモデルを変えた実績があり、そのとき両方の編集が必要だった)
+    d = (ROOT / "docs/DESIGN.md").read_text()
+    assert "worker を Sonnet に置き" in d
+    assert "| 物量 | worker / verifier / decomposer | Sonnet |" in d
 
 
 def test_readme_explains_mechanism() -> None:
@@ -395,3 +400,78 @@ def test_integration_branch_model() -> None:
     assert "Refs #" in worker
     # 親 PR に Closes を集約
     assert "`Closes #<番号>` を列挙する" in loop
+
+
+def test_external_author_optin_is_designed() -> None:
+    """外部起票の親は tasuki:accepted の opt-in が無ければループ対象外であること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "起票者の信頼チェック" in loop
+    assert "author_association" in loop
+    assert "tasuki:accepted" in loop
+    # ラベル作成と文書への反映
+    assert "tasuki:accepted" in (ROOT / "commands/loop-init.md").read_text()
+    sec = (ROOT / "docs/SECURITY.md").read_text()
+    assert "tasuki:accepted" in sec
+    # opt-in は本文にのみ効く、という限界の明示(過大主張しない)
+    assert "コメントまでは守れない" in sec
+
+
+def test_child_visibility_hygiene() -> None:
+    """子 issue は機械の作業単位として、取り込み時に閉じ、一覧から絞れること(案C)。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "tasuki:child" in loop
+    assert "子 issue を close する" in loop
+    assert "保険として残す" in loop  # Closes 列挙の位置づけ
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "tasuki:child" in init
+    assert "no:parent-issue" in init
+    assert "no:parent-issue" in (ROOT / "README.md").read_text()
+
+
+def test_parent_pr_is_designed_for_approval() -> None:
+    """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
+    import yaml
+
+    for name in ("development", "experiment"):
+        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
+            "parent_pr_required_fields"
+        ]
+        for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
+            assert f in fields, (name, f)
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 裁量の決定を実装方針から親 PR へ集約する規則
+    assert "承認してほしい判断" in loop
+    assert "「選択と理由」から" in loop
+    # ready 化は 3c 入場時(人間に draft を渡さない)
+    assert "親 PR を ready 化する" in loop
+    assert loop.index("親 PR を ready 化する") < loop.index("これは人間が起動するコマンドである")
+
+
+def test_parent_pr_body_is_staged_and_traceable() -> None:
+    """親 PR 本文が「大観が先、承認材料は CI 全緑の後」の2段構成であること。
+
+    検証が通る前に承認の文言を書くと、赤のまま「承認してほしい」と読める
+    本文が世に出る。判断には出どころ(どの子)と検証点を必ず添える。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "前半(作成時から置く): 大観" in loop
+    # 承認材料は本文の編集ではなく新規コメント(タイムラインの最後に現れる)
+    assert "「新規コメント」として投稿する" in loop
+    assert "check-runs 全緑を確認してから" in loop
+    assert "どの子(#N)で決めたか" in loop
+    assert "どこで検められたか" in loop
+    assert "どの子の作業で見つかったかを添える" in loop
+
+
+def test_toc_adaptation_is_reflected() -> None:
+    """TOC の記述が新構造(制約通過の最小化+親予算のバッチ)に更新されていること。"""
+    phil = (ROOT / "docs/PHILOSOPHY.md").read_text()
+    assert "親 PR の1回に最小化" in phil
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "親の粒度" in gates
+    # A: 受理ゲートが承認サイズを見る
+    skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "承認のサイズを検める" in skill  # 契約シグナルの照合として言い直した
+    # C: レイヤー報告は覗いてよい任意のチェックポイント
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "覗いてよい任意のチェックポイント" in loop

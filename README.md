@@ -96,6 +96,40 @@ flowchart TD
     start -.->|差し戻し| T["人間へ"]:::human
 ```
 
+## 前提
+
+- git リポジトリと GitHub リモート
+- `gh` CLI(sub-issues / issue dependencies を使うため v2.94.0 以上を推奨。未満は `gh api` フォールバック)
+- Python プロジェクト(`pyproject.toml`)と `uv`
+- CI は plugin が生成する(既存 CI は前提にしない)
+
+## 導入
+
+Claude Code に plugin として読み込む。
+開発や試用は `--plugin-dir` で直接読む。
+
+```bash
+claude --plugin-dir /path/to/tasuki
+```
+
+常用する場合は `.claude-plugin/marketplace.json` を用意し、`/plugin marketplace add <パス>` で登録する。
+読み込めたら `/plugin` の一覧に tasuki が出る。
+
+## 使い方
+
+1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
+2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
+3. `/tasuki:loop <親 issue 番号>` を実行する。ループがまず issue をレビューする。受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
+4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
+5. **人間が見るのは親 PR だけ**。全子の成果は統合ブランチにまとまり、統合ゲートと出荷前レビューを経て親 PR が ready になる。それをマージすれば全子 issue が閉じる(子 PR は参照用に残る)
+
+レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
+issue を書く前に別途レビューさせる工程は要らない。
+
+補足(任意だが推奨):ゲートのレビュアーは契約の「待ち位置」という自然言語で判定するため、最初は人間の感覚とズレる。
+「この issue は PASS のはず」「これは差し戻しのはず」という判定例を数件書いて目盛りを合わせると、初回から判定が安定する。
+手順は `tasuki:baton-contract` skill が案内する。
+
 ## 動く仕組み
 
 ### 状態はすべて GitHub にある
@@ -125,8 +159,39 @@ tasuki は次の4つで止める。
 - **マージは常に人間**:default branch への反映は、統合ブランチをまとめた親 PR の人間マージの1回だけ。子 PR はループが統合ブランチへ取り込む(人間は必要なときだけ開く)
 
 また、人間はいつでも親 issue に `loop:pause` ラベルを付けてループを止められる(理由は要らない。外せば続きから再開する)。
+
+子 issue と子 PR は機械の作業単位であり、取り込みが済むとループが子 issue を閉じる。
+一覧で親だけを見たいときは `is:open no:parent-issue` で絞れる(子には `tasuki:child` ラベルも付く)。
 止まったものは `loop:triage` ラベルが付いて人間の判断待ちになる。
 `/tasuki:loop-status` がその一覧(アンドン)を最初に表示する。
+
+### ブランチはこう流れる
+
+```mermaid
+gitGraph
+    accTitle: ブランチの流れ
+    accDescr: 子 PR は統合ブランチへ合流し、ループが取り込む。main に入る経路は親 PR の人間マージただ1つである。
+    commit id: "main"
+    branch loop/parent-1
+    commit id: "統合ブランチ開始"
+    branch child-2
+    commit id: "#2 基盤"
+    checkout loop/parent-1
+    merge child-2 id: "ループが取り込む"
+    branch child-3
+    commit id: "#3"
+    checkout loop/parent-1
+    branch child-4
+    commit id: "#4"
+    checkout loop/parent-1
+    merge child-3 id: "取り込み(並行)"
+    merge child-4 id: "取り込み(並行) "
+    checkout main
+    merge loop/parent-1 id: "親PR: 人間がマージ" type: HIGHLIGHT
+```
+
+子 PR は統合ブランチ(`loop/parent-1`)へ合流し、ループが取り込む。
+main に入る経路は**親 PR の人間マージただ1つ**である(図の強調印)。
 
 ### 検査が二段になっている
 
@@ -174,44 +239,10 @@ worker が検査設定やテストを書き換えていれば、それ自体が�
 ゲート判定のモデルは契約の `gates[].model` で、昇格先は `escalate_to` で変えられる。
 worker と verifier と decomposer のモデルは agent 定義(`agents/*.md` の `model:`)で決まる。
 
-## 前提
-
-- git リポジトリと GitHub リモート
-- `gh` CLI(sub-issues / issue dependencies を使うため v2.94.0 以上を推奨。未満は `gh api` フォールバック)
-- Python プロジェクト(`pyproject.toml`)と `uv`
-- CI は plugin が生成する(既存 CI は前提にしない)
-
-## 導入
-
-Claude Code に plugin として読み込む。
-開発や試用は `--plugin-dir` で直接読む。
-
-```bash
-claude --plugin-dir /path/to/tasuki
-```
-
-常用する場合は `.claude-plugin/marketplace.json` を用意し、`/plugin marketplace add <パス>` で登録する。
-読み込めたら `/plugin` の一覧に tasuki が出る。
-
-## 使い方
-
-1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
-2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
-3. `/tasuki:loop <親 issue 番号>` を実行する。ループがまず issue をレビューする。受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
-4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
-5. **人間が見るのは親 PR だけ**。全子の成果は統合ブランチにまとまり、統合ゲートと出荷前レビューを経て親 PR が ready になる。それをマージすれば全子 issue が閉じる(子 PR は参照用に残る)
-
-レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
-issue を書く前に別途レビューさせる工程は要らない。
-
-補足(任意だが推奨):ゲートのレビュアーは契約の「待ち位置」という自然言語で判定するため、最初は人間の感覚とズレる。
-「この issue は PASS のはず」「これは差し戻しのはず」という判定例を数件書いて目盛りを合わせると、初回から判定が安定する。
-手順は `tasuki:baton-contract` skill が案内する。
-
 ## 安全に使える範囲
 
 v1 は issue、PR、コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。
-外部からの issue を受け付けるリポジトリでは、未検証テキストが agent に流れるため使わない。
+外部からの起票は、maintainer が本文を読んで `tasuki:accepted` ラベルを付けた親だけがループ対象になる(opt-in。ループ自体も `/tasuki:loop <親>` の明示起動でしか動かない)。
 詳細と v2 のハードニングは [docs/SECURITY.md](docs/SECURITY.md) にある。
 
 ## ドキュメント

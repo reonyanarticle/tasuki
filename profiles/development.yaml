@@ -20,7 +20,7 @@ phases:
     receives:
       from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
-      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない"]
+      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な価値の同居)"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
     hands_off:
       to: implementation
@@ -68,7 +68,13 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
     - 期待値の根拠
     - 再現手順
     - 生データへのリンク
-  pr_required_fields:
+  parent_pr_required_fields:      # 親 PR(人間が承認する唯一の PR)の必須欄
+    - 何が変わるか              # 利用者に見える変化と内部の変化を分けて書く
+    - 承認してほしい判断        # ループが裁量で決めたことの列挙(要件に無い決定)
+    - やらなかったこと          # スコープ外に残した既知の課題
+    - リスクと戻し方
+    - 対応 issue
+  pr_required_fields:             # 子 PR(機械が取り込む)の必須欄
     - 概要
     - 対応する親要件          # 親 issue のどの要件のための変更か
     - 受け入れ条件の充足      # AC ごとに、どの変更とテストが満たすか

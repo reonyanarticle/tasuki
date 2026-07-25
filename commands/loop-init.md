@@ -231,6 +231,8 @@ jobs:
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
 - `loop:review`(出荷前レビュー待ち。親 issue に付く。人間が親 PR に `/code-review` を回す番)
 - `loop:pause`(人間による一時停止。親 issue に付けると新しい委譲を止める)
+- `tasuki:accepted`(外部起票の親 issue をループ対象にする opt-in。maintainer が本文を読んでから付ける)
+- `tasuki:child`(ループが起票した子 issue の明示。一覧のフィルタ用)
 - `loop:triage`(人間の裁定待ち)
 
 ### 7. バジェット確認と fixture の案内
@@ -239,6 +241,8 @@ jobs:
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
 **checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+
+**一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 
 最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
 

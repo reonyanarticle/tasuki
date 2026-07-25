@@ -115,6 +115,28 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 未検証の issue / コメント本文が Bash を持つ worker / verifier に流れる点が根本原因で、指示レベルの緩和を全 agent に入れたうえで、v1 の適用範囲を信頼できる issue のリポジトリに限定すると明記した。
 作者認証と worker/verifier の sandbox は v2 のハードニングとする。
 
+## v1.1: 統合ブランチと親 PR への集約(2026-07-25)
+
+フェーズ3完了後、実運用レビューを受けて人間の関与を再設計した。
+
+- 子 PR は統合ブランチ `loop/parent-<N>` に向け、ゲート通過後にループが取り込む。**人間の判断は親 PR の1回に集約**(default branch への反映点はここだけ)
+- 親 PR は承認の道具として設計する:本文=大観、承認材料(裁量判断の出どころと検証点つき)は check-runs 全緑後に**新規コメント**で投稿
+- 実装方針コメント(worker の第1手)、出荷前レビュー(5観点)、loop:pause、loop:review、実験プロファイルの契約解決(gates[].phase)、tasuki:accepted(外部起票の opt-in)、tasuki:child と取り込み時クローズ
+- テスト基盤: claude plugin validate(CI)+ LLM fixture runner(RUN_LLM_TESTS=1)
+
+### v1.1 の E2E 実施結果(2026-07-25、tasuki-e2e-v2 リポジトリ)
+
+複数モジュールの経費精算アプリを種に、Decimal 移行(5子、3レイヤー、分岐と合流あり)で検証した。
+
+| 検証 | 結果 |
+|---|---|
+| 統合ブランチ+親 PR、子 PR の自動取り込み | 達成(子5件、人間のマージ0回) |
+| レイヤー並列 | 達成(L2 を worker subagent 3体の並行実行) |
+| 分割欠陥の自己修復 | 達成(型移行のモジュール別分割が checks-local 失敗→task-question→分割ゲート差し戻し→改訂の経路で修正された) |
+| checks-local/ci の食い違い | 達成(生成 workflow の欠陥を fail-closed が検出) |
+| pause / 二重実行 / 承認コメント | 達成 |
+| リポジトリ由来 agent と plugin agent の呼び出し | 達成(headless で双方向を実機確認) |
+
 ## 未決事項
 
 1. ~~受理ゲートのコスト見積もりを誰が書くか~~ **決着(2026-07-23)**：起票者(人間)がテンプレ必須欄として記入する(門前払いと整合する最小構成)。decomposer による見積もり案と人間承認のフローは v2 予約
