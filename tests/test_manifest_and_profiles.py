@@ -140,3 +140,34 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
         missing = sorted(referenced - set(budgets))
         assert not missing, (name, missing)
+
+
+def test_gate_phase_resolves_in_every_profile() -> None:
+    """abstraction ゲートの phase が、どのプロファイルでも実在するフェーズを指すこと。
+
+    loop.md がフェーズ名をハードコードしていた頃、experiment プロファイルは
+    decomposition と implementation を持たないため受理と分割と着手のゲートが
+    参照先を解決できなかった。同じ壊れ方を防ぐ。
+    """
+    import yaml
+
+    for name in ("development", "experiment"):
+        profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
+        phases = {p["name"] for p in profile["phases"]}
+        for gate in profile["gates"]:
+            if gate.get("kind") != "abstraction":
+                continue
+            assert "phase" in gate, (name, gate["id"])
+            assert gate["phase"] in phases, (name, gate["id"], gate["phase"], sorted(phases))
+
+
+def test_loop_does_not_hardcode_phase_names() -> None:
+    """loop.md がプロファイル固有のフェーズ名を直接書かないこと。"""
+    import re
+
+    loop = (ROOT / "commands/loop.md").read_text()
+    hardcoded = re.findall(
+        r"(?:decomposition|implementation|experiment-design|execution|analysis) フェーズ", loop
+    )
+    assert not hardcoded, hardcoded
+    assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く

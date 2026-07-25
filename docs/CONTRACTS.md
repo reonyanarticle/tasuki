@@ -61,10 +61,12 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
 gates:
   - id: intake
     kind: abstraction
+    phase: decomposition      # 親 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能
     model: opus                   # 低頻度・高レバレッジ
   - id: split
     kind: abstraction
+    phase: implementation
     reviewer: gate-reviewer
     model: opus
     set_signals:                  # 分割の集合レベル基準(分割ゲート固有)
@@ -73,6 +75,7 @@ gates:
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
   - id: start
     kind: abstraction
+    phase: implementation
     reviewer: gate-reviewer
     model: haiku                  # 高頻度・照合型
     escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
@@ -98,6 +101,7 @@ gates:
     blocking_threshold: high
   - id: outcome
     kind: abstraction
+    phase: report
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
@@ -105,6 +109,7 @@ gates:
     criteria_skills: []
   - id: integration
     kind: abstraction
+    phase: integration
     reviewer: gate-reviewer
     model: opus
 
@@ -160,8 +165,8 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:` の5キーは実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:` の6キーは実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
 
 ## issue テンプレート仕様
 

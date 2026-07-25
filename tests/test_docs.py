@@ -70,7 +70,7 @@ def test_phase3_full_loop_wiring() -> None:
     assert "分割案 YAML は `<details>` に畳む" in loop and "分割案の永続化" in loop
     assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
     assert "不採用クローズ" in loop
-    assert "integration フェーズ" in loop
+    assert "`gates.integration.phase`" in loop  # フェーズ名はハードコードせず契約から引く
 
 
 def test_security_threat_model_documented() -> None:
@@ -311,3 +311,31 @@ def test_diagrams_are_conditional_and_renderable() -> None:
             ids = re.findall(r"^\s*([^\s\[{(]+)[\[{(]", block, re.M)
             bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
             assert not bad, (path.name, bad)
+
+
+def test_common_gate_rules_are_single_source() -> None:
+    """ラベル整理と冪等の規則を、ゲートごとに散らさず共通規則として1箇所に置くこと。
+
+    受理ゲートにしかラベル整理が書かれておらず、他のゲートでは triage が
+    滞留し続けていた。共通規則にすることで書き漏れを構造的に防ぐ。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "## ゲート共通の規則" in loop
+    assert "### ラベルの整理" in loop and "### コメントは冪等に投稿する" in loop
+    # 共通規則が個々のゲートより前にあること
+    assert loop.index("## ゲート共通の規則") < loop.index("### 2b.")
+    # 各ゲートの PASS 付与が片付けに言及していること(判定条件の出現ではなく付与の箇所)
+    import re
+
+    for gate in ("intake", "split", "start", "outcome", "integration"):
+        assigns = list(re.finditer(rf"`gate:{gate}-passed` を付け", loop))
+        assert assigns, gate
+        assert any("片付け" in loop[m.start() : m.start() + 120] for m in assigns), gate
+
+
+def test_degenerate_cases_documented() -> None:
+    """縮退した形(子1件、依存なし、全マージ済み、子0件)の扱いが書かれていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "縮退した形の扱い" in loop
+    for case in ("子が1件", "依存がまったく無い", "全子 issue がマージ済み", "子が0件"):
+        assert case in loop, case
