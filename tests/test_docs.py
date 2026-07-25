@@ -402,6 +402,51 @@ def test_integration_branch_model() -> None:
     assert "`Closes #<番号>` を列挙する" in loop
 
 
+def test_replan_path_is_designed() -> None:
+    """走行中の親要件変更に正式経路(loop:replan)があること。
+
+    経路が無いと、本文編集のズレは統合ゲートの孤児要件まで潜伏する。
+    黙った自動追従(編集のたびに再分割)も、意図しない opus 消費になるため退ける。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "loop:replan" in loop
+    assert "要件変更の検知" in loop  # §0 の機械検知(通知のみ)
+    assert "再計画は行っていない" in loop  # ラベル無し編集は通知に留める
+    assert "差分分割モード" in loop
+    assert "維持 / 改訂 / 追加 / 撤回" in loop
+    assert "追い子" in loop  # 取り込み済みへの波及は巻き戻さず前進で適応
+    assert "強制中断しない" in loop  # 発効は合流点
+    # decomposer 側にモードがあること
+    dec = (ROOT / "agents/decomposer.md").read_text()
+    assert "差分分割モード" in dec
+    assert "改訂と撤回を宣言できるのは実行前または差し戻し中の子だけ" in dec
+    # ラベルの作成と可視化
+    assert "loop:replan" in (ROOT / "commands/loop-init.md").read_text()
+    assert "loop:replan" in (ROOT / "commands/loop-status.md").read_text()
+    assert "loop:replan" in (ROOT / "README.md").read_text()
+
+
+def test_base_sync_checkpoints_are_designed() -> None:
+    """ループ外開発(hotfix 等)と共存する default branch の定点取り込みがあること。
+
+    定点が無いと親 PR の base が古いまま承認され、承認した差分とマージ結果がずれる。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "定点0" in loop and "定点1" in loop and "定点2" in loop
+    assert "rebase はしない" in loop  # 子 PR の参照 SHA を書き換えない
+    assert "merge-base が default branch の先端と一致していること" in loop  # 3c 入場条件
+    assert "hotfix 側に特別な経路は要らない" in loop
+    # worker 実行中は base を動かさない
+    assert "worker が実行中の間は取り込まない" in loop
+
+
+def test_undone_items_have_issue_drafts() -> None:
+    """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "起票できる下書き" in loop
+    assert "**起票はしない**" in loop
+
+
 def test_external_author_optin_is_designed() -> None:
     """外部起票の親は tasuki:accepted の opt-in が無ければループ対象外であること。"""
     loop = (ROOT / "commands/loop.md").read_text()
