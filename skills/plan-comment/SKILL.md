@@ -65,7 +65,7 @@ issue 番号を並べて矢印で結んだだけの図は、下の一覧表が�
 
 | 状態 | 判定 |
 |---|---|
-| 完了 | PR が ready |
+| 完了 | 子 PR が統合ブランチへ取り込み済み(merged) |
 | 進行中 | `loop:in-progress`、または `gate:start-passed` 以降で未 ready |
 | 差し戻し | `gate:*-returned` |
 | 裁定待ち | `loop:triage` |

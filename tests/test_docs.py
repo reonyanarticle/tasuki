@@ -62,13 +62,13 @@ def test_phase3_full_loop_wiring() -> None:
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
-    assert "すべて人間にマージされるまで進まない" in loop
+    assert "全子が統合ブランチへ取り込まれたら進む" in loop
     assert "統合ゲート" in loop
-    assert "親 issue の close は人間が行う" in loop
+    assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
     assert "遡及適用しない" in loop
     assert "分割案 YAML は `<details>` に畳む" in loop and "分割案の永続化" in loop
-    assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
+    assert "1件取り込むごとに、統合ブランチ上で checks-local を再実行" in loop
     assert "不採用クローズ" in loop
     assert "`gates.integration.phase`" in loop  # フェーズ名はハードコードせず契約から引く
 
@@ -203,7 +203,7 @@ def test_baton_contract_covers_set_signals() -> None:
 def test_preship_review_phase_defined() -> None:
     """出荷前レビュー(5観点)と security スキャンの実施フェーズが定義されていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "### 2g. 出荷前レビュー" in loop
+    assert "### 3c. 出荷前レビュー(親 PR、最終コード評価)" in loop
     assert "/code-review" in loop
     assert "/claude-security:claude-security" in loop
     assert "1観点ずつ指定して5回に分ける" in loop  # 一度に回さない
@@ -376,3 +376,22 @@ def test_operational_gaps_are_specified() -> None:
     assert "loop:pause" in (ROOT / "commands/loop-init.md").read_text()
     assert "loop:pause" in (ROOT / "commands/loop-status.md").read_text()
     assert "loop:pause" in (ROOT / "README.md").read_text()
+
+
+def test_integration_branch_model() -> None:
+    """人間の最終判断が親 PR の1回に集約されていること(統合ブランチ方式)。
+
+    子 PR を人間が個別にマージする設計は「人間はループの外」という思想に反する。
+    default branch への反映点は親 PR のマージだけとする。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "loop/parent-<親番号>" in loop  # 統合ブランチ
+    assert "人間が最終的に見るのはこの親 PR だけ" in loop
+    assert "人間は子 PR をマージしない" in loop
+    assert "orchestrator が子 PR を統合ブランチへマージする" in loop
+    # 子 PR は Closes を使わない(統合ブランチ向けでは機能しない)
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "`Closes` は使わない" in worker
+    assert "Refs #" in worker
+    # 親 PR に Closes を集約
+    assert "`Closes #<番号>` を列挙する" in loop

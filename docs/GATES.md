@@ -26,7 +26,7 @@ abstraction ゲートは二段構成とする。
 | 形式ゲート | `checks` | 反復中はローカル実行(`checks-local`)、ready 化前に CI で最終判定(`checks-ci`) | mechanical | lint / 整形 / 型 / テスト / セキュリティ |
 | 成果ゲート | `outcome` | レポート→ issue | abstraction | 要件⇔結果の対応表(N対1)、生ログ排除 |
 | 統合ゲート | `integration` | 全子完了→親 | abstraction | 子成果の親要件へのロールアップ、孤児要件なし |
-| 最終ゲート | — | マージ | 人間 | 要件適合の最終判断。**マージは常に人間が実行** |
+| 最終ゲート | — | 親 PR のマージ | 人間 | 要件適合の最終判断。**default branch への反映は親 PR の人間マージのみ**(子 PR はループが統合ブランチへ取り込む) |
 
 識別子はゲート名を英語にしたもので、契約ファイルの `gates[].id` と GitHub ラベル(`gate:<識別子>-passed` / `-returned`)に使う。
 形式ゲートのサブゲートは `checks-lint` のように provider 名を続ける。

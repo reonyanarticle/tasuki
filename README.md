@@ -56,7 +56,7 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 ```mermaid
 flowchart TD
     accTitle: tasuki の全体の流れ
-    accDescr: 人間が親 issue を書くと、受理ゲートと分割ゲートを経て子 issue に分かれる。各子はループが実装と検査を行い ready PR になる。人間がマージし、統合ゲートを経て人間が親 issue を close する。ゲートの差し戻しは triage として人間に戻る。
+    accDescr: 人間が親 issue を書くと、受理ゲートと分割ゲートを経て子 issue に分かれる。各子はループが実装と検査を行い、統合ブランチへ取り込まれる。統合ゲートと出荷前レビューを経て、人間が親 PR を1回だけマージする。ゲートの差し戻しは triage として人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
@@ -65,10 +65,9 @@ flowchart TD
     intake -->|OK| D["decomposer が分割"]:::work
     D --> split{"分割ゲート"}:::gate
     split -->|OK| C["子 issue を起票"]:::work
-    C --> IN["各子 issue: 実装と検査<br/>(下図。ready PR になる)"]:::work
-    IN --> HM["人間: PR をマージ"]:::human
-    HM --> integration{"統合ゲート"}:::gate
-    integration -->|OK| HC["人間: 親 issue を close"]:::human
+    C --> IN["各子 issue: 実装と検査<br/>(下図。統合ブランチへ取り込み)"]:::work
+    IN --> integration{"統合ゲート"}:::gate
+    integration -->|OK| HM["人間: 親 PR をマージし close"]:::human
 
     T["人間: triage で issue を直す"]:::human
     intake -.->|差し戻し| T
@@ -82,7 +81,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件がゲートを通る流れ
-    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合を経て成果ゲートに至り、draft PR が ready になる。形式ゲートと成果ゲートの差し戻しは worker に戻り、着手ゲートの差し戻しは人間に戻る。
+    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合を経て成果ゲートに至り、子 PR が統合ブランチへ取り込まれる。形式ゲートと成果ゲートの差し戻しは worker に戻り、着手ゲートの差し戻しは人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
@@ -123,7 +122,7 @@ tasuki は次の4つで止める。
 - **反復予算**:ゲートごとの差し戻し回数(`max_iterations_per_gate`)と、実装の反復回数(子 issue の `予算(max_iterations)`)に上限がある。超えたら人間へ渡す
 - **WIP 上限**:未マージの ready PR が `wip_limit_prs` に達したら新しい実装を始めない。ボトルネックは人間のレビュー帯域だと明示する
 - **fail-closed**:CI の結果が1件も無い、あるいは job が実行されなかった場合は「成功」とみなさない。検査を通っていない実装は出荷判定に進めない
-- **マージは常に人間**:ゲートが行うのはレビューまでで、default branch への反映は必ず人間が行う
+- **マージは常に人間**:default branch への反映は、統合ブランチをまとめた**親 PR の人間マージ**の1回だけ。子 PR はループが統合ブランチへ取り込む(人間は必要なときだけ開く)
 
 また、**人間はいつでも親 issue に `loop:pause` ラベルを付けてループを止められる**(理由は要らない。外せば続きから再開する)。
 止まったものは `loop:triage` ラベルが付いて人間の判断待ちになる。
@@ -200,7 +199,7 @@ claude --plugin-dir /path/to/tasuki
 2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
 3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
 4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
-5. **マージは常に人間が実行する**。ゲートが行うのはレビューまでで、最終判断は人間に残る
+5. **人間が見るのは親 PR だけ**。全子の成果は統合ブランチにまとまり、統合ゲートと出荷前レビューを経て親 PR が ready になる。それをマージすれば全子 issue が閉じる(子 PR は参照用に残る)
 
 レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
 issue を書く前に別途レビューさせる工程は要らない。
