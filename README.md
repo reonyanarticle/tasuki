@@ -211,7 +211,7 @@ issue を書く前に別途レビューさせる工程は要らない。
 ## 安全に使える範囲
 
 v1 は issue、PR、コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。
-外部からの issue を受け付けるリポジトリでは、未検証テキストが agent に流れるため使わない。
+外部からの起票は、maintainer が本文を読んで `tasuki:accepted` ラベルを付けた親だけがループ対象になる(opt-in。ループ自体も `/tasuki:loop <親>` の明示起動でしか動かない)。
 詳細と v2 のハードニングは [docs/SECURITY.md](docs/SECURITY.md) にある。
 
 ## ドキュメント

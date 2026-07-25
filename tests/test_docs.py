@@ -395,3 +395,17 @@ def test_integration_branch_model() -> None:
     assert "Refs #" in worker
     # 親 PR に Closes を集約
     assert "`Closes #<番号>` を列挙する" in loop
+
+
+def test_external_author_optin_is_designed() -> None:
+    """外部起票の親は tasuki:accepted の opt-in が無ければループ対象外であること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "起票者の信頼チェック" in loop
+    assert "author_association" in loop
+    assert "tasuki:accepted" in loop
+    # ラベル作成と文書への反映
+    assert "tasuki:accepted" in (ROOT / "commands/loop-init.md").read_text()
+    sec = (ROOT / "docs/SECURITY.md").read_text()
+    assert "tasuki:accepted" in sec
+    # opt-in は本文にのみ効く、という限界の明示(過大主張しない)
+    assert "コメントまでは守れない" in sec
