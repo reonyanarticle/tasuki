@@ -32,7 +32,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 
 状態を GitHub に外部化している以上、コメントの重複はそのまま状態の重複になる(観点 #19)。
 
-**issue に残すコメントは人間可読の markdown を主とし、機械可読の JSON / YAML は `<details>` に畳む**(生の JSON / YAML をそのまま貼らない。状態復元は畳んだ JSON を読む。書式は `tasuki:gate-review` skill)。
+**issue に残すコメントは人間可読の markdown を主とし、機械可読の JSON / YAML は `<details>` に畳む**(畳んだ中身は `jq .` を通した見た目に整形する。1行に詰めない)(生の JSON / YAML をそのまま貼らない。状態復元は畳んだ JSON を読む。書式は `tasuki:gate-review` skill)。
 
 **フェーズ名をこの手順に書かない。** 各ゲートが検める受け渡し先は契約の `gates[].phase` が指す。フェーズの呼び名はプロファイルによって異なる(development は `implementation`、experiment は `execution`)ため、名前で直接引くと実験用のプロファイルで解決できなくなる。
 
@@ -163,7 +163,8 @@ PASS したら `gate:start-passed` を付け、ラベルを片付ける(共通�
 `tasuki-worker`(sonnet、worktree 分離)へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。
 `loop:in-progress` は worker 委譲中だけの状態であり、met / abort に加え、`loop:triage` を付けるとき(上限超過、check-run なし等)と 2b への差し戻し時にも必ず外す。
 渡すのは子 issue 本文のみ。
-worker の義務は worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成、loop-report 形式の報告、掃除。
+worker の義務は、**実装前の方針コメント**、worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成(ラベルは PR に付ける)、loop-report 形式の報告、掃除。
+実装方針のコメントは、人間が実装前に方向性を止めるための出口である。差し戻しでは新規に投稿せず、同じコメントを編集して更新する(冪等)。
 
 差し戻し再実行は **必ず新規の worker セッション** で行う(観点 #16)。
 前セッションを継続せず、渡すのは子 issue 本文+差し戻し verdict(または CI findings、verifier の未達項目)のみ。

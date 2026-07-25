@@ -136,3 +136,27 @@ def test_trust_boundary_has_single_source() -> None:
         assert "tasuki:data-boundary" in text, path.name
         # 複製されていた本文が戻っていないこと
         assert "誰でもコメント" not in text, path.name
+
+
+def test_worker_records_plan_before_implementing() -> None:
+    """worker が実装前に方針を issue コメントへ残すこと(本文には書かない)。
+
+    子 issue の待ち位置は「実装方式は未指定」なので、方針を本文に書くと
+    着手ゲートが TOO_CONCRETE で差し戻す。要件と方針を別の場所に置く。
+    """
+    text = (ROOT / "agents/worker.md").read_text()
+    assert "実装方針の記録" in text
+    assert "issue 本文には書かない" in text
+    for item in ("作るもの", "既存への接続", "選択と理由", "確かめ方"):
+        assert item in text, item
+    # 方針の記録が実装より前の手順であること
+    assert text.index("実装方針の記録") < text.index("2. **実装 / 実験**")
+    # 設計上の位置づけが docs に残っていること
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "### 実装方針をどこに置くか" in gates
+
+
+def test_loop_pr_label_goes_on_the_pr() -> None:
+    """loop:pr を PR に付けること(issue に付けると WIP 集計が機能しない)。"""
+    text = (ROOT / "agents/worker.md").read_text()
+    assert "ラベルは PR に付ける。issue には付けない" in text

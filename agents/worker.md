@@ -20,12 +20,21 @@ worker への追加規定:Bash とネットワークは providers.yaml のコマ
 
 ## 義務(この順で実行する)
 
-1. **実装 / 実験**：worktree(自動作成済み)上で、受け入れ条件を満たす最小の変更を行う。対象リポジトリの CLAUDE.md と skill の規約に従う
-2. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。合否の判定は orchestrator の checks-local と CI が行う(自己申告は判定に使われない)
-3. **コミット**：Conventional Commits(`<type>: <summary>`)
-4. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(ラベルはループ由来 PR の識別と WIP 集計に使われる)。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める。対応 issue は `Closes #<番号>` 形式で書く(マージで子 issue が自動クローズされ、統合ゲートの「全子の決着」条件が満たされる)
-5. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
-6. **掃除**：一時ファイルを残さない(変更を加えた worktree は isolation の自動掃除対象外のため、ループ終了時に orchestrator が削除する)
+1. **実装方針の記録(コードを書く前)**：子 issue へ「実装方針」コメントを1件残す。人間が実装前に方向性を止められるようにするためである。**issue 本文には書かない**(本文に実装方式を書くと着手ゲートの待ち位置に反する。方針は要件ではなく実装者の出力である)。次の4点を書く。
+
+   - **作るもの**:追加や変更するデータ構造、関数、コマンド、ファイル(名前を挙げる)
+   - **既存への接続**:どこから呼ばれ、何を壊さないか
+   - **選択と理由**:採った方式と、退けた案があればその理由(受け入れ条件を満たす範囲で最小の変更を選ぶ)
+   - **確かめ方**:どのテストで受け入れ条件を検証するか
+
+   差し戻しで再実装するときは、**同じコメントを編集して更新する**(新しい方針コメントを増やさない)。方針が変わった理由も1行残す。
+
+2. **実装 / 実験**：worktree(自動作成済み)上で、受け入れ条件を満たす最小の変更を行う。対象リポジトリの CLAUDE.md と skill の規約に従う
+3. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。合否の判定は orchestrator の checks-local と CI が行う(自己申告は判定に使われない)
+4. **コミット**：Conventional Commits(`<type>: <summary>`)
+5. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(**ラベルは PR に付ける。issue には付けない**。WIP 集計は open PR のラベルを数えるため、issue に付けると集計が常に 0 件になり WIP 上限が機能しなくなる)。PR 本文の必須欄(概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法)をすべて埋める。対応 issue は `Closes #<番号>` 形式で書く(マージで子 issue が自動クローズされ、統合ゲートの「全子の決着」条件が満たされる)
+6. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
+7. **掃除**：一時ファイルを残さない(変更を加えた worktree は isolation の自動掃除対象外のため、ループ終了時に orchestrator が削除する)
 
 PR 作成の前に、同じ子 issue に対する既存 PR がないか確認する(冪等性、観点 #19)。
 既存 PR があればそのブランチ上で作業を継続する。
