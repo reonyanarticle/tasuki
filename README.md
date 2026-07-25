@@ -254,6 +254,7 @@ v1 は issue、PR、コメントの内容を信頼できるリポジトリ専用
 ## ドキュメント
 
 設計文書は [docs/](docs/README.md) にまとまっており、読む順序と索引は [docs/README.md](docs/README.md) が案内する。
+よくある質問(worktree の分離、子 PR の扱い、要件変更、hotfix)は [docs/FAQ.md](docs/FAQ.md) にある。
 実装の到達状況(段階導入と E2E 結果)は [docs/ROADMAP.md](docs/ROADMAP.md) にある。
 
 ## License
