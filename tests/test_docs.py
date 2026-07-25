@@ -466,6 +466,23 @@ def test_section0_numbering_consistent() -> None:
     assert refs <= set(nums), refs
 
 
+def test_draft_command_is_designed() -> None:
+    """起票支援(/tasuki:draft)が、独自基準を持たず契約の目盛りをシフトレフトすること。
+
+    基準が2つあると「draft を通ったのに受理ゲートで落ちる」が起きる。
+    また実装方式が本文に入ると、待ち位置(解き方は未指定)に反して TOO_CONCRETE になる。
+    """
+    d = (ROOT / "commands/draft.md").read_text()
+    assert "`gates.intake.phase`" in d  # 契約から引く(フェーズ名を書かない)
+    assert "このコマンド独自の基準を持たない" in d
+    assert "実装方式は本文に書かない" in d
+    assert "参考メモ" in d
+    assert "ラベルは付けず、verdict も issue に残さない" in d  # 事前審査は正式判定でない
+    assert "確認を得てから" in d  # 勝手に起票しない
+    assert "裏取り" in d
+    assert "/tasuki:draft" in (ROOT / "README.md").read_text()
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
