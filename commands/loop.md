@@ -131,7 +131,7 @@ PASS したら `gate:start-passed` ラベルを付け、`gate:start-returned` �
 
 ### 2c. 実装(worker)
 
-`tasuki-worker`(sonnet、worktree 分離)へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。
+`tasuki-worker`(opus、worktree 分離)へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。
 `loop:in-progress` は worker 委譲中だけの状態であり、met / abort に加え、`loop:triage` を付けるとき(上限超過、check-run なし等)と 2b への差し戻し時にも必ず外す。
 渡すのは子 issue 本文のみ。
 worker の義務は worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成、loop-report 形式の報告、掃除。

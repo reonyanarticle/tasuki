@@ -109,12 +109,17 @@ flowchart TD
 | 成果ゲート | レポート照合。毎反復発生 | Sonnet(必要なら Opus へ昇格) |
 | 着手ゲート | 子 issue ごとの高頻度な照合 | Haiku(必要なら Sonnet へ昇格) |
 | decomposer | 親 issue を子へ分割 | Sonnet |
-| worker | **実装を書く**。worktree 分離 | Sonnet |
+| worker | **実装を書く**。worktree 分離 | Opus |
 | verifier | 成功基準と打ち切り条件の照合 | Sonnet |
 
 **誤って通す(誤 PASS)ほうが、誤って差し戻す(誤 REJECT)より高くつく。**
 誤 PASS はそのゲートより下流の作業をすべて無駄にするが、誤 REJECT は前工程を1回やり直すだけで済み、反復上限で有界である。
 だから低頻度で下流コストの大きいゲートほど強いモデルを当てている。
+
+**実装(worker)に Opus を当てているのも同じ理由である。**
+実装が弱いと差し戻しのたびに実装と検査がまるごと再実行され、反復が2回増えれば1回を上位モデルで書くより高くつく。
+加えて、ゲートが見るのは抽象度のズレであって設計の良否ではないため、実装の質は出荷前レビューまで誰にも検められない。
+一方 verifier は基準との照合が仕事、decomposer の出力は分割ゲート(Opus)が検めるので、どちらも Sonnet で足りる。
 
 ゲート判定のモデルは契約の `gates[].model` で、昇格先は `escalate_to` で変えられる。
 worker と verifier と decomposer のモデルは agent 定義(`agents/*.md` の `model:`)で決まる。

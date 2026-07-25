@@ -1,7 +1,7 @@
 ---
 name: tasuki-worker
 description: tasuki の worker。着手ゲートを通過した子 issue を worktree 上で実装し、self-verify を経て draft PR を作成し、レポートを書いて掃除する。worker と worktree は1対1。
-model: sonnet
+model: opus
 isolation: worktree
 tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent はネスト許可(CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH)環境でのみ機能する
 ---

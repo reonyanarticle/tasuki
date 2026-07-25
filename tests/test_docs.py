@@ -271,6 +271,9 @@ def test_readme_documents_model_assignment() -> None:
         assert model in r, model
     assert "誤 PASS" in r and "誤 REJECT" in r  # 配分の根拠
     # agent 定義の model と README の記述が食い違わないこと
-    for name in ("worker", "verifier", "decomposer"):
+    expected = {"worker": "opus", "verifier": "sonnet", "decomposer": "sonnet"}
+    for name, model in expected.items():
         text = (ROOT / f"agents/{name}.md").read_text()
-        assert "model: sonnet" in text, name
+        assert f"model: {model}" in text, (name, model)
+    # 実装に上位モデルを当てる理由が書かれていること(配分を後から緩めないため)
+    assert "実装(worker)に Opus を当てているのも同じ理由" in r
