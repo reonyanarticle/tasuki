@@ -5,13 +5,13 @@
 CI は plugin が **作ることを前提** とする(既存 CI は前提にしない)。
 手順は次のとおり。
 
-1. 言語検出 → language pack 選択(`pyproject.toml` → python)。前提ツールの dev 依存と `uv.lock` を整備する(lockfile が無ければ生成。CI の `uv sync --frozen` の前提)
+1. 言語検出 → language pack 選択(各 pack の `detect` に挙がったファイルの有無で判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
 3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、形式ゲート + 成果ゲート通過で ready 化する
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
-   - lint / typecheck job は SARIF 出力をアップロードする(basedpyright は normalizer で SARIF 化)
-   - format job は `black --check` の exit code で判定する
+   - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
+   - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
    - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点 #18)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点 #17)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)

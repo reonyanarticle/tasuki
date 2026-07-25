@@ -86,28 +86,22 @@ def test_loop_references_existing_agents() -> None:
 
 
 def test_labels_used_are_created() -> None:
-    """loop / loop-status が使うラベルは loop-init が作成する集合に含まれること。"""
+    """loop と loop-status が使うラベルを、loop-init が1つ残らず作成すること。
+
+    範囲表記(gate:intake-passed 〜 gate:integration-passed)では、識別子を
+    名前にした後は途中のラベルが列挙されず作られない。実際に使う集合と
+    作る集合を突き合わせる。
+    """
     import re
 
     init_text = (ROOT / "commands/loop-init.md").read_text()
-    # loop-init は gate:* を範囲表記で規定する。端点と loop:* の記載を確認する
-    for marker in (
-        "gate:intake-passed",
-        "gate:integration-passed",
-        "gate:intake-returned",
-        "gate:integration-returned",
-        "loop:in-progress",
-        "loop:pr",
-        "loop:triage",
-    ):
-        assert marker in init_text, marker
-
-    created = {f"gate:g{i}-{s}" for i in range(5) for s in ("passed", "returned")}
-    created |= {"loop:in-progress", "loop:pr", "loop:triage"}
-    used = set()
+    used: set[str] = set()
     for path in (ROOT / "commands/loop.md", ROOT / "commands/loop-status.md"):
-        used |= set(re.findall(r"(?:gate:g\d-(?:passed|returned)|loop:[a-z-]+)", path.read_text()))
-    assert used <= created, used - created
+        used |= set(re.findall(r"`(gate:[a-z-]+|loop:[a-z-]+)`", path.read_text()))
+    # ワイルドカード表記は集合ではないので除く
+    used = {label for label in used if "*" not in label}
+    missing = sorted(label for label in used if label not in init_text)
+    assert not missing, missing
 
 
 def test_no_runtime_unresolvable_docs_references() -> None:
@@ -129,3 +123,16 @@ def test_verifier_status_contract() -> None:
     assert '"met | continue | abort | waiting"' in verifier_text.replace("status", "status")
     loop_text = (ROOT / "commands/loop.md").read_text()
     assert "drift_check" in loop_text, "loop.md は drift_check を先に判定する"
+
+
+def test_trust_boundary_has_single_source() -> None:
+    """信頼境界の規範は data-boundary skill を単一の正とし、各 agent は参照だけすること。
+
+    同じ文面を各 agent に複製すると、次の改訂で一部だけ更新されて食い違う。
+    """
+    assert (ROOT / "skills/data-boundary/SKILL.md").exists()
+    for path in AGENT_FILES:
+        text = path.read_text()
+        assert "tasuki:data-boundary" in text, path.name
+        # 複製されていた本文が戻っていないこと
+        assert "誰でもコメント" not in text, path.name

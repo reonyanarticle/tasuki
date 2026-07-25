@@ -23,12 +23,18 @@ _DEFAULT_LEVEL = "note"
 
 
 def _int_or_zero(value: object) -> int:
-    """0 始まりの行・桁を安全に読む(null や非数値は 0 とみなす)。"""
+    """0 始まりの行と桁を安全に読む。
+
+    null や非数値は 0 とみなす。負値も 0 に切り上げる。SARIF の startLine と
+    startColumn は 1 以上でなければならず、0 以下だと upload-sarif がファイルごと
+    拒否して、その run の指摘がすべて失われる。
+    """
     try:
-        return int(value)  # pyright: ignore[reportArgumentType]
+        parsed = int(value)  # pyright: ignore[reportArgumentType]
     except (TypeError, ValueError, OverflowError):
         # OverflowError は inf(JSON の 1e400 等)を int にするときに出る。
         return 0
+    return max(0, parsed)
 
 
 def _relative_uri(raw: object, root: Path) -> str:

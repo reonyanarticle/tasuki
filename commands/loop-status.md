@@ -2,7 +2,7 @@
 description: tasuki ループの進行状況、triage inbox(人間の裁定待ち)、メトリクスを表示する。読み取り専用
 argument-hint: "[親 issue 番号]"
 disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Bash(gh *)
+allowed-tools: Skill, Read, Grep, Glob, Bash(gh *)
 ---
 
 # /tasuki:loop-status
@@ -16,6 +16,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *)
 
 人間の判断待ちを一覧化する(アンドン)。
 
+- `loop:review` ラベルの issue(出荷前レビュー待ち。人間が `/code-review` を回す番)
 - `loop:triage` ラベルの issue(エスカレーション。Fable 裁定の3分類コメントがあれば要約を併記)
 - 未回答の task-question(質問コメントに回答が付いていない issue)
 - 承認待ちの axis-question(契約ファイル変更 PR で open のもの)

@@ -66,4 +66,12 @@ ci:
       ]
     added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)"
   # 設定ファイルの「新規追加」検知の対象(既存ファイルの改変検知とは別に見る)
-  new_config_files: ["tox.ini", "pyrightconfig.json", "setup.cfg", "conftest.py"]
+  new_config_files:
+    [
+      "tox.ini",
+      "pyrightconfig.json",
+      "setup.cfg",
+      "pytest.ini",
+      "conftest.py",
+      ":(glob)**/conftest.py",
+    ]

@@ -38,7 +38,8 @@ tasuki/
 │   ├── baton-contract/SKILL.md   # 契約(待ち位置)の書き方・読み方
 │   ├── loop-report/SKILL.md      # レポート作成手順(対応表必須)
 │   ├── plan-comment/SKILL.md     # 親 issue の計画コメント(図を描く条件を含む)
-│   └── mermaid/SKILL.md          # 図種の決定手順と記法(汎用。tasuki 固有の判断は持たない)
+│   ├── mermaid/SKILL.md          # 図種の決定手順と記法(汎用。tasuki 固有の判断は持たない)
+│   └── data-boundary/SKILL.md    # 入力を未検証データとして扱う共通規範(全 agent が参照)
 ├── agents/
 │   ├── decomposer.md
 │   ├── gate-reviewer.md          # 全ゲート共通。モデルは呼び出しごとに指定。読み取り専用

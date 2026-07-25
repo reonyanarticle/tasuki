@@ -221,16 +221,19 @@ jobs:
 
 `gh label create` で作成する(既存なら skip、冪等)。
 
-- `gate:intake-passed` 〜 `gate:integration-passed`(通過)
-- `gate:intake-returned` 〜 `gate:integration-returned`(差し戻し中)
+- 通過:`gate:intake-passed`、`gate:split-passed`、`gate:start-passed`、`gate:outcome-passed`、`gate:integration-passed`
+- 差し戻し中:`gate:intake-returned`、`gate:split-returned`、`gate:start-returned`、`gate:outcome-returned`、`gate:integration-returned`
+
+ラベル名は契約の `gates[].id` から作る。**範囲表記で省略せず、使うものをすべて作る**(作り漏れると `gh issue edit --add-label` が「ラベルが無い」で失敗し、ゲートの通過状態が保存されないまま毎回やり直しになる)。
 - `loop:in-progress`(worker 割り当て済み)
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
+- `loop:review`(出荷前レビュー待ち。人間が `/code-review` を回す番)
 - `loop:triage`(人間の裁定待ち)
 
 ### 7. バジェット確認と fixture の案内
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限(python pack なら `Bash(uv run *)`)を導入先の設定に追加するよう提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
 
