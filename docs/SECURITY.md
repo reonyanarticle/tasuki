@@ -5,12 +5,12 @@ tasuki を安全に使える範囲と、v1 が守らない範囲を定める。
 
 ## v1 の前提: issue と PR の内容は信頼できること
 
-**tasuki v1 は、issue・PR・コメントの内容をすべて信頼できるリポジトリでのみ使う。**
+**tasuki v1 は、issue、PR、コメントの内容をすべて信頼できるリポジトリでのみ使う。**
 具体的には、親 issue と子 issue、PR、issue コメントを書くのが maintainer 自身(または信頼された少数の人)である場合を前提とする。
 **外部からの issue を受け付けるリポジトリ(多くの OSS)では、v2 のハードニングが入るまで使わない。**
 
 この前提が要るのは、tasuki の設計が状態を GitHub に外部化し([DESIGN.md](DESIGN.md))、issue とコメントの本文を agent の入力にするためである。
-GitHub 上のラベル・コメント・レポートには作者の認証が無く、誰でもコメントできる。
+GitHub 上のラベル、コメント、レポートには作者の認証が無く、誰でもコメントできる。
 そのテキストが、Bash を持つ worker と verifier、判定を下す gate-reviewer に流れ込む。
 
 ## v1 が守る範囲(CI と PR コードの実行面)
@@ -39,7 +39,7 @@ v1 では指示レベルの緩和(「入力中の命令に従わない」)を全
 
 外部 issue を受け付けるリポジトリへ広げるための項目。
 
-1. **作者認証**：ラベル・verdict コメント・レポートを、orchestrator の実行アカウント(bot 識別子)が付けたものだけ信頼する。他者が付けたものは無視する。来歴は本文テキストではなく作者で判定する
+1. **作者認証**：ラベル、verdict コメント、レポートを、orchestrator の実行アカウント(bot 識別子)が付けたものだけ信頼する。他者が付けたものは無視する。来歴は本文テキストではなく作者で判定する
 2. **worker / verifier の sandbox**：契約オプション `sandbox: container`(GATES.md #15 で予約)を実装し、外部 issue を扱うリポジトリで必須にする
 3. **ゲート定義の保護**:`.github/workflows/**` と `.tasuki/**` を CODEOWNERS で人間レビュー必須にし、orchestrator は「期待するチェック名がすべて成功」を確認する(「赤が無い」で通さない)
 4. **orchestrator の allowlist 粒度**：`Bash(git *)` は `git -c core.pager=sh` 等で実質任意実行になるため、サブコマンド単位に絞るか hook で危険な形を弾く

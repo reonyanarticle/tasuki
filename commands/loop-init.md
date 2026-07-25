@@ -12,7 +12,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 前提チェック(失敗したら中断して報告)
 
-0. **信頼境界の確認(必須)**:tasuki v1 は issue・PR・コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証・sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
+0. **信頼境界の確認(必須)**:tasuki v1 は issue、PR、コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証、sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
 1. git リポジトリであり、GitHub リモート(origin)があること
 2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する
@@ -23,8 +23,8 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 `pyproject.toml` があれば python pack(`packs/python/providers.yaml`)を選択する。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
-pack の前提ツール(ruff / black / basedpyright / pytest)が dev 依存にあるか確認し、なければ `uv add --dev` での追加を提案する。
-`uv.lock` が無ければ `uv lock` で生成し、コミット対象に含める(CI の `uv sync --frozen` は lockfile が無いと全 job が即失敗するため必須)。
+pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
+pack の `ci.lockfile` が無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須)。
 
 ### 2. プロジェクト資産の棚卸し
 
@@ -85,9 +85,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: astral-sh/setup-uv@v5
-        with: { enable-cache: true }
-      - run: uv sync --frozen
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
       - run: <providers.lint.command>
       - if: always()
         continue-on-error: true    # SARIF 可視化は best-effort(private リポジトリは GHAS なしだと失敗する)。ゲート判定は上の lint コマンドの exit code
@@ -99,9 +99,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: astral-sh/setup-uv@v5
-        with: { enable-cache: true }
-      - run: uv sync --frozen
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
       - run: <providers.format.command>
   typecheck:
     runs-on: ubuntu-latest
@@ -111,20 +111,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: astral-sh/setup-uv@v5
-        with: { enable-cache: true }
-      - run: uv sync --frozen
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
       - run: <providers.typecheck.command>
         continue-on-error: true    # 失敗の判定は下の gate ステップが行う
-      - run: python .tasuki/normalizers/basedpyright_json_to_sarif.py <providers.typecheck.output_file> basedpyright.sarif
+      - run: <pack.ci.normalizer_runtime> .tasuki/<providers.typecheck.normalizer> <providers.typecheck.output_file> <providers.typecheck.output_file の SARIF 版>
       - if: always()
         continue-on-error: true    # 同上。ゲート判定は下の typecheck gate ステップ
         uses: github/codeql-action/upload-sarif@v3
-        with: { sarif_file: basedpyright.sarif, category: typecheck }
+        with: { sarif_file: <typecheck の SARIF ファイル>, category: typecheck }
       - name: typecheck gate
         # jq -e により、summary が欠けた JSON・空ファイル・欠損ファイルはすべて job 失敗になる(fail-closed)
         run: |
-          errors="$(jq -er '.summary.errorCount' <providers.typecheck.output_file>)"
+          errors="$(<pack.ci.blocking_count.typecheck> <providers.typecheck.output_file>)"
           test "$errors" -eq 0
   test:
     runs-on: ubuntu-latest
@@ -132,20 +132,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: astral-sh/setup-uv@v5
-        with: { enable-cache: true }
-      - run: uv sync --frozen
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
       - run: <providers.test.command>
       - name: test-tampering check   # 観点 #18。機械検知できる範囲: 削除・skip/xfail・設定による除外
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
           base="origin/$BASE_REF"
-          git diff "$base"...HEAD -- 'tests/' '**/test_*.py' '**/*_test.py' > /tmp/test.diff
+          git diff "$base"...HEAD -- <pack.ci.test_tampering.paths> > /tmp/test.diff
           if grep -E '^\-.*def test_' /tmp/test.diff; then
             echo '::error::既存テストの削除を検出。仕様と矛盾する場合は task-question にすること'; exit 1
           fi
-          if grep -E '^\+.*(pytest\.mark\.(skip|xfail)|unittest\.skip|importorskip)' /tmp/test.diff; then
+          if grep -E "^\+.*(<pack.ci.test_tampering.added_line_pattern>)" /tmp/test.diff; then
             echo '::error::テストの skip / xfail 追加を検出'; exit 1
           fi
           # 型/テスト設定ファイル(pyproject を使う project では通常不要)の新規追加は一律で差し戻す
@@ -153,16 +153,16 @@ jobs:
             echo '::error::設定ファイル(tox.ini / pyrightconfig.json / setup.cfg)の新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
           # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
-          git diff "$base"...HEAD -- pyproject.toml pytest.ini setup.cfg tox.ini pyrightconfig.json '**/conftest.py' > /tmp/conf.diff
-          if grep -E '^\+.*(addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\s*=|\[tool\.(ruff|black|basedpyright|pytest))' /tmp/conf.diff; then
+          git diff "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
+          if grep -E "^\+.*(<pack.ci.config_tampering.added_line_pattern>)" /tmp/conf.diff; then
             echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if ! git diff --quiet "origin/$BASE_REF"...HEAD -- uv.lock; then
-            echo '::warning::依存の変更を検出(uv.lock)。PR 本文の変更点に理由があるか確認'
+          if ! git diff --quiet "origin/$BASE_REF"...HEAD -- <pack.ci.lockfile>; then
+            echo '::warning::依存の変更を検出(lockfile)。PR 本文の変更点に理由があるか確認'
           fi
   security:
     runs-on: ubuntu-latest
@@ -173,10 +173,23 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2, persist-credentials: false }
       # 生成時に最新リリースのコミット SHA を解決して固定する(@main 等の可変参照は使わない)
-      - uses: anthropics/claude-code-security-review@<コミット SHA>
+      - id: review
+        uses: anthropics/claude-code-security-review@<コミット SHA>
         with:
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           comment-pr: true
+      - name: security gate      # 閾値以上の findings で job を落とす(コメントを出すだけにしない)
+        env:
+          FINDINGS: ${{ steps.review.outputs.<findings 件数の output 名> }}
+        run: |
+          if [ -z "${FINDINGS}" ]; then
+            echo "::error::security-review の findings 件数を取得できなかった"
+            exit 1
+          fi
+          if [ "${FINDINGS}" -gt 0 ]; then
+            echo "::error::閾値以上の findings が ${FINDINGS} 件ある"
+            exit 1
+          fi
   notify-success:                  # 沈黙と故障を区別するため成功も通知する(観点 #17)
     needs: [lint, format, typecheck, test, security]
     runs-on: ubuntu-latest
@@ -190,11 +203,14 @@ jobs:
 
 生成時の注意:
 
+- **`<...>` は生成時に展開するプレースホルダである。** `<providers.*>` は pack の `providers`、`<pack.ci.*>` は pack の `ci` から読む。テンプレートに言語固有のコマンドを直接書かない(core を言語非依存に保ち、2言語目を pack の追加だけで通すため)
+
 - **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
-- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ・タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
+- **security job を生成するなら、findings 件数の output 名を固定した SHA の `action.yml` から解決して埋める**。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
+- **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
@@ -216,4 +232,4 @@ jobs:
 
 ## 完了報告
 
-生成・変更したファイルの一覧と、未完了の手動作業(secret 設定、branch protection、fixture 手書き、spawn depth 設定)を分けて報告する。
+生成、変更したファイルの一覧と、未完了の手動作業(secret 設定、branch protection、fixture 手書き、spawn depth 設定)を分けて報告する。

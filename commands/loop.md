@@ -2,13 +2,13 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を G2 ゲートと GM(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Bash(gh *), Bash(git *)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh *), Bash(git *)
 ---
 
 # /tasuki:loop
 
 このセッションはループの orchestrator である。
-**前提**:issue・PR・コメントの内容は信頼できること。v1 は maintainer が issue を書く信頼リポジトリ専用であり、外部 issue を受け付けるリポジトリでは使わない(未検証テキストが Bash を持つ worker/verifier に流れるため)。
+**前提**:issue、PR、コメントの内容は信頼できること。v1 は maintainer が issue を書く信頼リポジトリ専用であり、外部 issue を受け付けるリポジトリでは使わない(未検証テキストが Bash を持つ worker/verifier に流れるため)。
 subagent は別の subagent を起動できないため、orchestrator はメインセッションが務める。
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。
@@ -52,7 +52,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、`gate:g1-returned` と `loop:triage` を付けて修正待ちにする
 - **PASS** → 分割案の場合、起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば G1 差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(G2 差し戻しの宛先判別用)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、G1 が見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:g1-passed` を付ける
 
-`gate:g1-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加・削除、blocked-by の変更を毎 run 検知)は G1 を再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
+`gate:g1-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加、削除、blocked-by の変更を毎 run 検知)は G1 を再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
 
 ### 1c. 依存グラフとレイヤー
 
@@ -70,6 +70,8 @@ worker を起動するたびに WIP(観点 #24)を再確認し、上限到達中
 GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定後に必ず削除する。開始時に同名の残骸があれば前回クラッシュの残りとして先に削除する(冪等)。
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
+ただし **担当したまま落ちた実行を回収する経路を持つ**。`loop:in-progress` が付いた子 issue について、最後のループ由来コメント(verdict、レポート、開始コメント)から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee と `loop:in-progress` を外し、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
+この回収が無いと、クラッシュした実行が担当した子 issue は以後すべての run から永久にスキップされ、`loop:triage` にも上がらないまま停止する。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
 - `gate:g2-returned` で本文末尾に `via tasuki-decomposer` がある子(修正の主体はループ内の decomposer):起票者待ちにしない。最終 verdict より後に本文が編集されていれば 2a から再入し、未編集なら orchestrator が decomposer 修正セッションを自ら起動する(verdict を渡して本文を更新させ、2a から再入する)。この自己修正の反復も `max_iterations_per_gate` に計上し、超過で `loop:triage`
@@ -130,7 +132,7 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
 2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)を実行し、exit code で合否を読む(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義は default branch(信頼された版)から読む**。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
-3. テスト改変検知(base との diff に対する削除・skip/xfail・設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
+3. テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
 6. 全て成功 → verifier(2e)へ
@@ -140,7 +142,8 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 ### 2e. 内側ループの出口(verifier)
 
 `tasuki-verifier` へ委譲する。
-渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準・打ち切り条件のみ。
+渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準と打ち切り条件のみ。
+**PR のブランチ名を必ず渡す**(verifier は再実行を default branch ではなくそのブランチの一時 worktree で行う)。
 verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。
 
 まず verifier の `drift_check` を確認する。
@@ -168,7 +171,7 @@ verifier の返す JSON は orchestrator が機械的に読むための内部デ
 
 - 判定対象のレポートコメント
 - 契約の report フェーズ `receives` 定義+差し戻し履歴(過去 verdict があれば)
-- 子 issue 本文(受け入れ条件・成功基準。対応表の N対1 照合用)
+- 子 issue 本文(受け入れ条件、成功基準。対応表の N対1 照合用)
 
 返った verdict を issue コメントに記録する(人間可読の markdown +畳んだ JSON。冪等)。
 エスカレーション規則は G2 と同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
@@ -185,7 +188,9 @@ PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g �
 
 最終コミットの check-runs を `gh api` で読み、全 job の成否を確認する(マージ判断の正は CI)。
 
-- **check-run が1件も無い** → PASS とみなさない(workflow 未生成・実行スキップ・権限不備を確認し、解決できなければ `loop:triage`。fail-closed)
+- **check-run が1件も無い** → PASS とみなさない(workflow 未生成、実行スキップ、権限不備を確認し、解決できなければ `loop:triage`。fail-closed)
+- **未完了の job がある**(`status` が `queued` または `in_progress`) → まだ判定しない。完了までポーリングして待つ(差し戻しに数えない。`gh pr create` 直後と push 直後は必ずこの状態を通る)
+- **`cancelled` または `skipped` の job がある** → 失敗として扱わない。反復中の push で `concurrency` が旧 run を打ち切った結果であることが多いため、最新コミットの run を確認し直す。最新コミットに対する完了 run が無ければ `gh run rerun` で走らせ直し、それでも `cancelled` が残る場合のみ `loop:triage`(打ち切られた run を差し戻し理由にすると、欠陥が無いまま `max_iterations_per_gate` を溶かす)
 - **失敗した job がある** → GM-local と CI の食い違い(環境差、secrets 依存のテスト等)として findings を抽出し、新規 worker セッションへ差し戻す(内側ループ上限に計上)。**実装コミットが変わったら `gate:g3-passed` を外し**、2d から通り直す(古いレポートの PASS で新しい実装を ready 化しない)
 - **全 job 成功** → PR を ready 化し、子 issue に完了コメントを残し、`loop:in-progress` を外す。完了コメントには「マージ前に人間がレポートを読むこと(観点 #13)」を明記する(G3 PASS はレポートの形式照合であり、内容の承認ではない)
 

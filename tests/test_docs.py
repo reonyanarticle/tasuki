@@ -144,3 +144,46 @@ def test_gm_is_hybrid() -> None:
     assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()
     loop_text = (ROOT / "commands/loop.md").read_text()
     assert "GM-local" in loop_text and "GM-ci" in loop_text
+
+
+_NAKAGURO_ALLOWED = (
+    "中黒",  # CLAUDE.md の規約文そのもの
+    "ドラム・バッファー・ロープ",  # TOC の固有名詞(カタカナ複合語であって並列ではない)
+)
+
+
+def _prose_lines(path: Path) -> list[tuple[int, str]]:
+    """コード塊を除いた地の文の行を返す。"""
+    lines: list[tuple[int, str]] = []
+    in_code = False
+    for i, line in enumerate(path.read_text().split("\n"), 1):
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if not in_code:
+            lines.append((i, line))
+    return lines
+
+
+_WRITING_TARGETS = [
+    ROOT / "README.md",
+    ROOT / "CLAUDE.md",
+    *sorted((ROOT / "docs").glob("*.md")),
+    *sorted((ROOT / "commands").glob("*.md")),
+    *sorted((ROOT / "agents").glob("*.md")),
+    *sorted((ROOT / "skills").glob("*/SKILL.md")),
+]
+
+
+@pytest.mark.parametrize("path", _WRITING_TARGETS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_no_nakaguro_in_parallel_enumeration(path: Path) -> None:
+    """日本語の並列に中黒を使わない(CLAUDE.md の文体規約)。
+
+    規約は書かれていても強制されていなければ守られない。ここで機械的に固定する。
+    """
+    offenders = [
+        (i, line.strip())
+        for i, line in _prose_lines(path)
+        if "・" in line and not any(tok in line for tok in _NAKAGURO_ALLOWED)
+    ]
+    assert not offenders, offenders

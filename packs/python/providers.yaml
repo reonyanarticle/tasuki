@@ -26,3 +26,29 @@ providers:
   security:
     action: "anthropics/claude-code-security-review"  # GitHub Action として実行(docs/OPERATIONS.md)
     output: pr-comment
+
+# CI workflow(loop-gates.yml)を組み立てるための言語固有の部品。
+# core(commands/loop-init.md)は job の骨格と fail-closed 規則だけを持ち、
+# 言語に依存する具体はここから読んで埋める(core を言語非依存に保つため)。
+ci:
+  # 全 job 共通の前処理(ランタイム準備と依存解決)
+  setup:
+    uses: "astral-sh/setup-uv@v5"
+    with: { enable-cache: true }
+    install: "uv sync --frozen"
+  # normalizer を実行するインタプリタ
+  normalizer_runtime: python
+  # 依存追加の検知対象(lockfile-diff)
+  lockfile: uv.lock
+  # provider の出力からブロッキング件数を読む方法(fail-closed 判定に使う)
+  blocking_count:
+    typecheck: "jq -er '.summary.errorCount'"
+  # テスト改変検知(base との diff に対して適用する)
+  test_tampering:
+    paths: ["tests/", "**/test_*.py", "**/*_test.py"]
+    added_line_pattern: "pytest\\.mark\\.(skip|xfail)|unittest\\.skip|importorskip"
+  # 設定の無効化検知(閾値やルールを緩める変更を拾う)
+  config_tampering:
+    paths:
+      ["pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini", "pyrightconfig.json", "**/conftest.py"]
+    added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)"

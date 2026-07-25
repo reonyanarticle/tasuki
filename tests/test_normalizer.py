@@ -75,3 +75,66 @@ def test_convert_empty_diagnostics(tmp_path: Path) -> None:
 
 def test_main_usage_error() -> None:
     assert normalizer.main(["prog"]) == 2
+
+
+def test_absolute_paths_become_repo_relative(tmp_path: Path) -> None:
+    """絶対パスは repo ルートからの相対 uri になること(code scanning の対応づけ要件)。"""
+    root = tmp_path / "repo"
+    report = {
+        "generalDiagnostics": [
+            {
+                "file": str(root / "src/api.py"),
+                "severity": "error",
+                "message": "bad",
+                "range": {"start": {"line": 0, "character": 0}},
+            }
+        ]
+    }
+    src = tmp_path / "in.json"
+    src.write_text(json.dumps(report))
+    out = tmp_path / "out.sarif"
+    normalizer.convert(src, out, root=root)
+    sarif = json.loads(out.read_text())
+    uri = sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"][
+        "uri"
+    ]
+    assert uri == "src/api.py"
+
+
+def test_unknown_severity_degrades_to_note(tmp_path: Path) -> None:
+    """未知の severity は error に昇格させず note に倒すこと。"""
+    report = {
+        "generalDiagnostics": [
+            {
+                "file": "a.py",
+                "severity": "hint",
+                "message": "unreachable",
+                "range": {"start": {"line": 0, "character": 0}},
+            }
+        ]
+    }
+    src = tmp_path / "in.json"
+    src.write_text(json.dumps(report))
+    out = tmp_path / "out.sarif"
+    error_count = normalizer.convert(src, out)
+    assert error_count == 0
+    assert json.loads(out.read_text())["runs"][0]["results"][0]["level"] == "note"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "",  # typecheck が落ちて 0 バイトになった場合
+        "{ broken",
+        '{"generalDiagnostics": null}',
+        '{"generalDiagnostics": [{"file": null, "range": null, "severity": null}]}',
+    ],
+    ids=["empty", "malformed", "null-diagnostics", "null-fields"],
+)
+def test_broken_input_still_writes_sarif(tmp_path: Path, raw: str) -> None:
+    """入力が壊れていても例外を投げず SARIF を書くこと(後続の upload-sarif を守る)。"""
+    src = tmp_path / "in.json"
+    src.write_text(raw)
+    out = tmp_path / "out.sarif"
+    assert normalizer.convert(src, out) == 0
+    assert json.loads(out.read_text())["version"] == "2.1.0"

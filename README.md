@@ -87,9 +87,9 @@ claude --plugin-dir /path/to/tasuki
 ## 使い方
 
 1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
-2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景・目的・価値・予算・完了の定義を埋める)。子 issue は自分で書かない
+2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
 3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理(G0)→分割(G1)→着手(G2)の順にゲートを通し、通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
-4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。分割・依存・状態は mermaid の計画図で俯瞰できる
+4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。分割、依存、状態は mermaid の計画図で俯瞰できる
 5. **マージは常に人間が実行する**。ゲートが行うのはレビューまでで、最終判断は人間に残る
 
 レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
@@ -101,7 +101,7 @@ issue を書く前に別途レビューさせる工程は要らない。
 
 ## 安全に使える範囲
 
-v1 は issue・PR・コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。
+v1 は issue、PR、コメントの内容を信頼できるリポジトリ専用である(maintainer が issue を書く前提)。
 外部からの issue を受け付けるリポジトリでは、未検証テキストが agent に流れるため使わない。
 詳細と v2 のハードニングは [docs/SECURITY.md](docs/SECURITY.md) にある。
 

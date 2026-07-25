@@ -65,10 +65,30 @@ def test_sarif_uploads_are_best_effort(template: dict) -> None:
 
 
 def test_typecheck_gate_is_fail_closed(template: dict) -> None:
-    """typecheck の合否は jq -e ステップが決める(summary 欠落で失敗する)。"""
+    """typecheck の合否は fail-closed な件数読み取りが決める(summary 欠落で失敗する)。
+
+    件数の読み方は言語依存なので pack が持つ。core は placeholder を置くだけであり、
+    fail-closed の保証は pack 側(`jq -er` の -e)で検査する。
+    """
     steps = template["jobs"]["typecheck"]["steps"]
     gate_steps = [s for s in steps if s.get("name") == "typecheck gate"]
-    assert gate_steps and "jq -er" in gate_steps[0]["run"]
+    assert gate_steps
+    assert "<pack.ci.blocking_count.typecheck>" in gate_steps[0]["run"]
+
+    pack = yaml.safe_load((ROOT / "packs/python/providers.yaml").read_text())
+    reader = pack["ci"]["blocking_count"]["typecheck"]
+    assert "jq -er" in reader, reader
+
+
+def test_core_template_has_no_language_specifics() -> None:
+    """core(loop-init)に言語固有のツール名を書かない(CLAUDE.md の三層構造)。
+
+    2言語目を pack の追加だけで通すための不変条件。
+    """
+    text = (ROOT / "commands/loop-init.md").read_text()
+    forbidden = ["setup-uv", "uv sync", "uv.lock", "basedpyright", "errorCount", "pytest.ini"]
+    found = [tok for tok in forbidden if tok in text]
+    assert not found, found
 
 
 def test_security_action_not_on_mutable_ref(template: dict) -> None:
