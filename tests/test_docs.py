@@ -259,3 +259,18 @@ def test_loop_command_keeps_least_privilege() -> None:
     assert not any(tok.strip() == "Bash" for tok in allowed.split(":", 1)[1].split(",")), allowed
     init = (ROOT / "commands/loop-init.md").read_text()
     assert "checks-local の実行権限を提案する" in init
+
+
+def test_readme_documents_model_assignment() -> None:
+    """README が役割ごとのモデル配分と、その根拠(非対称性)を示すこと。"""
+    r = (ROOT / "README.md").read_text()
+    assert "## 誰がどのモデルで動くか" in r
+    for role in ("orchestrator", "worker", "verifier", "decomposer"):
+        assert role in r, role
+    for model in ("Opus", "Sonnet", "Haiku"):
+        assert model in r, model
+    assert "誤 PASS" in r and "誤 REJECT" in r  # 配分の根拠
+    # agent 定義の model と README の記述が食い違わないこと
+    for name in ("worker", "verifier", "decomposer"):
+        text = (ROOT / f"agents/{name}.md").read_text()
+        assert "model: sonnet" in text, name
