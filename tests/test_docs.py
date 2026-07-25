@@ -116,6 +116,12 @@ def test_mermaid_skill_teaches_judgment_not_templates() -> None:
     assert "gantt" in sk  # 選ばない判断
     # 凡例をグラフ内 subgraph にしない規則(今回の欠陥の再発防止)
     assert "凡例をグラフの中に作らない" in sk
+    assert "linkStyle" in sk  # 凡例が線の番号を壊すこと
+    # GitHub 固有の落とし穴(調査で確認した事実)
+    assert "`theme` を指定しない" in sk  # ダーク自動追随を殺すため
+    assert "elk" in sk  # 無言で dagre にフォールバックする
+    assert "info" in sk  # バージョンの自己確認手順
+    assert "accTitle" in sk  # 代替テキスト
 
 
 def test_plan_comment_skill_makes_diagram_conditional() -> None:
