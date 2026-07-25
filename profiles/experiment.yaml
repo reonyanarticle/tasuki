@@ -82,6 +82,8 @@ templates:
     - 生データへのリンク
   pr_required_fields:
     - 概要
+    - 対応する親要件          # 親 issue のどの要件のための変更か
+    - 受け入れ条件の充足      # AC ごとに、どの変更とテストが満たすか
     - 変更点
     - 影響範囲と revert 可否
     - 対応 issue

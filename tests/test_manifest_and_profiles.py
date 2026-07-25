@@ -171,3 +171,21 @@ def test_loop_does_not_hardcode_phase_names() -> None:
     )
     assert not hardcoded, hardcoded
     assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く
+
+
+def test_pr_template_carries_traceability() -> None:
+    """PR 単体で「何のための変更か」が判断できる必須欄を持つこと。
+
+    Closes #N だけでは、レビューする人が受け入れ条件も親要件も見られず、
+    issue を開き直さないと判断できない。レビューが起きる場所は PR である。
+    """
+    import yaml
+
+    for name in ("development", "experiment"):
+        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
+            "pr_required_fields"
+        ]
+        assert "対応する親要件" in fields, name
+        assert "受け入れ条件の充足" in fields, name
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "PR 単体で判断できるようにする" in worker

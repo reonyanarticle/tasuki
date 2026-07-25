@@ -339,3 +339,19 @@ def test_degenerate_cases_documented() -> None:
     assert "縮退した形の扱い" in loop
     for case in ("子が1件", "依存がまったく無い", "全子 issue がマージ済み", "子が0件"):
         assert case in loop, case
+
+
+def test_artifact_placement_is_documented() -> None:
+    """親 issue と子 issue と draft PR の役割分担が根拠つきで書かれていること。
+
+    実装方針を親に置くと俯瞰できなくなり、issue 本文に置くと着手ゲートに反する。
+    細部は動くコードの diff で見るほうが早い、という判断も残す。
+    """
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "### 実装方針をどこに置くか" in gates
+    for place in ("親 issue", "子 issue", "draft PR"):
+        assert place in gates, place
+    assert "仕様書にしない" in gates
+    assert "動くコードの diff" in gates
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "仕様書にしない" in worker
