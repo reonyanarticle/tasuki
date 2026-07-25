@@ -421,3 +421,22 @@ def test_child_visibility_hygiene() -> None:
     assert "tasuki:child" in init
     assert "no:parent-issue" in init
     assert "no:parent-issue" in (ROOT / "README.md").read_text()
+
+
+def test_parent_pr_is_designed_for_approval() -> None:
+    """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
+    import yaml
+
+    for name in ("development", "experiment"):
+        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
+            "parent_pr_required_fields"
+        ]
+        for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
+            assert f in fields, (name, f)
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 裁量の決定を実装方針から親 PR へ集約する規則
+    assert "承認してほしい判断" in loop
+    assert "「選択と理由」から" in loop
+    # ready 化は 3c 入場時(人間に draft を渡さない)
+    assert "親 PR を ready 化する" in loop
+    assert loop.index("親 PR を ready 化する") < loop.index("これは人間が起動するコマンドである")
