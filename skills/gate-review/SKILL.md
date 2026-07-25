@@ -115,6 +115,10 @@ orchestrator がこの verdict を issue コメントに残すときは、**人�
 生の JSON や YAML をそのまま貼らない(人間が読めないため)。
 状態復元は畳んだ JSON を読めば従来どおりできる。
 
+**畳んだ中の JSON は整形して貼る。** 1行に詰めた JSON は、開いた人が結局読めない。
+`jq .` を通した見た目、つまり2スペース字下げと1キー1行にする。
+配列の要素も1行ずつ並べる。
+
 ```markdown
 ## 着手ゲート: 🔴 差し戻し TOO_ABSTRACT
 opus / confidence high

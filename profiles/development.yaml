@@ -70,6 +70,8 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
     - 生データへのリンク
   pr_required_fields:
     - 概要
+    - 対応する親要件          # 親 issue のどの要件のための変更か
+    - 受け入れ条件の充足      # AC ごとに、どの変更とテストが満たすか
     - 変更点
     - 影響範囲と revert 可否
     - 対応 issue
@@ -78,10 +80,12 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
 gates:
   - id: intake
     kind: abstraction
+    phase: decomposition       # 親 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能(docs/INTEGRATION.md)
     model: opus                   # 低頻度・高レバレッジ
   - id: split
     kind: abstraction
+    phase: implementation      # 分割した子をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: opus
     set_signals:                  # 分割の集合レベル基準(個々の子でなく分割全体を検査)
@@ -90,6 +94,7 @@ gates:
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
   - id: start
     kind: abstraction
+    phase: implementation      # 子 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: haiku                  # 高頻度・照合型
     escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
@@ -115,6 +120,7 @@ gates:
     blocking_threshold: high
   - id: outcome
     kind: abstraction
+    phase: report              # 成果をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
@@ -122,6 +128,7 @@ gates:
     criteria_skills: []
   - id: integration
     kind: abstraction
+    phase: integration         # 統合の待ち位置
     reviewer: gate-reviewer
     model: opus
 

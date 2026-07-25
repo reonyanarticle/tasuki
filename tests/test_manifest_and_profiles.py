@@ -140,3 +140,69 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
         missing = sorted(referenced - set(budgets))
         assert not missing, (name, missing)
+
+
+def test_gate_phase_resolves_in_every_profile() -> None:
+    """abstraction ゲートの phase が、どのプロファイルでも実在するフェーズを指すこと。
+
+    loop.md がフェーズ名をハードコードしていた頃、experiment プロファイルは
+    decomposition と implementation を持たないため受理と分割と着手のゲートが
+    参照先を解決できなかった。同じ壊れ方を防ぐ。
+    """
+    import yaml
+
+    for name in ("development", "experiment"):
+        profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
+        phases = {p["name"] for p in profile["phases"]}
+        for gate in profile["gates"]:
+            if gate.get("kind") != "abstraction":
+                continue
+            assert "phase" in gate, (name, gate["id"])
+            assert gate["phase"] in phases, (name, gate["id"], gate["phase"], sorted(phases))
+
+
+def test_loop_does_not_hardcode_phase_names() -> None:
+    """loop.md がプロファイル固有のフェーズ名を直接書かないこと。"""
+    import re
+
+    loop = (ROOT / "commands/loop.md").read_text()
+    hardcoded = re.findall(
+        r"(?:decomposition|implementation|experiment-design|execution|analysis) フェーズ", loop
+    )
+    assert not hardcoded, hardcoded
+    assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く
+
+
+def test_pr_template_carries_traceability() -> None:
+    """PR 単体で「何のための変更か」が判断できる必須欄を持つこと。
+
+    Closes #N だけでは、レビューする人が受け入れ条件も親要件も見られず、
+    issue を開き直さないと判断できない。レビューが起きる場所は PR である。
+    """
+    import yaml
+
+    for name in ("development", "experiment"):
+        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
+            "pr_required_fields"
+        ]
+        assert "対応する親要件" in fields, name
+        assert "受け入れ条件の充足" in fields, name
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "PR 単体で判断できるようにする" in worker
+
+
+def test_pack_declares_artifacts_and_hygiene_is_wired() -> None:
+    """pack が生成物パターンを持ち、loop-init と worker がそれを使うこと。
+
+    E2E で __pycache__ の .pyc がコミットされ、ブランチ間で生成物どうしが
+    2連続で競合した。言語固有のパターンは pack に置く(三層構造)。
+    """
+    import yaml
+
+    pack = yaml.safe_load((ROOT / "packs/python/providers.yaml").read_text())
+    assert "__pycache__/" in pack["artifacts"]
+    assert "*.pyc" in pack["artifacts"]
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "生成物が .gitignore で除外されているか検査する" in init
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "生成物" in worker and "コミットしない" in worker

@@ -56,15 +56,17 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
   report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク]
-  pr_required_fields: [概要, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
+  pr_required_fields: [概要, 対応する親要件, 受け入れ条件の充足, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
 
 gates:
   - id: intake
     kind: abstraction
+    phase: decomposition      # 親 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能
     model: opus                   # 低頻度・高レバレッジ
   - id: split
     kind: abstraction
+    phase: implementation
     reviewer: gate-reviewer
     model: opus
     set_signals:                  # 分割の集合レベル基準(分割ゲート固有)
@@ -73,6 +75,7 @@ gates:
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
   - id: start
     kind: abstraction
+    phase: implementation
     reviewer: gate-reviewer
     model: haiku                  # 高頻度・照合型
     escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
@@ -98,6 +101,7 @@ gates:
     blocking_threshold: high
   - id: outcome
     kind: abstraction
+    phase: report
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
@@ -105,6 +109,7 @@ gates:
     criteria_skills: []
   - id: integration
     kind: abstraction
+    phase: integration
     reviewer: gate-reviewer
     model: opus
 
@@ -160,8 +165,8 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:` の5キーは実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:` の6キーは実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
 
 ## issue テンプレート仕様
 
@@ -172,7 +177,7 @@ providers:
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
 | 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) |
 | レポート | 要件 ID ⇔結果の対応表 / 結論 / 再現手順(コマンドと環境) / 生データへのリンク |
-| PR 本文 | 概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
+| PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 
 必須欄の空チェックが着手ゲートの門前払いに直結する。
 

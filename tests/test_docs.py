@@ -62,15 +62,15 @@ def test_phase3_full_loop_wiring() -> None:
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
-    assert "すべて人間にマージされるまで進まない" in loop
+    assert "全子が統合ブランチへ取り込まれたら進む" in loop
     assert "統合ゲート" in loop
-    assert "親 issue の close は人間が行う" in loop
+    assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
     assert "遡及適用しない" in loop
     assert "分割案 YAML は `<details>` に畳む" in loop and "分割案の永続化" in loop
-    assert "1件マージされるごとに残る ready PR の check-runs を再確認" in loop
+    assert "1件取り込むごとに、統合ブランチ上で checks-local を再実行" in loop
     assert "不採用クローズ" in loop
-    assert "integration フェーズ" in loop
+    assert "`gates.integration.phase`" in loop  # フェーズ名はハードコードせず契約から引く
 
 
 def test_security_threat_model_documented() -> None:
@@ -203,7 +203,7 @@ def test_baton_contract_covers_set_signals() -> None:
 def test_preship_review_phase_defined() -> None:
     """出荷前レビュー(5観点)と security スキャンの実施フェーズが定義されていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "### 2g. 出荷前レビュー" in loop
+    assert "### 3c. 出荷前レビュー(親 PR、最終コード評価)" in loop
     assert "/code-review" in loop
     assert "/claude-security:claude-security" in loop
     assert "1観点ずつ指定して5回に分ける" in loop  # 一度に回さない
@@ -311,3 +311,87 @@ def test_diagrams_are_conditional_and_renderable() -> None:
             ids = re.findall(r"^\s*([^\s\[{(]+)[\[{(]", block, re.M)
             bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
             assert not bad, (path.name, bad)
+
+
+def test_common_gate_rules_are_single_source() -> None:
+    """ラベル整理と冪等の規則を、ゲートごとに散らさず共通規則として1箇所に置くこと。
+
+    受理ゲートにしかラベル整理が書かれておらず、他のゲートでは triage が
+    滞留し続けていた。共通規則にすることで書き漏れを構造的に防ぐ。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "## ゲート共通の規則" in loop
+    assert "### ラベルの整理" in loop and "### コメントは冪等に投稿する" in loop
+    # 共通規則が個々のゲートより前にあること
+    assert loop.index("## ゲート共通の規則") < loop.index("### 2b.")
+    # 各ゲートの PASS 付与が片付けに言及していること(判定条件の出現ではなく付与の箇所)
+    import re
+
+    for gate in ("intake", "split", "start", "outcome", "integration"):
+        assigns = list(re.finditer(rf"`gate:{gate}-passed` を付け", loop))
+        assert assigns, gate
+        assert any("片付け" in loop[m.start() : m.start() + 120] for m in assigns), gate
+
+
+def test_degenerate_cases_documented() -> None:
+    """縮退した形(子1件、依存なし、全マージ済み、子0件)の扱いが書かれていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "縮退した形の扱い" in loop
+    for case in ("子が1件", "依存がまったく無い", "全子 issue がマージ済み", "子が0件"):
+        assert case in loop, case
+
+
+def test_artifact_placement_is_documented() -> None:
+    """親 issue と子 issue と draft PR の役割分担が根拠つきで書かれていること。
+
+    実装方針を親に置くと俯瞰できなくなり、issue 本文に置くと着手ゲートに反する。
+    細部は動くコードの diff で見るほうが早い、という判断も残す。
+    """
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "### 実装方針をどこに置くか" in gates
+    for place in ("親 issue", "子 issue", "draft PR"):
+        assert place in gates, place
+    assert "仕様書にしない" in gates
+    assert "動くコードの diff" in gates
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "仕様書にしない" in worker
+
+
+def test_operational_gaps_are_specified() -> None:
+    """運用の観点(手動停止、単一親、契約の読み取り時点、gh 失敗)が定義されていること。
+
+    Fable レビューで見つけた欠落。いずれも実運用で最初に踏む類のもの。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 人間が理由を問わず引けるブレーキ
+    assert "loop:pause" in loop
+    assert "実行中の worker は完了まで走り切ってよい" in loop  # 強制中断はしない
+    # 同時に回す親のスコープ
+    assert "同時に自走させる親 issue は1つとする" in loop
+    # 契約は run 開始時に固定
+    assert "run は開始時に読んだ契約で最後まで走る" in loop
+    # gh 失敗は fail-stop(握りつぶして進まない)
+    assert "run を止めて失敗箇所を報告する" in loop
+    # ラベルが作成対象に含まれ、status が表示すること
+    assert "loop:pause" in (ROOT / "commands/loop-init.md").read_text()
+    assert "loop:pause" in (ROOT / "commands/loop-status.md").read_text()
+    assert "loop:pause" in (ROOT / "README.md").read_text()
+
+
+def test_integration_branch_model() -> None:
+    """人間の最終判断が親 PR の1回に集約されていること(統合ブランチ方式)。
+
+    子 PR を人間が個別にマージする設計は「人間はループの外」という思想に反する。
+    default branch への反映点は親 PR のマージだけとする。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "loop/parent-<親番号>" in loop  # 統合ブランチ
+    assert "人間が最終的に見るのはこの親 PR だけ" in loop
+    assert "人間は子 PR をマージしない" in loop
+    assert "orchestrator が子 PR を統合ブランチへマージする" in loop
+    # 子 PR は Closes を使わない(統合ブランチ向けでは機能しない)
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "`Closes` は使わない" in worker
+    assert "Refs #" in worker
+    # 親 PR に Closes を集約
+    assert "`Closes #<番号>` を列挙する" in loop

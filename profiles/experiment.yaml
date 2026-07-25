@@ -82,6 +82,8 @@ templates:
     - 生データへのリンク
   pr_required_fields:
     - 概要
+    - 対応する親要件          # 親 issue のどの要件のための変更か
+    - 受け入れ条件の充足      # AC ごとに、どの変更とテストが満たすか
     - 変更点
     - 影響範囲と revert 可否
     - 対応 issue
@@ -90,10 +92,12 @@ templates:
 gates:
   - id: intake
     kind: abstraction
+    phase: experiment-design   # 親 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: opus
   - id: split
     kind: abstraction
+    phase: execution           # 分割した子をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: opus
     set_signals:
@@ -102,6 +106,7 @@ gates:
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
   - id: start
     kind: abstraction
+    phase: execution           # 子 issue をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: haiku
     escalate_to: sonnet
@@ -127,6 +132,7 @@ gates:
     blocking_threshold: high
   - id: outcome
     kind: abstraction
+    phase: report              # 成果をどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
@@ -134,6 +140,7 @@ gates:
     criteria_skills: []
   - id: integration
     kind: abstraction
+    phase: integration         # 統合の待ち位置
     reviewer: gate-reviewer
     model: opus
 

@@ -1,0 +1,14 @@
+# 着手ゲート: 曖昧語と打ち切り条件の欠落は TOO_ABSTRACT
+gate: start
+expected_verdict: TOO_ABSTRACT
+input: |
+  ## 対応する親要件
+  完了の定義「ログを見やすくする」
+  ## 目的
+  ログ出力を適切に改善する。
+  ## 受け入れ条件
+  - 使いやすくなっていること
+  ## 成功基準
+  - 見やすいと感じられること
+  ## 予算(max_iterations)
+  3

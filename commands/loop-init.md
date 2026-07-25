@@ -198,8 +198,10 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}   # ${{ }} を run に直接展開しない(テンプレ全体の規則)
+          REPO: ${{ github.repository }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "loop-gates: all green"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "loop-gates: all green"
 ```
 
 生成時の注意:
@@ -227,12 +229,15 @@ jobs:
 ラベル名は契約の `gates[].id` から作る。**範囲表記で省略せず、使うものをすべて作る**(作り漏れると `gh issue edit --add-label` が「ラベルが無い」で失敗し、ゲートの通過状態が保存されないまま毎回やり直しになる)。
 - `loop:in-progress`(worker 割り当て済み)
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
-- `loop:review`(出荷前レビュー待ち。人間が `/code-review` を回す番)
+- `loop:review`(出荷前レビュー待ち。親 issue に付く。人間が親 PR に `/code-review` を回す番)
+- `loop:pause`(人間による一時停止。親 issue に付けると新しい委譲を止める)
 - `loop:triage`(人間の裁定待ち)
 
 ### 7. バジェット確認と fixture の案内
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
+**生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
+
 **checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
