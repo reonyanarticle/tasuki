@@ -62,7 +62,7 @@ description: tasuki が親 issue に残す計画コメントの組み立て方�
 | 状態 | 判定 |
 |---|---|
 | 完了 | PR が ready |
-| 進行中 | `loop:in-progress`、または `gate:g2-passed` 以降で未 ready |
+| 進行中 | `loop:in-progress`、または `gate:start-passed` 以降で未 ready |
 | 差し戻し | `gate:*-returned` |
 | 裁定待ち | `loop:triage` |
 | 未着手 | 依存待ち、または未処理 |

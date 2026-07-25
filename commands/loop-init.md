@@ -52,7 +52,7 @@ pack の `ci.lockfile` が無ければ生成してコミット対象に含める
 - `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の見出し下には AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため)
 - `.github/pull_request_template.md`：`pr_required_fields` の各項目を `## 見出し` にする
 
-見出し直下が空のままの issue は門前払いで差し戻される(親 issue はループ起動時、子 issue は G2 前。この空チェックが機能するよう、見出し文字列を profile と一致させること)。
+見出し直下が空のままの issue は門前払いで差し戻される(親 issue はループ起動時、子 issue は着手ゲートの前。この空チェックが機能するよう、見出し文字列を profile と一致させること)。
 
 ### 5. CI workflow の生成
 
@@ -60,8 +60,8 @@ security job は **オプトイン(既定では生成しない)**。
 ユーザーに導入するか確認してから生成する。
 security job(`anthropics/claude-code-security-review` Action)は Anthropic API キー(`CLAUDE_API_KEY` secret)で Claude API を直接呼ぶため、**Claude Code の契約とは別の API 課金**が発生する(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。
 
-- **既定(オプトインしない)**：security job を生成しない。GM は lint / format / typecheck / test の4ゲート。`notify-success` の `needs` にも入れない
-- **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.tasuki/profile.yaml` の `enabled_gates` に `gm-security` を追加する
+- **既定(オプトインしない)**：security job を生成しない。形式ゲートは lint / format / typecheck / test の4ゲート。`notify-success` の `needs` にも入れない
+- **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.tasuki/profile.yaml` の `enabled_gates` に `checks-security` を追加する
 
 job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
@@ -180,7 +180,7 @@ jobs:
           comment-pr: true
       - name: security gate      # 閾値以上の findings で job を落とす(コメントを出すだけにしない)
         env:
-          # 契約の gates.gm-security.blocking_threshold 以上の重大度に絞った件数を渡す
+          # 契約の gates.checks-security.blocking_threshold 以上の重大度に絞った件数を渡す
           FINDINGS: ${{ steps.review.outputs.<blocking_threshold 以上の findings 件数の output 名> }}
         run: |
           if [ -z "${FINDINGS}" ]; then
@@ -208,10 +208,10 @@ jobs:
 - **`<...>` は生成時に展開するプレースホルダである。** `<providers.*>` は pack の `providers`、`<pack.ci.*>` は pack の `ci` から読む。テンプレートに言語固有のコマンドを直接書かない(core を言語非依存に保ち、2言語目を pack の追加だけで通すため)
 
 - **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
-- **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
+- **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の形式ゲート判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフックや、import 時に実行されるテスト設定)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
-- **security job を生成するなら、契約の `gates.gm-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
+- **security job を生成するなら、契約の `gates.checks-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
@@ -221,8 +221,8 @@ jobs:
 
 `gh label create` で作成する(既存なら skip、冪等)。
 
-- `gate:g0-passed` 〜 `gate:g4-passed`(通過)
-- `gate:g0-returned` 〜 `gate:g4-returned`(差し戻し中)
+- `gate:intake-passed` 〜 `gate:integration-passed`(通過)
+- `gate:intake-returned` 〜 `gate:integration-returned`(差し戻し中)
 - `loop:in-progress`(worker 割り当て済み)
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
 - `loop:triage`(人間の裁定待ち)
@@ -230,7 +230,7 @@ jobs:
 ### 7. バジェット確認と fixture の案内
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
-**GM-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限(python pack なら `Bash(uv run *)`)を導入先の設定に追加するよう提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限(python pack なら `Bash(uv run *)`)を導入先の設定に追加するよう提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
 

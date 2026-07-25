@@ -8,7 +8,7 @@ plugin の成立条件は、外部の subagent、skill、検査ツールを接�
 
 | 接続点 | インターフェース | 例 |
 |---|---|---|
-| gate reviewer 差し替え | 契約 YAML の `reviewer:` に subagent 名を指定。入力は前工程出力+契約、出力は verdict JSON([GATES.md](GATES.md)) | 外部コレクションのレビュアー系 agent を G2 に割り当て |
+| gate reviewer 差し替え | 契約 YAML の `reviewer:` に subagent 名を指定。入力は前工程出力+契約、出力は verdict JSON([GATES.md](GATES.md)) | 外部コレクションのレビュアー系 agent を着手ゲートに割り当て |
 | worker 差し替え | 入力は子 issue 本文のみ、義務は worktree 作成→実装→ self-verify → PR →報告→掃除、出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
 | mechanical provider 追加 | コマンド+ SARIF または JUnit XML 出力(非対応ツールは pack の normalizer を挟む) | 任意の linter やスキャナ |
 | skill 参照 | ゲート判定基準は skill として外出し可能。worker は対象リポジトリの skill / CLAUDE.md を通常通り参照 | プロジェクト固有規約の注入 |
@@ -23,7 +23,7 @@ worker からプロジェクト subagent へ直接委譲する場合は、導入
 ### 1. 発見
 
 `/tasuki:loop-init` がプロジェクト直下と導入済み plugin を棚卸しし、接続候補を提案する。
-レビュアー系 agent はゲート reviewer / GM への割り当てを、コマンド提供 plugin は provider 登録を提案する。
+レビュアー系 agent はゲート reviewer / 形式ゲートへの割り当てを、コマンド提供 plugin は provider 登録を提案する。
 採用結果は契約 YAML に書き込まれる。
 
 ### 2. 優先順位

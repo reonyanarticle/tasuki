@@ -45,72 +45,72 @@ phases:
       too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
     hands_off:
       to: integration
-  - name: integration             # 全子完了→親。G4 が照合する昇りの最終待ち位置
+  - name: integration             # 全子完了→親。統合ゲートが照合する昇りの最終待ち位置
     receives:
       from: report
       waiting_level: "全親要件⇔子成果の対応が明示され、孤児の親要件が無い"
       too_abstract_signals: ["親要件の孤児(対応する子成果なし)", "対応の明示なし"]
       too_concrete_signals: ["子レポートの生転載"]
 
-templates:                        # issue テンプレの必須欄(G2 門前払いの機械チェック対象)
+templates:                        # issue テンプレの必須欄(着手ゲートの門前払いの機械チェック対象)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
   report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク]
   pr_required_fields: [概要, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
 
 gates:
-  - id: g0
+  - id: intake
     kind: abstraction
     reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能
     model: opus                   # 低頻度・高レバレッジ
-  - id: g1
+  - id: split
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
-    set_signals:                  # 分割の集合レベル基準(G1 固有)
+    set_signals:                  # 分割の集合レベル基準(分割ゲート固有)
       - 依存の循環
       - 親要件の孤児(どの子 issue にも対応しない)
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
-  - id: g2
+  - id: start
     kind: abstraction
     reviewer: gate-reviewer
     model: haiku                  # 高頻度・照合型
     escalate_to: sonnet           # low-confidence PASS / 差し戻し2連続で昇格
     preflight: template-fields    # 門前払い(機械チェック)
     criteria_skills: []           # 判定基準に加える導入先プロジェクトの skill 名(任意)
-  - id: gm-lint
+  - id: checks-lint
     kind: mechanical
     provider: lint                # pack の providers.yaml を参照
     blocking_threshold: error     # SARIF level
-  - id: gm-format
+  - id: checks-format
     kind: mechanical
     provider: format              # exit-code 判定(black --check)
-  - id: gm-typecheck
+  - id: checks-typecheck
     kind: mechanical
     provider: typecheck
     blocking_threshold: error
-  - id: gm-test
+  - id: checks-test
     kind: mechanical
     provider: test                # JUnit XML: failures == 0
-  - id: gm-security
+  - id: checks-security
     kind: mechanical
     provider: security            # providers.yaml のキーと一致させる
     blocking_threshold: high
-  - id: g3
+  - id: outcome
     kind: abstraction
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
     preflight: report-fields      # 門前払い(report_required_fields の機械チェック)
     criteria_skills: []
-  - id: g4
+  - id: integration
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
 
 # 段階導入(ROADMAP.md)。フェーズ3では全 abstraction ゲートと gm-* を有効化する
-# gm-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
-enabled_gates: [g0, g1, g2, g3, g4, gm-lint, gm-format, gm-typecheck, gm-test]
+# checks-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
+enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
@@ -125,7 +125,7 @@ experiment.yaml と development.yaml の差分は次の3点のみで、ゲート
 
 - phases の名称(課題定義→実験計画→実行→分析→報告)
 - `exit_criteria_required` の中身(評価指標、データセット、seed)
-- G2 必須欄(実験条件、データ版数)
+- 着手ゲートの必須欄(実験条件、データ版数)
 
 experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
 analysis 単独の受け渡し照合はフェーズ3のロール分割とあわせて再検討する。
@@ -161,7 +161,7 @@ providers:
 ```
 
 契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:` の5キーは実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は G1 の集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。
 
 ## issue テンプレート仕様
 
@@ -174,11 +174,11 @@ providers:
 | レポート | 要件 ID ⇔結果の対応表 / 結論 / 再現手順(コマンドと環境) / 生データへのリンク |
 | PR 本文 | 概要 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 
-必須欄の空チェックが G2 の門前払いに直結する。
+必須欄の空チェックが着手ゲートの門前払いに直結する。
 
 親の `予算(コスト上限)` と子の `予算(max_iterations)` は、**ループの反復、実行コストの上限**である(loop が暴走しないためのバックストップ)。
 一方、その機能や検証そのものに必要な費用や、守るべき性能、速度などの制約(非機能要件)は、`価値` と `受け入れ条件` / `成功基準` に**測定可能な形**で書く。
-前者は orchestrator と watchdog が、後者は verifier と G2 / G3 が照合する(責任の置き場所が異なる)。
+前者は orchestrator と watchdog が、後者は verifier と着手 / 成果ゲートが照合する(責任の置き場所が異なる)。
 
 ## 質問ルーティング
 

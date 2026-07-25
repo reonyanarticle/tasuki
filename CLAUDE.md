@@ -9,7 +9,7 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 
 ## 実装前の必須確認
 
-- 実装順は [docs/ROADMAP.md](docs/ROADMAP.md) の段階導入に従う(フェーズ1: G2 + GM のみ)
+- 実装順は [docs/ROADMAP.md](docs/ROADMAP.md) の段階導入に従う(フェーズ1: 着手ゲート + 形式ゲートのみ)
 - Claude Code の機能仕様に依存する箇所(subagent の `model:` / `isolation:`、plugin.json スキーマ等)は、着手前に docs.claude.com の現行仕様を確認する。一覧は ROADMAP.md の「実装時検証事項」
 
 ## 規約

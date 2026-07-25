@@ -26,7 +26,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *)
 子 issue ごとに1行で表示する。
 
 ```
-#123 [gate:g2-passed] [loop:in-progress] PR #45 (draft, CI: running) タイトル
+#123 [gate:start-passed] [loop:in-progress] PR #45 (draft, CI: running) タイトル
 ```
 
 - `gate:*` ラベルからゲート通過状況

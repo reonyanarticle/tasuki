@@ -64,7 +64,7 @@ def test_reviewer_is_single_agent_with_per_call_model() -> None:
     # ゲート別の判定基準は skill が単一の正であること
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "## ゲート別の特記事項" in skill
-    for gate in ("G0(受理)", "G1(分割)", "G2(着手)", "G3(成果)", "G4(統合)"):
+    for gate in ("受理ゲート", "分割ゲート", "着手ゲート", "成果ゲート", "統合ゲート"):
         assert gate in skill, gate
 
 
@@ -92,10 +92,10 @@ def test_labels_used_are_created() -> None:
     init_text = (ROOT / "commands/loop-init.md").read_text()
     # loop-init は gate:* を範囲表記で規定する。端点と loop:* の記載を確認する
     for marker in (
-        "gate:g0-passed",
-        "gate:g4-passed",
-        "gate:g0-returned",
-        "gate:g4-returned",
+        "gate:intake-passed",
+        "gate:integration-passed",
+        "gate:intake-returned",
+        "gate:integration-returned",
         "loop:in-progress",
         "loop:pr",
         "loop:triage",

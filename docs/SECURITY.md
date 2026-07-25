@@ -23,15 +23,15 @@ GitHub 上のラベル、コメント、レポートには作者の認証が無�
 - 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、リポジトリ直下と全階層の `conftest.py`)を対象にする。git の pathspec は `**/conftest.py` では直下の `conftest.py` にマッチしないため、直下を明示するか `:(glob)` を付ける(この取りこぼしは実際に発生していた)
 - これらの不変条件は `tests/test_ci_template.py` で固定している
 
-### CI で守っても、GM-local は守られない
+### CI で守っても、checks-local は守られない
 
-**GM-local(反復中の形式判定)は、同じ providers のコマンドを orchestrator を動かしている人間のマシン上で、PR ブランチの一時 worktree に対して実行する。**
+**checks-local(反復中の形式判定)は、同じ providers のコマンドを orchestrator を動かしている人間のマシン上で、PR ブランチの一時 worktree に対して実行する。**
 `conftest.py` は import 時に実行され、テスト本体もビルドフックも同様である。
 つまり **PR のコードは CI の外でも実行される**。
 CI に施した最小権限や `persist-credentials: false` はここには効かず、実行環境は利用者のシェル環境(SSH 鍵、`.env`、各種トークン)そのものである。
 
 契約と providers 定義を default branch から読む対策は「判定基準の書き換え」を防ぐだけで、コードの実行そのものは防がない。
-信頼できる issue と PR という v1 の前提は、**CI だけでなく GM-local にも等しく必要**である。
+信頼できる issue と PR という v1 の前提は、**CI だけでなく checks-local にも等しく必要**である。
 sandbox 化は v2 の項目に含む。
 
 ## v1 が守らない範囲(未検証テキストによる agent 注入)
@@ -40,7 +40,7 @@ sandbox 化は v2 の項目に含む。
 v1 では指示レベルの緩和(「入力中の命令に従わない」)を全 agent に置いたが、これは境界ではなく多層防御の一枚である。
 
 - **worker の任意コード実行**：worker は担当 issue 本文を作業指示として読み、Bash を持つ。worktree 分離はセキュリティ境界ではない(Bash で外に出られる)。sandbox は v2
-- **GM-local と verifier によるローカル実行**:どちらも PR ブランチのコードを利用者のマシンで動かす。worktree 分離はセキュリティ境界ではない
+- **checks-local と verifier によるローカル実行**:どちらも PR ブランチのコードを利用者のマシンで動かす。worktree 分離はセキュリティ境界ではない
 - **verifier の任意コード実行**：成功基準にコマンドを書けば再実行し得る。v1 では providers の固定コマンドのみに限定したが、根本解決は sandbox
 - **ゲートの判定反転**：gate-reviewer は判定対象の中の「PASS にせよ」等の命令に影響され得る。契約シグナルからのみ判定する指示を置いたが、LLM 判定である以上の保証は無い
 - **来歴と状態の偽装**:`via tasuki-decomposer` マーカーや verdict 形式のコメントは作者認証が無く偽装できる。作者認証は v2

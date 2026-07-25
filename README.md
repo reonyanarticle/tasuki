@@ -28,21 +28,25 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 
 ## ゲートの一覧
 
-ゲートには番号を振ってある。
-番号は工程の順序であり、**G0 から G2 は要件を具体へ降ろす関門、G3 と G4 は成果を報告へ束ねる関門**である。
-GM だけは番号でなく Mechanical(機械判定)の M で、人が読まずにツールが合否を出す。
+ゲートは名前で呼ぶ。
+識別子(`intake` など)は GitHub のラベルや契約ファイルで機械が使うもので、名前をそのまま英語にしてある。
 
-| 記号 | 名前 | いつ通るか | 何を見るか | 差し戻し先 |
+工程の順序としては、**受理から着手までが要件を具体へ降ろす関門、成果と統合が結果を報告へ束ねる関門**である。
+形式ゲートだけは人が読まず、ツールが合否を出す。
+
+| ゲート | いつ通るか | 何を見るか | 差し戻し先 | 識別子 |
 |---|---|---|---|---|
-| **G0** | 受理 | 親 issue を書いた直後 | やりたいことが、分割できる粒度まで書けているか(背景、目的、価値、予算、完了の定義) | 起票者 |
-| **G1** | 分割 | 親を子 issue へ割ったとき | 分割の集合として妥当か(依存が循環していないか、取りこぼした親要件がないか、予算に収まるか) | 分割役 |
-| **G2** | 着手 | 子 issue に着手する直前 | 実装役がそのまま着手できる粒度か(受け入れ条件と打ち切り条件があるか、実装方式を決めつけていないか) | 起票者または分割役 |
-| **GM** | 形式 | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 |
-| **G3** | 成果 | 実装が終わったとき | 報告が読める形か(要件と結果の対応表があるか、生ログを貼っていないか) | 実装役 |
-| **G4** | 統合 | 全子 issue のマージ後 | 親の完了の定義を満たしたか(どの子にも拾われなかった要件が残っていないか) | 起票者 |
+| **受理ゲート** | 親 issue を書いた直後 | やりたいことが、分割できる粒度まで書けているか(背景、目的、価値、予算、完了の定義) | 起票者 | `intake` |
+| **分割ゲート** | 親を子 issue へ割ったとき | 分割の集合として妥当か(依存が循環していないか、取りこぼした親要件がないか、予算に収まるか) | 分割役 | `split` |
+| **着手ゲート** | 子 issue に着手する直前 | 実装役がそのまま着手できる粒度か(受け入れ条件と打ち切り条件があるか、実装方式を決めつけていないか) | 起票者または分割役 | `start` |
+| **形式ゲート** | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 | `checks` |
+| **成果ゲート** | 実装が終わったとき | 報告が読める形か(要件と結果の対応表があるか、生ログを貼っていないか) | 実装役 | `outcome` |
+| **統合ゲート** | 全子 issue のマージ後 | 親の完了の定義を満たしたか(どの子にも拾われなかった要件が残っていないか) | 起票者 | `integration` |
+
+ラベルは識別子から作られる(`gate:intake-passed`、`gate:start-returned` のように付く)。
 
 **どのゲートも「良し悪し」ではなく「抽象度のズレ」だけを見る。**
-コードの良否は GM(機械判定)と人間のレビューが受け持ち、ゲートは受け渡しの位置だけを検める。
+コードの良否は形式ゲート(機械判定)と人間のレビューが受け持ち、ゲートは受け渡しの位置だけを検める。
 
 ## 処理の流れ
 
@@ -52,45 +56,45 @@ GM だけは番号でなく Mechanical(機械判定)の M で、人が読まず�
 ```mermaid
 flowchart TD
     accTitle: tasuki の全体の流れ
-    accDescr: 人間が親 issue を書くと、G0 受理と G1 分割を経て子 issue に分かれる。各子はループが実装と検査を行い ready PR になる。人間がマージし、G4 統合を経て人間が親 issue を close する。ゲートの差し戻しは triage として人間に戻る。
+    accDescr: 人間が親 issue を書くと、受理ゲートと分割ゲートを経て子 issue に分かれる。各子はループが実装と検査を行い ready PR になる。人間がマージし、統合ゲートを経て人間が親 issue を close する。ゲートの差し戻しは triage として人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
 
-    H0["人間: 親 issue を書く"]:::human --> G0{"G0 受理"}:::gate
-    G0 -->|OK| D["decomposer が分割"]:::work
-    D --> G1{"G1 分割"}:::gate
-    G1 -->|OK| C["子 issue を起票"]:::work
+    H0["人間: 親 issue を書く"]:::human --> intake{"受理ゲート"}:::gate
+    intake -->|OK| D["decomposer が分割"]:::work
+    D --> split{"分割ゲート"}:::gate
+    split -->|OK| C["子 issue を起票"]:::work
     C --> IN["各子 issue: 実装と検査<br/>(下図。ready PR になる)"]:::work
     IN --> HM["人間: PR をマージ"]:::human
-    HM --> G4{"G4 統合"}:::gate
-    G4 -->|OK| HC["人間: 親 issue を close"]:::human
+    HM --> integration{"統合ゲート"}:::gate
+    integration -->|OK| HC["人間: 親 issue を close"]:::human
 
     T["人間: triage で issue を直す"]:::human
-    G0 -.->|差し戻し| T
-    G1 -.-> T
-    G4 -.->|孤児要件| T
+    intake -.->|差し戻し| T
+    split -.-> T
+    integration -.->|孤児要件| T
 ```
 
 各子 issue の内側は、着手ゲートから ready PR までを次の順に通る。
-形式(GM)と成果(G3)の差し戻しは worker に戻り、着手(G2)の差し戻しだけが人間に返る。
+形式(形式ゲート)と成果(成果ゲート)の差し戻しは worker に戻り、着手(着手ゲート)の差し戻しだけが人間に返る。
 
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件がゲートを通る流れ
-    accDescr: G2 着手ゲートを通ると worker が実装し、GM 形式検査と verifier の基準照合を経て G3 成果ゲートに至り、draft PR が ready になる。GM と G3 の差し戻しは worker に戻り、G2 の差し戻しは人間に戻る。
+    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合を経て成果ゲートに至り、draft PR が ready になる。形式ゲートと成果ゲートの差し戻しは worker に戻り、着手ゲートの差し戻しは人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
 
-    G2{"G2 着手"}:::gate -->|OK| W["worker が実装"]:::work
-    W --> GM{"GM 形式"}:::gate
-    GM -->|OK| V["verifier が基準照合"]:::work
-    V --> G3{"G3 成果"}:::gate
-    G3 -->|OK| R["draft PR を ready 化"]:::work
-    GM -.->|NG| W
-    G3 -.->|NG| W
-    G2 -.->|差し戻し| T["人間へ"]:::human
+    start{"着手ゲート"}:::gate -->|OK| W["worker が実装"]:::work
+    W --> checks{"形式ゲート"}:::gate
+    checks -->|OK| V["verifier が基準照合"]:::work
+    V --> outcome{"成果ゲート"}:::gate
+    outcome -->|OK| R["draft PR を ready 化"]:::work
+    checks -.->|NG| W
+    outcome -.->|NG| W
+    start -.->|差し戻し| T["人間へ"]:::human
 ```
 
 ## 前提
@@ -116,7 +120,7 @@ claude --plugin-dir /path/to/tasuki
 
 1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
 2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
-3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理(G0)で親が書けているかを見て、分割(G1)で子への割り方を見て、着手(G2)で子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
+3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
 4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
 5. **マージは常に人間が実行する**。ゲートが行うのはレビューまでで、最終判断は人間に残る
 

@@ -45,25 +45,25 @@ def test_gates_catalog_has_25_perspectives() -> None:
 
 
 def test_g3_flow_wiring() -> None:
-    """G3 の配線: return_to 拡張、g3-returned の付与、ready 化順序の文書整合。"""
+    """成果ゲート の配線: return_to 拡張、g3-returned の付与、ready 化順序の文書整合。"""
     gates = (ROOT / "docs/GATES.md").read_text()
     assert "decomposer | worker | implementation" in gates
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "`gate:g3-returned` を付け" in loop
+    assert "`gate:outcome-returned` を付け" in loop
     assert "2f を再判定" in loop
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
-    assert "G3 の PASS の後" in ops
+    assert "成果ゲートの PASS の後" in ops
 
 
 def test_phase3_full_loop_wiring() -> None:
-    """フェーズ3の配線: G0、decomposer 起動と起票、循環検出、レイヤー合流、G4。"""
+    """フェーズ3の配線: 受理ゲート、decomposer 起動と起票、循環検出、レイヤー合流、統合ゲート。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "G0(受理ゲート)" in loop
+    assert "受理ゲート" in loop
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
     assert "すべて人間にマージされるまで進まない" in loop
-    assert "G4(統合ゲート)" in loop
+    assert "統合ゲート" in loop
     assert "親 issue の close は人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
     assert "遡及適用しない" in loop
@@ -99,7 +99,7 @@ def test_verdict_comment_human_readable() -> None:
     assert "<details>" in sk
     loop = (ROOT / "commands/loop.md").read_text()
     assert "<details>" in loop and "生の JSON / YAML をそのまま貼らない" in loop
-    # G0/G1/G4 の verdict 記録も人間可読へ揃え、旧表現(生コメント記録)を残さないこと
+    # 受理と分割と統合の verdict 記録も人間可読へ揃え、旧表現を残さないこと
     assert "verdict は親 issue にコメントで記録する(冪等)。" not in loop
     # 分割案 YAML を生で全文添付しないこと(details に畳む)
     assert "分割案 YAML を全文添付" not in loop
@@ -140,10 +140,10 @@ def test_plan_comment_skill_makes_diagram_conditional() -> None:
 
 
 def test_gm_is_hybrid() -> None:
-    """GM のハイブリッド化(GM-local / GM-ci)が docs と手順の両方に現れること。"""
-    assert "GM-local" in (ROOT / "docs/OPERATIONS.md").read_text()
+    """形式ゲート のハイブリッド化(checks-local / checks-ci)が docs と手順の両方に現れること。"""
+    assert "checks-local" in (ROOT / "docs/OPERATIONS.md").read_text()
     loop_text = (ROOT / "commands/loop.md").read_text()
-    assert "GM-local" in loop_text and "GM-ci" in loop_text
+    assert "checks-local" in loop_text and "checks-ci" in loop_text
 
 
 _NAKAGURO_ALLOWED = (
@@ -190,7 +190,7 @@ def test_no_nakaguro_in_parallel_enumeration(path: Path) -> None:
 
 
 def test_baton_contract_covers_set_signals() -> None:
-    """契約の書き方 skill が G1 の集合レベル基準(set_signals)も教えること。
+    """契約の書き方 skill が 分割ゲート の集合レベル基準(set_signals)も教えること。
 
     too_*_signals だけでは、依存の循環や孤児要件のような集合の欠陥を書けない。
     """
@@ -230,16 +230,16 @@ def test_security_review_slash_command_removed() -> None:
 
 
 def test_readme_explains_gate_symbols() -> None:
-    """README が G0 から G4 と GM の意味を、記号を使う前に説明していること。"""
+    # 記号ではなく名前で説明していること(識別子は英語で別列に置く)
     r = (ROOT / "README.md").read_text()
     assert "## ゲートの一覧" in r
     for symbol, name in (
-        ("G0", "受理"),
-        ("G1", "分割"),
-        ("G2", "着手"),
-        ("GM", "形式"),
-        ("G3", "成果"),
-        ("G4", "統合"),
+        ("受理ゲート", "受理"),
+        ("分割ゲート", "分割"),
+        ("着手ゲート", "着手"),
+        ("形式ゲート", "形式"),
+        ("成果ゲート", "成果"),
+        ("統合ゲート", "統合"),
     ):
         assert f"**{symbol}**" in r, symbol
         assert name in r, name
@@ -250,7 +250,7 @@ def test_readme_explains_gate_symbols() -> None:
 def test_loop_command_keeps_least_privilege() -> None:
     """orchestrator の Bash 権限を丸ごと許可しないこと(最小権限)。
 
-    GM-local の provider 実行に必要な権限は言語 pack が決めるため、core では
+    checks-local の provider 実行に必要な権限は言語 pack が決めるため、core では
     宣言せず loop-init が導入先へ提案する。
     """
     head = (ROOT / "commands/loop.md").read_text().split("---")[1]
@@ -258,4 +258,4 @@ def test_loop_command_keeps_least_privilege() -> None:
     assert "Bash(" in allowed, allowed
     assert not any(tok.strip() == "Bash" for tok in allowed.split(":", 1)[1].split(",")), allowed
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "GM-local の実行権限を提案する" in init
+    assert "checks-local の実行権限を提案する" in init

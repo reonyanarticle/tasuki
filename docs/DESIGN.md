@@ -81,7 +81,7 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | タスクの親子関係 | sub-issues |
 | 着手順 | issue dependencies |
 | ゲート判定と差し戻し理由 | issue コメント(監査ログを兼ねる) |
-| ゲート通過状況 | ラベル(`gate:g2-passed` 等) |
+| ゲート通過状況 | ラベル(`gate:start-passed` 等) |
 | 成果物 | ブランチと PR |
 | 判断原則の変更履歴 | 契約ファイルへの PR |
 
@@ -92,9 +92,9 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | ロール | 責務 | コンテキスト | 対応ゲート |
 |---|---|---|---|
 | orchestrator | 依存グラフ構築、レイヤー実行、差し戻し回数管理、エスカレーション。**コードを書かない** | 全体(ただし要約のみ保持) | 全ゲートの呼び出し元 |
-| decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | G1 被検査者 |
-| gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | G0〜G4 |
-| worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | GM 被検査者 |
+| decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | 分割ゲートの被検査者 |
+| gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | 受理から統合までの全ゲート |
+| worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | 形式ゲートの被検査者 |
 | verifier | 成功基準と打ち切り条件の判定(maker と別コンテキスト) | 実行結果+基準のみ | 内側ループの出口 |
 | 人間 | 最終マージ、axis-question の承認、エスカレーション受け | — | 最終ゲート |
 
@@ -121,9 +121,9 @@ Fable 5 が計画と委譲を行い、作業は下位レートの worker(Sonnet)
 | 層 | ロール | モデル | 根拠 |
 |---|---|---|---|
 | 統括 | orchestrator | Fable 5 | 極少トークン、最高判断。計画、依存グラフ、委譲、エスカレーション裁定のみ。**ゲート判定は兼ねない**(maker/checker 分離とレート戦略の両方が崩れるため) |
-| 高レバレッジ判定 | G0 / G1 / G4 reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
-| 中頻度判定 | G3 reviewer / decomposer | Sonnet(G3 は Opus へ昇格可) | 意味検証だが毎反復発生 |
-| 高頻度照合 | G2 reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
+| 高レバレッジ判定 | 受理 / 分割 / 統合ゲートの reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
+| 中頻度判定 | 成果ゲートの reviewer / decomposer | Sonnet(成果ゲートは Opus へ昇格可) | 意味検証だが毎反復発生 |
+| 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
 | 物量 | worker / verifier | Sonnet | トークンの大半。worker レート課金の主戦場 |
 
 実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。

@@ -12,7 +12,7 @@ tasuki の設計文書一式。
 |---|---|
 | [PHILOSOPHY.md](PHILOSOPHY.md) | 思想。受け手基準の抽象度、バトンパスの3値判定、コンテキスト境界、製造業と制御工学との対応 |
 | [DESIGN.md](DESIGN.md) | アーキテクチャ。三層構造、plugin ディレクトリ、状態管理、ロール定義、レイヤードレート構造(モデル選択) |
-| [GATES.md](GATES.md) | ゲート体系。ゲートカタログ(G0〜G4 / GM)、verdict スキーマ、レビュー観点カタログ(25観点) |
+| [GATES.md](GATES.md) | ゲート体系。ゲートカタログ(受理ゲート〜統合 / 形式ゲート)、verdict スキーマ、レビュー観点カタログ(25観点) |
 | [CONTRACTS.md](CONTRACTS.md) | 契約。プロファイル YAML、providers.yaml、issue / PR テンプレート、質問ルーティング、初期 fixture |
 | [OPERATIONS.md](OPERATIONS.md) | 運用。`/tasuki:loop-init` と CI 生成、コスト管理とエスカレーション、メトリクス、回帰テスト |
 | [INTEGRATION.md](INTEGRATION.md) | 橋渡し。外部の subagent、skill、検査ツールの接続点と、プロジェクト直下アセットとの統合ルール |
