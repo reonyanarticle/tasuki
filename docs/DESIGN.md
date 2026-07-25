@@ -107,21 +107,45 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 レイヤー完了ごとに default branch を更新してから次レイヤーへ進む。
 依存の循環はエラーとして検出し、報告して停止する。
 
+```mermaid
+flowchart TD
+    accTitle: レイヤー実行の構造
+    accDescr: 同じレイヤーの子 issue は並行して実装され、それぞれ ready PR になる。そのレイヤーの PR をすべて人間がマージして default branch が更新されてから、次のレイヤーの子 issue に着手する。
+    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+    classDef pending fill:#6e7781,stroke:#57606a,color:#fff
+
+    subgraph L1["レイヤー1(並行に実装)"]
+        A["#11 worker → ready PR"]:::work
+        B["#12 worker → ready PR"]:::work
+    end
+    A --> M["人間: レイヤー1の PR を全マージ"]:::human
+    B --> M
+    M --> D["default branch を更新"]:::work
+    D --> C
+    subgraph L2["レイヤー2(#11 と #12 に依存)"]
+        C["#13 worker → ready PR"]:::pending
+    end
+```
+
+レイヤー間の合流点が人間のマージであることが、この構造の要である。
+自動でマージしないため、前レイヤーの成果を人間が見ないまま次レイヤーが積み上がることがない。
+
 deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
 フェーズ3でレイヤー並列を有効化した。レイヤー内の子 issue は並行処理し、ゲート判定と issue への書き込みは orchestrator が直列で行う(観点 #20)。
 次レイヤーへの前進は、前レイヤーの ready PR がすべて人間にマージされてからとする(default branch の更新を合流点にする)。
 
 ## レイヤードレート構造(モデル選択)
 
-原則は、**下流をやり直させる可能性が高い工程に上位モデルを当て、照合と定型作業は下位レートに流す** ことにある。
-配分の基準は「頻度 × 誤ったときの下流コスト」であり、根拠は次の非対称性にある。
-誤 PASS はそのゲートより下流をすべて無駄にするが、誤 REJECT は前フェーズ1回の再実行で済み `max_iterations` で有界である。
+原則は、**最上位モデルは判断に限定し、トークンの物量は worker レートで流す** ことにある。
+判断(計画と委譲、ゲートの裁定)に上位モデルを当て、実装と照合は Sonnet に流すことで、消費トークンの大半を worker レートで課金させる。
+個々のゲートのモデルは「頻度 × 誤判定の下流コスト」で決める。
+誤 PASS はゲートより下流をすべて無駄にするが、誤 REJECT は前フェーズ1回の再実行で済み `max_iterations` で有界という非対称性がある。
 
-**この非対称性は判定だけでなく実装にも当てはまる。**
-実装が弱いと形式ゲートと成果ゲートで差し戻され、1反復ごとに worker と検査と verifier が丸ごと再実行される。
-反復が2回増えれば、1回を上位モデルで書くより高くつく。
-さらに、ゲートが見るのは抽象度のズレであって設計の良否ではないため、実装の質は出荷前レビュー(`2g`)まで誰にも検められない。
-このため **worker は Opus とし、照合が仕事の verifier と、出力を分割ゲート(Opus)に検められる decomposer は Sonnet に据える**。
+実装(worker)を上位モデルにするかは、この配分の主要な選択肢である。
+実装が弱いと差し戻しのたびに実装と検査が再実行されるため、反復が増えるなら上位モデルのほうが安くなりうる。
+v1 では **worker を Sonnet に置き、コストの支配項を worker レートに留める** 方を採る。
+実運用のメトリクス(差し戻し回数とモデル別判定回数)で反復が多いと分かった場合に、この配分を見直す。
 
 | 層 | ロール | モデル | 根拠 |
 |---|---|---|---|
@@ -129,8 +153,7 @@ deploy と release の分離(feature flag)により、未完成の機能を理�
 | 高レバレッジ判定 | 受理 / 分割 / 統合ゲートの reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
 | 中頻度判定 | 成果ゲートの reviewer / decomposer | Sonnet(成果ゲートは Opus へ昇格可) | 意味検証だが毎反復発生 |
 | 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
-| 実装 | worker | Opus | 誤った実装は下流の反復を丸ごと増やす。設計の良否はゲートで捕まらない |
-| 照合と物量 | verifier / decomposer | Sonnet | verifier は基準との照合が仕事。decomposer の出力は分割ゲート(Opus)が検める |
+| 物量 | worker / verifier / decomposer | Sonnet | トークンの大半。worker レート課金の主戦場 |
 
 実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。
 昇格は同じ agent を上位モデルで呼び直すことであり、agent を切り替えることではない。

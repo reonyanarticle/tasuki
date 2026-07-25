@@ -271,9 +271,43 @@ def test_readme_documents_model_assignment() -> None:
         assert model in r, model
     assert "誤 PASS" in r and "誤 REJECT" in r  # 配分の根拠
     # agent 定義の model と README の記述が食い違わないこと
-    expected = {"worker": "opus", "verifier": "sonnet", "decomposer": "sonnet"}
+    expected = {"worker": "sonnet", "verifier": "sonnet", "decomposer": "sonnet"}
     for name, model in expected.items():
         text = (ROOT / f"agents/{name}.md").read_text()
         assert f"model: {model}" in text, (name, model)
-    # 実装に上位モデルを当てる理由が書かれていること(配分を後から緩めないため)
-    assert "実装(worker)に Opus を当てているのも同じ理由" in r
+    # 配分を選んだ理由が書かれていること(根拠なく変えられないようにする)
+    assert "コストの支配項を worker レートに留める" in r
+
+
+def test_readme_explains_mechanism() -> None:
+    """README が「動く仕組み」(状態の置き場所、停止装置、二段検査、自己検査の禁止)を説明すること。"""
+    r = (ROOT / "README.md").read_text()
+    assert "## 動く仕組み" in r
+    for heading in ("状態はすべて GitHub にある", "暴走しない仕組み", "検査が二段になっている"):
+        assert heading in r, heading
+    # 再開できること、fail-closed、マージは人間、という核が落ちていないこと
+    assert "続きから再開する" in r
+    assert "fail-closed" in r
+    assert "マージは常に人間" in r
+
+
+def test_operations_documents_preship_review_and_output_rules() -> None:
+    """運用文書に出荷前レビューと、issue 出力の原則があること。"""
+    ops = (ROOT / "docs/OPERATIONS.md").read_text()
+    assert "## 出荷前レビュー" in ops
+    assert "/code-review" in ops and "/claude-security:claude-security" in ops
+    assert "## issue に残す出力の原則" in ops
+    assert "<details>" in ops
+
+
+def test_diagrams_are_conditional_and_renderable() -> None:
+    """図は構造がある箇所にだけ置き、識別子は ASCII、代替テキストを持つこと。"""
+    import re
+
+    for path in (ROOT / "README.md", ROOT / "docs/DESIGN.md"):
+        for block in re.findall(r"```mermaid\n(.*?)```", path.read_text(), re.S):
+            assert "accTitle:" in block and "accDescr:" in block, path.name
+            # ノード ID に日本語を使わない(ID は ASCII、表示ラベルのみ日本語)
+            ids = re.findall(r"^\s*([^\s\[{(]+)[\[{(]", block, re.M)
+            bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
+            assert not bad, (path.name, bad)
