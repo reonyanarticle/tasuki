@@ -33,6 +33,8 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 
 ```mermaid
 flowchart TD
+    accTitle: tasuki の処理の流れ
+    accDescr: 人間が親 issue を書くと、G0 受理と G1 分割を経て子 issue に分かれる。各子は G2 着手、実装、GM 形式検査、G3 成果照合を通り、draft PR が ready になる。人間がマージした後、G4 統合を経て人間が親 issue を close する。各ゲートの差し戻しは triage として人間に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
@@ -89,7 +91,7 @@ claude --plugin-dir /path/to/tasuki
 1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成される
 2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない
 3. `/tasuki:loop <親 issue 番号>` を実行する。**ループがまず issue をレビューする**:受理(G0)→分割(G1)→着手(G2)の順にゲートを通し、通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
-4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。分割、依存、状態は mermaid の計画図で俯瞰できる
+4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
 5. **マージは常に人間が実行する**。ゲートが行うのはレビューまでで、最終判断は人間に残る
 
 レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。

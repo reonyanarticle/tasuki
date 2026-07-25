@@ -118,3 +118,23 @@ def test_providers_normalizer_exists(providers: dict) -> None:
 
 def test_providers_detect(providers: dict) -> None:
     assert providers["detect"] == ["pyproject.toml"]
+
+
+def test_loop_contract_keys_exist_in_profiles() -> None:
+    """loop.md が参照する契約キーが profiles に実在すること(dead config を作らない)。"""
+    import re
+
+    import yaml
+
+    loop = (ROOT / "commands/loop.md").read_text()
+    referenced = set(
+        re.findall(
+            r"`(max_iterations_per_gate|max_inner_loop|wip_limit_prs|stale_assignment_minutes)`",
+            loop,
+        )
+    )
+    assert referenced, "契約キーの参照が見つからない"
+    for name in ("development", "experiment"):
+        budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
+        missing = sorted(referenced - set(budgets))
+        assert not missing, (name, missing)
