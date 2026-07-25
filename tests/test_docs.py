@@ -107,15 +107,30 @@ def test_verdict_comment_human_readable() -> None:
     assert "そのまま issue に貼らない" in loop
 
 
-def test_plan_diagram_skill() -> None:
-    """計画可視化 skill が用途別の図種選択(flowchart/stateDiagram、gantt 不採用)を定めること。"""
-    sk = (ROOT / "skills/plan-diagram/SKILL.md").read_text()
-    assert "flowchart LR" in sk
+def test_mermaid_skill_teaches_judgment_not_templates() -> None:
+    """汎用 mermaid skill が「描くか」「どの図種か」の判断と記法を持つこと。"""
+    sk = (ROOT / "skills/mermaid/SKILL.md").read_text()
+    assert "図にするかを決める" in sk  # 描かない判断がある
+    assert "図種を決める" in sk
     assert "stateDiagram-v2" in sk
-    assert "gantt" in sk and "使わない" in sk
-    assert "maxEdges" in sk
-    assert "tasuki:plan-diagram" in (ROOT / "commands/loop.md").read_text()
-    assert "tasuki:plan-diagram" in (ROOT / "commands/loop-status.md").read_text()
+    assert "gantt" in sk  # 選ばない判断
+    # 凡例をグラフ内 subgraph にしない規則(今回の欠陥の再発防止)
+    assert "凡例をグラフの中に作らない" in sk
+
+
+def test_plan_comment_skill_makes_diagram_conditional() -> None:
+    """tasuki 固有 skill が図を条件付きにし、汎用 mermaid skill を参照すること。"""
+    sk = (ROOT / "skills/plan-comment/SKILL.md").read_text()
+    assert "図を描く条件" in sk
+    assert "合流または分岐" in sk  # 閾値
+    assert "tasuki:mermaid" in sk  # skill 間の参照
+    # 旧 skill と、4部構成の無条件強制が残っていないこと
+    assert not (ROOT / "skills/plan-diagram").exists()
+    for path in ("commands/loop.md", "commands/loop-status.md"):
+        text = (ROOT / path).read_text()
+        assert "tasuki:plan-comment" in text, path
+        assert "plan-diagram" not in text, path
+        assert "4部構成" not in text, path
 
 
 def test_gm_is_hybrid() -> None:

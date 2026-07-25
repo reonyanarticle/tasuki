@@ -33,7 +33,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh *)
 - assignee と `loop:in-progress` から worker 割り当て
 - 関連 PR の状態(draft / ready / CI 結果)を `gh pr list` と check-runs から
 
-`$ARGUMENTS` に親 issue を指定した場合は、`tasuki:plan-diagram` skill の4部構成(進捗サマリ、計画図、要件カバレッジ図、ダッシュボード表)を出力し、全体設計と進捗を俯瞰できるようにする。図は表示のみで、issue への書き込みはしない。
+`$ARGUMENTS` に親 issue を指定した場合は、`tasuki:plan-comment` skill に従って全体像(冒頭の要約と子の一覧表、条件を満たす場合のみ依存の図)を出力する。表示のみで、issue への書き込みはしない。
 
 ## 3. メトリクス
 
