@@ -280,7 +280,7 @@ def test_readme_documents_model_assignment() -> None:
 
 
 def test_readme_explains_mechanism() -> None:
-    """README が「動く仕組み」(状態の置き場所、停止装置、二段検査、自己検査の禁止)を説明すること。"""
+    """README が「動く仕組み」(状態、停止装置、二段検査、自己検査の禁止)を説明すること。"""
     r = (ROOT / "README.md").read_text()
     assert "## 動く仕組み" in r
     for heading in ("状態はすべて GitHub にある", "暴走しない仕組み", "検査が二段になっている"):
