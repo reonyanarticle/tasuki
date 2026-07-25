@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を G2 ゲートと GM(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Bash
+allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh *), Bash(git *)
 ---
 
 # /tasuki:loop
@@ -134,7 +134,7 @@ worker の義務は worktree 上での実装、self-verify、Conventional Commit
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点 #17)。
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
-2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)を実行し、exit code で合否を読む(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義は default branch(信頼された版)から読む**。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)を実行し、exit code で合否を読む。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限(例 `Bash(uv run *)`)の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義は default branch(信頼された版)から読む**。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 3. テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
@@ -202,13 +202,15 @@ PASS したら `gate:g3-passed` を付け、`gate:g3-returned` を外し、2g �
 
 **レビュー観点(5つ)**
 
-Google のコードレビュー指針(design を最重要とし、functionality、complexity、tests、naming と続く)を、tasuki の1子 issue ぶんの変更に合わせて5つへ畳んだもの。
+出典は2つある。
+Google のコードレビュー指針(design を最重要とし、functionality、complexity、tests、naming と続く)と、Findy Library の「What review verifies」(functional / non-functional / design & architecture / test suite / readability の5観点)である。
+両者はほぼ同じ範囲を指しており、これを tasuki の1子 issue ぶんの変更に合わせて畳んだ。
 
 | # | 観点 | 見るもの |
 |---|---|---|
 | 1 | 設計と統合 | 変更を置いた場所と抽象の粒度。既存との重複、責務のはみ出し、三層構造(core / pack / repo override)の越境 |
 | 2 | 正しさと境界条件 | 子 issue の受け入れ条件を実際に満たすか。エラー経路、空と null、冪等性、並行時の競合、失敗時の後始末 |
-| 3 | テストの妥当性 | AC / SC に対応するテストがあるか。実装出力を写しただけの期待値になっていないか。**実装を壊したときに落ちるか** |
+| 3 | テストの妥当性 | AC / SC に対応するテストがあるか。実装出力を写しただけの期待値になっていないか。**その修正を revert したらテストが赤くなるか** |
 | 4 | 複雑さと可読性 | 過剰な一般化、次に読む人が追えるか、命名とコメントが「なぜ」を語っているか |
 | 5 | 運用影響 | revert 可否、移行と後方互換、失敗が観測できるか、性能と費用の非機能要件を満たすか |
 

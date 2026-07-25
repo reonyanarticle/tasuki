@@ -227,3 +227,35 @@ def test_security_review_slash_command_removed() -> None:
     """組み込みの /security-review への参照を残さないこと(claude-security に統一)。"""
     for path in _WRITING_TARGETS:
         assert "/security-review" not in path.read_text(), path.name
+
+
+def test_readme_explains_gate_symbols() -> None:
+    """README が G0 から G4 と GM の意味を、記号を使う前に説明していること。"""
+    r = (ROOT / "README.md").read_text()
+    assert "## ゲートの一覧" in r
+    for symbol, name in (
+        ("G0", "受理"),
+        ("G1", "分割"),
+        ("G2", "着手"),
+        ("GM", "形式"),
+        ("G3", "成果"),
+        ("G4", "統合"),
+    ):
+        assert f"**{symbol}**" in r, symbol
+        assert name in r, name
+    # 説明が、記号を最初に使う「処理の流れ」より前にあること
+    assert r.index("## ゲートの一覧") < r.index("## 処理の流れ")
+
+
+def test_loop_command_keeps_least_privilege() -> None:
+    """orchestrator の Bash 権限を丸ごと許可しないこと(最小権限)。
+
+    GM-local の provider 実行に必要な権限は言語 pack が決めるため、core では
+    宣言せず loop-init が導入先へ提案する。
+    """
+    head = (ROOT / "commands/loop.md").read_text().split("---")[1]
+    allowed = next(line for line in head.split("\n") if line.startswith("allowed-tools:"))
+    assert "Bash(" in allowed, allowed
+    assert not any(tok.strip() == "Bash" for tok in allowed.split(":", 1)[1].split(",")), allowed
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "GM-local の実行権限を提案する" in init

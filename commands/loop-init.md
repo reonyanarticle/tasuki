@@ -230,6 +230,8 @@ jobs:
 ### 7. バジェット確認と fixture の案内
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
+**GM-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限(python pack なら `Bash(uv run *)`)を導入先の設定に追加するよう提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+
 最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
 
 ## 完了報告
