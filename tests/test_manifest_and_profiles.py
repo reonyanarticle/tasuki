@@ -189,3 +189,20 @@ def test_pr_template_carries_traceability() -> None:
         assert "受け入れ条件の充足" in fields, name
     worker = (ROOT / "agents/worker.md").read_text()
     assert "PR 単体で判断できるようにする" in worker
+
+
+def test_pack_declares_artifacts_and_hygiene_is_wired() -> None:
+    """pack が生成物パターンを持ち、loop-init と worker がそれを使うこと。
+
+    E2E で __pycache__ の .pyc がコミットされ、ブランチ間で生成物どうしが
+    2連続で競合した。言語固有のパターンは pack に置く(三層構造)。
+    """
+    import yaml
+
+    pack = yaml.safe_load((ROOT / "packs/python/providers.yaml").read_text())
+    assert "__pycache__/" in pack["artifacts"]
+    assert "*.pyc" in pack["artifacts"]
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "生成物が .gitignore で除外されているか検査する" in init
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "生成物" in worker and "コミットしない" in worker

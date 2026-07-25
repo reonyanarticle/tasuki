@@ -32,7 +32,7 @@ worker への追加規定:Bash とネットワークは providers.yaml のコマ
 
 2. **実装 / 実験**：worktree(自動作成済み)上で、受け入れ条件を満たす最小の変更を行う。対象リポジトリの CLAUDE.md と skill の規約に従う
 3. **self-verify**：pack の providers.yaml と同じコマンド(lint / format / typecheck / test)をローカル実行し、通してからプッシュする。合否の判定は orchestrator の checks-local と CI が行う(自己申告は判定に使われない)
-4. **コミット**：Conventional Commits(`<type>: <summary>`)
+4. **コミット**：Conventional Commits(`<type>: <summary>`)。**生成物(pack の `artifacts`。`__pycache__/` 等)をコミットしない。** `git add -A` の前に `git status` で対象を確認し、生成物が混ざるなら個別に add するか .gitignore の不備を task-question として報告する(生成物を巻き込むと、ブランチ間で生成物どうしが競合する)
 5. **draft PR 作成**：`gh pr create --draft --label "loop:pr"`(**ラベルは PR に付ける。issue には付けない**。WIP 集計は open PR のラベルを数えるため、issue に付けると集計が常に 0 件になり WIP 上限が機能しなくなる)。契約の `pr_required_fields` をすべて埋める。
 
    **PR 単体で判断できるようにする。** レビューが起きる場所は PR であり、読み手に issue を開き直させない。特に次の2欄を省略しない。

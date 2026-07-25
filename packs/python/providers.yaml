@@ -27,6 +27,10 @@ providers:
     action: "anthropics/claude-code-security-review"  # GitHub Action として実行(docs/OPERATIONS.md)
     output: pr-comment
 
+# 実行時の生成物(コミットしてはならないもの)。loop-init が .gitignore を検査し、
+# worker がコミット前に除外を確認する。
+artifacts: ["__pycache__/", "*.pyc", ".pytest_cache/", ".ruff_cache/"]
+
 # CI workflow(loop-gates.yml)を組み立てるための言語固有の部品。
 # core(commands/loop-init.md)は job の骨格と fail-closed 規則だけを持ち、
 # 言語に依存する具体はここから読んで埋める(core を言語非依存に保つため)。
