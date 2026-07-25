@@ -355,3 +355,24 @@ def test_artifact_placement_is_documented() -> None:
     assert "動くコードの diff" in gates
     worker = (ROOT / "agents/worker.md").read_text()
     assert "仕様書にしない" in worker
+
+
+def test_operational_gaps_are_specified() -> None:
+    """運用の観点(手動停止、単一親、契約の読み取り時点、gh 失敗)が定義されていること。
+
+    Fable レビューで見つけた欠落。いずれも実運用で最初に踏む類のもの。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 人間が理由を問わず引けるブレーキ
+    assert "loop:pause" in loop
+    assert "実行中の worker は完了まで走り切ってよい" in loop  # 強制中断はしない
+    # 同時に回す親のスコープ
+    assert "同時に自走させる親 issue は1つとする" in loop
+    # 契約は run 開始時に固定
+    assert "run は開始時に読んだ契約で最後まで走る" in loop
+    # gh 失敗は fail-stop(握りつぶして進まない)
+    assert "run を止めて失敗箇所を報告する" in loop
+    # ラベルが作成対象に含まれ、status が表示すること
+    assert "loop:pause" in (ROOT / "commands/loop-init.md").read_text()
+    assert "loop:pause" in (ROOT / "commands/loop-status.md").read_text()
+    assert "loop:pause" in (ROOT / "README.md").read_text()

@@ -228,6 +228,7 @@ jobs:
 - `loop:in-progress`(worker 割り当て済み)
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
 - `loop:review`(出荷前レビュー待ち。人間が `/code-review` を回す番)
+- `loop:pause`(人間による一時停止。親 issue に付けると新しい委譲を止める)
 - `loop:triage`(人間の裁定待ち)
 
 ### 7. バジェット確認と fixture の案内

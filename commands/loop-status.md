@@ -16,6 +16,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh *)
 
 人間の判断待ちを一覧化する(アンドン)。
 
+- `loop:pause` ラベルの親 issue(一時停止中。外せば次の run が再開する)
 - `loop:review` ラベルの issue(出荷前レビュー待ち。人間が `/code-review` を回す番)
 - `loop:triage` ラベルの issue(エスカレーション。Fable 裁定の3分類コメントがあれば要約を併記)
 - 未回答の task-question(質問コメントに回答が付いていない issue)

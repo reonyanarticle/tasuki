@@ -41,13 +41,18 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 
 ## 0. 前提と状態復元(冪等性、観点 #19)
 
-1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する
+**同時に自走させる親 issue は1つとする(v1)。**
+子レベルの排他(assignee の CAS)はあるが、レイヤーの合流やマージ後の check-runs 再確認は親単位で書かれており、複数親の相互作用(共有の WIP 上限、default branch の同時更新)は検証していない。
+別の親を回したいときは、先の親が停止状態(全子 ready / triage / pause)になってから起動する。
+
+1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)
 2. `$ARGUMENTS` の親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る(gh < 2.94.0 なら `gh api` フォールバック)
 3. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.7 の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:intake-returned` と `loop:triage` を付けて中断する(受理ゲートの LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
-4. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
-5. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
-6. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた **ready(draft でない)open PR** が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す。draft PR は実装中であり人間のレビュー待ちではないため数えない(数えると、自分が起こした draft で自分の並列実行を止めてしまう)
-7. **受理ゲート**:契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+4. **gh の呼び出しが失敗したら、その場で retry を1回だけ試み、それでも失敗したら run を止めて失敗箇所を報告する**(失敗を握りつぶして先に進むと、状態の欠けた issue が生まれる)。部分完了の復旧は次の run の状態復元と突合(§1a)が引き受ける
+5. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
+6. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
+7. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた **ready(draft でない)open PR** が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す。draft PR は実装中であり人間のレビュー待ちではないため数えない(数えると、自分が起こした draft で自分の並列実行を止めてしまう)
+8. **受理ゲート**:契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(分割ゲート、レイヤー構成)
 
@@ -296,6 +301,17 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 - **差し戻し** → 孤児の親要件(どの子成果にも対応しない要件)を列挙し、`gate:integration-returned` と `loop:triage` を付ける。不足を埋める追加子 issue の分割案を decomposer に作らせ、提案として親にコメントする(起票は人間承認後)
 
 ## 4. 停止装置(ブレーキとシートベルト)
+
+### 人間による一時停止(loop:pause)
+
+人間はいつでも、親 issue に `loop:pause` ラベルを付けてループを止められる。
+暴走の検知を機械に任せるだけでなく、**人間が理由を問わず引けるブレーキ**を用意する(アンドンの紐)。
+
+- orchestrator は §0 の状態復元時と、worker を起動する直前のたびに `loop:pause` を確認する
+- 付いていたら、新しい委譲を行わず、現在の状態を親 issue に報告して run を終了する(実行中の worker は完了まで走り切ってよい。強制中断はしない)
+- 外すのも人間である。外れた後の run は通常どおり §0 から再開する(状態は GitHub にあるので、続きから走る)
+- `loop:pause` は stale assignee の回収(§2)を**抑止しない**。止まっている間も残骸の回収は行ってよい
+
 
 停止条件の本体は着手ゲートで事前定義された基準(verifier が判定)である。
 以下は暴走時のバックストップであり、発火が常態化したら直すのは上限値ではなく契約。
