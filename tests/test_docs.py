@@ -466,7 +466,7 @@ def test_toc_adaptation_is_reflected() -> None:
     assert "親の粒度" in gates
     # A: 受理ゲートが承認サイズを見る
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
-    assert "承認のサイズも見る" in skill
+    assert "承認のサイズを検める" in skill  # 契約シグナルの照合として言い直した
     # C: レイヤー報告は覗いてよい任意のチェックポイント
     loop = (ROOT / "commands/loop.md").read_text()
     assert "覗いてよい任意のチェックポイント" in loop
