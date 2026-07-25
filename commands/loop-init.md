@@ -198,8 +198,10 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}   # ${{ }} を run に直接展開しない(テンプレ全体の規則)
+          REPO: ${{ github.repository }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "loop-gates: all green"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "loop-gates: all green"
 ```
 
 生成時の注意:
