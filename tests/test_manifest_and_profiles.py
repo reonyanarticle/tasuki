@@ -39,7 +39,7 @@ class TestProfiles:
         assert names[-1] == "integration"
         integration = profile["phases"][-1]
         assert any("孤児" in s for s in integration["receives"]["too_abstract_signals"])
-        g1 = next(g for g in profile["gates"] if g["id"] == "g1")
+        g1 = next(g for g in profile["gates"] if g["id"] == "split")
         assert any("循環" in s for s in g1["set_signals"])
         assert any("親予算" in s for s in g1["set_signals"])
         second = profile["phases"][1]["receives"]["too_abstract_signals"]
@@ -48,12 +48,14 @@ class TestProfiles:
     def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
         profile = request.getfixturevalue(profile_name)
-        assert {"g0", "g1", "g2", "g3", "g4"} <= set(profile["enabled_gates"])
+        assert {"intake", "split", "start", "outcome", "integration"} <= set(
+            profile["enabled_gates"]
+        )
 
     def test_g3_wiring(self, profile_name: str, request: pytest.FixtureRequest) -> None:
-        """G3 は門前払い(report-fields)を持ち、report signals が判定基準を契約由来にする。"""
+        """成果ゲートは門前払いを持ち、report signals が判定基準を契約由来にする。"""
         profile = request.getfixturevalue(profile_name)
-        g3 = next(g for g in profile["gates"] if g["id"] == "g3")
+        g3 = next(g for g in profile["gates"] if g["id"] == "outcome")
         assert g3["preflight"] == "report-fields"
         report = next(p for p in profile["phases"] if p["name"] == "report")
         signals = report["receives"]["too_abstract_signals"]
@@ -64,11 +66,11 @@ class TestProfiles:
         assert "期待値の根拠" in profile["templates"]["report_required_fields"]
 
     def test_security_is_opt_in(self, profile_name: str, request: pytest.FixtureRequest) -> None:
-        """gm-security は定義されつつ、既定の enabled_gates には入らないこと。"""
+        """checks-security は定義されつつ、既定の enabled_gates には入らないこと。"""
         profile = request.getfixturevalue(profile_name)
         gate_ids = {gate["id"] for gate in profile["gates"]}
-        assert "gm-security" in gate_ids
-        assert "gm-security" not in profile["enabled_gates"]
+        assert "checks-security" in gate_ids
+        assert "checks-security" not in profile["enabled_gates"]
 
     def test_no_dead_models_block(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """どこからも読まれない models ブロックを持たないこと。"""
@@ -80,7 +82,7 @@ class TestProfiles:
     ) -> None:
         """g2 / g3 に criteria_skills キーがあること(橋渡しの接続点)。"""
         profile = request.getfixturevalue(profile_name)
-        for gate_id in ("g2", "g3"):
+        for gate_id in ("start", "outcome"):
             gate = next(g for g in profile["gates"] if g["id"] == gate_id)
             assert "criteria_skills" in gate, gate_id
 
@@ -118,3 +120,23 @@ def test_providers_normalizer_exists(providers: dict) -> None:
 
 def test_providers_detect(providers: dict) -> None:
     assert providers["detect"] == ["pyproject.toml"]
+
+
+def test_loop_contract_keys_exist_in_profiles() -> None:
+    """loop.md が参照する契約キーが profiles に実在すること(dead config を作らない)。"""
+    import re
+
+    import yaml
+
+    loop = (ROOT / "commands/loop.md").read_text()
+    referenced = set(
+        re.findall(
+            r"`(max_iterations_per_gate|max_inner_loop|wip_limit_prs|stale_assignment_minutes)`",
+            loop,
+        )
+    )
+    assert referenced, "契約キーの参照が見つからない"
+    for name in ("development", "experiment"):
+        budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
+        missing = sorted(referenced - set(budgets))
+        assert not missing, (name, missing)

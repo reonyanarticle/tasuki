@@ -26,3 +26,52 @@ providers:
   security:
     action: "anthropics/claude-code-security-review"  # GitHub Action として実行(docs/OPERATIONS.md)
     output: pr-comment
+
+# CI workflow(loop-gates.yml)を組み立てるための言語固有の部品。
+# core(commands/loop-init.md)は job の骨格と fail-closed 規則だけを持ち、
+# 言語に依存する具体はここから読んで埋める(core を言語非依存に保つため)。
+ci:
+  # 全 job 共通の前処理(ランタイム準備と依存解決)
+  setup:
+    uses: "astral-sh/setup-uv@v5"
+    with: { enable-cache: true }
+    install: "uv sync --frozen"
+  # normalizer を実行するインタプリタ
+  normalizer_runtime: python
+  # normalizer が書き出す SARIF の名前(生成と upload で同じ値を使う)
+  sarif_file:
+    typecheck: basedpyright.sarif
+  # 依存追加の検知対象(lockfile-diff)
+  lockfile: uv.lock
+  # provider の出力からブロッキング件数を読む方法(fail-closed 判定に使う)
+  blocking_count:
+    typecheck: "jq -er '.summary.errorCount'"
+  # テスト改変検知(base との diff に対して適用する)
+  # pathspec は git に渡す。`**/x` は直下の x にマッチしないため `:(glob)` を付ける。
+  # 生成器は各要素をシングルクォートで囲んで展開する(シェルの glob 展開を防ぐ)。
+  test_tampering:
+    paths: ["tests/", ":(glob)**/test_*.py", ":(glob)**/*_test.py"]
+    added_line_pattern: "pytest\\.mark\\.(skip|xfail)|unittest\\.skip|importorskip"
+  # 設定の無効化検知(閾値やルールを緩める変更を拾う)
+  config_tampering:
+    paths:
+      [
+        "pyproject.toml",
+        "pytest.ini",
+        "setup.cfg",
+        "tox.ini",
+        "pyrightconfig.json",
+        "conftest.py",
+        ":(glob)**/conftest.py",
+      ]
+    added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)"
+  # 設定ファイルの「新規追加」検知の対象(既存ファイルの改変検知とは別に見る)
+  new_config_files:
+    [
+      "tox.ini",
+      "pyrightconfig.json",
+      "setup.cfg",
+      "pytest.ini",
+      "conftest.py",
+      ":(glob)**/conftest.py",
+    ]

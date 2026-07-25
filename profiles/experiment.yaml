@@ -1,5 +1,5 @@
 # tasuki 契約プロファイル: experiment(検証・実験ループ)
-# development.yaml との差分は phases の名称、exit_criteria の中身、G2 必須欄のみ(docs/CONTRACTS.md)。
+# development.yaml との差分は phases の名称、exit_criteria の中身、着手ゲートの必須欄のみ(docs/CONTRACTS.md)。
 # ゲート機構・verdict・ルーティングは共通。
 profile: experiment
 
@@ -7,8 +7,9 @@ budgets:
   max_iterations_per_gate: 3
   max_inner_loop: 5
   wip_limit_prs: 3
+  stale_assignment_minutes: 60   # 停止した実行が残した assignee を回収するまでの経過時間
 
-# モデルは agent 定義に固定されている(worker/verifier = sonnet、gate-reviewer は haiku/sonnet/opus の3変種)。
+# モデルは agent 定義に固定されている(worker と verifier = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 phases:
@@ -87,11 +88,11 @@ templates:
     - 検証方法
 
 gates:
-  - id: g0
+  - id: intake
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
-  - id: g1
+  - id: split
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
@@ -99,45 +100,45 @@ gates:
       - 依存の循環
       - 親要件の孤児(どの子 issue にも対応しない)
       - 親予算(コスト上限)との不整合(子件数・反復数の合計超過)
-  - id: g2
+  - id: start
     kind: abstraction
     reviewer: gate-reviewer
     model: haiku
     escalate_to: sonnet
     preflight: template-fields
     criteria_skills: []           # 判定基準に加える導入先プロジェクトの skill 名(任意)
-  - id: gm-lint
+  - id: checks-lint
     kind: mechanical
     provider: lint
     blocking_threshold: error
-  - id: gm-format
+  - id: checks-format
     kind: mechanical
     provider: format
-  - id: gm-typecheck
+  - id: checks-typecheck
     kind: mechanical
     provider: typecheck
     blocking_threshold: error
-  - id: gm-test
+  - id: checks-test
     kind: mechanical
     provider: test
-  - id: gm-security
+  - id: checks-security
     kind: mechanical
     provider: security
     blocking_threshold: high
-  - id: g3
+  - id: outcome
     kind: abstraction
     reviewer: gate-reviewer
     model: sonnet
     escalate_to: opus
     preflight: report-fields      # 門前払い(report_required_fields の機械チェック)
     criteria_skills: []
-  - id: g4
+  - id: integration
     kind: abstraction
     reviewer: gate-reviewer
     model: opus
 
-enabled_gates: [g0, g1, g2, g3, g4, gm-lint, gm-format, gm-typecheck, gm-test]
-# gm-security はオプトイン。/tasuki:loop-init で security job を選択した場合に追加される
+enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
+# checks-security はオプトイン。/tasuki:loop-init で security job を選択した場合に追加される
 # (anthropics/claude-code-security-review Action。CLAUDE_API_KEY による API 課金が別途発生)
 
 model_selection: static

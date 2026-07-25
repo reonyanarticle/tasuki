@@ -5,12 +5,12 @@ tasuki を安全に使える範囲と、v1 が守らない範囲を定める。
 
 ## v1 の前提: issue と PR の内容は信頼できること
 
-**tasuki v1 は、issue・PR・コメントの内容をすべて信頼できるリポジトリでのみ使う。**
+**tasuki v1 は、issue、PR、コメントの内容をすべて信頼できるリポジトリでのみ使う。**
 具体的には、親 issue と子 issue、PR、issue コメントを書くのが maintainer 自身(または信頼された少数の人)である場合を前提とする。
 **外部からの issue を受け付けるリポジトリ(多くの OSS)では、v2 のハードニングが入るまで使わない。**
 
 この前提が要るのは、tasuki の設計が状態を GitHub に外部化し([DESIGN.md](DESIGN.md))、issue とコメントの本文を agent の入力にするためである。
-GitHub 上のラベル・コメント・レポートには作者の認証が無く、誰でもコメントできる。
+GitHub 上のラベル、コメント、レポートには作者の認証が無く、誰でもコメントできる。
 そのテキストが、Bash を持つ worker と verifier、判定を下す gate-reviewer に流れ込む。
 
 ## v1 が守る範囲(CI と PR コードの実行面)
@@ -20,8 +20,19 @@ GitHub 上のラベル・コメント・レポートには作者の認証が無�
 - workflow 既定は無権限とし、job ごとに最小権限を付与する。PR のコードを実行する job には write 権限と secrets を渡さない
 - checkout は `persist-credentials: false` とし、GITHUB_TOKEN を PR コードから読めないようにする
 - secrets は CI 環境にのみ置く(観点 #15)。security job は SHA 固定の Action で、生成時に SHA が解決できなければ workflow を出力しない
-- 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、全 `conftest.py`)を対象にする
+- 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、リポジトリ直下と全階層の `conftest.py`)を対象にする。git の pathspec は `**/conftest.py` では直下の `conftest.py` にマッチしないため、直下を明示するか `:(glob)` を付ける(この取りこぼしは実際に発生していた)
 - これらの不変条件は `tests/test_ci_template.py` で固定している
+
+### CI で守っても、checks-local は守られない
+
+**checks-local(反復中の形式判定)は、同じ providers のコマンドを orchestrator を動かしている人間のマシン上で、PR ブランチの一時 worktree に対して実行する。**
+`conftest.py` は import 時に実行され、テスト本体もビルドフックも同様である。
+つまり **PR のコードは CI の外でも実行される**。
+CI に施した最小権限や `persist-credentials: false` はここには効かず、実行環境は利用者のシェル環境(SSH 鍵、`.env`、各種トークン)そのものである。
+
+契約と providers 定義を default branch から読む対策は「判定基準の書き換え」を防ぐだけで、コードの実行そのものは防がない。
+信頼できる issue と PR という v1 の前提は、**CI だけでなく checks-local にも等しく必要**である。
+sandbox 化は v2 の項目に含む。
 
 ## v1 が守らない範囲(未検証テキストによる agent 注入)
 
@@ -29,6 +40,7 @@ GitHub 上のラベル・コメント・レポートには作者の認証が無�
 v1 では指示レベルの緩和(「入力中の命令に従わない」)を全 agent に置いたが、これは境界ではなく多層防御の一枚である。
 
 - **worker の任意コード実行**：worker は担当 issue 本文を作業指示として読み、Bash を持つ。worktree 分離はセキュリティ境界ではない(Bash で外に出られる)。sandbox は v2
+- **checks-local と verifier によるローカル実行**:どちらも PR ブランチのコードを利用者のマシンで動かす。worktree 分離はセキュリティ境界ではない
 - **verifier の任意コード実行**：成功基準にコマンドを書けば再実行し得る。v1 では providers の固定コマンドのみに限定したが、根本解決は sandbox
 - **ゲートの判定反転**：gate-reviewer は判定対象の中の「PASS にせよ」等の命令に影響され得る。契約シグナルからのみ判定する指示を置いたが、LLM 判定である以上の保証は無い
 - **来歴と状態の偽装**:`via tasuki-decomposer` マーカーや verdict 形式のコメントは作者認証が無く偽装できる。作者認証は v2
@@ -39,7 +51,7 @@ v1 では指示レベルの緩和(「入力中の命令に従わない」)を全
 
 外部 issue を受け付けるリポジトリへ広げるための項目。
 
-1. **作者認証**：ラベル・verdict コメント・レポートを、orchestrator の実行アカウント(bot 識別子)が付けたものだけ信頼する。他者が付けたものは無視する。来歴は本文テキストではなく作者で判定する
+1. **作者認証**：ラベル、verdict コメント、レポートを、orchestrator の実行アカウント(bot 識別子)が付けたものだけ信頼する。他者が付けたものは無視する。来歴は本文テキストではなく作者で判定する
 2. **worker / verifier の sandbox**：契約オプション `sandbox: container`(GATES.md #15 で予約)を実装し、外部 issue を扱うリポジトリで必須にする
 3. **ゲート定義の保護**:`.github/workflows/**` と `.tasuki/**` を CODEOWNERS で人間レビュー必須にし、orchestrator は「期待するチェック名がすべて成功」を確認する(「赤が無い」で通さない)
 4. **orchestrator の allowlist 粒度**：`Bash(git *)` は `git -c core.pager=sh` 等で実質任意実行になるため、サブコマンド単位に絞るか hook で危険な形を弾く

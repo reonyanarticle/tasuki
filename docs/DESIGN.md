@@ -36,12 +36,13 @@ tasuki/
 ├── skills/
 │   ├── gate-review/SKILL.md      # ゲート判定手順(3値判定・差し戻し文の書式)
 │   ├── baton-contract/SKILL.md   # 契約(待ち位置)の書き方・読み方
-│   └── loop-report/SKILL.md      # レポート作成手順(対応表必須)
+│   ├── loop-report/SKILL.md      # レポート作成手順(対応表必須)
+│   ├── plan-comment/SKILL.md     # 親 issue の計画コメント(図を描く条件を含む)
+│   ├── mermaid/SKILL.md          # 図種の決定手順と記法(汎用。tasuki 固有の判断は持たない)
+│   └── data-boundary/SKILL.md    # 入力を未検証データとして扱う共通規範(全 agent が参照)
 ├── agents/
 │   ├── decomposer.md
-│   ├── gate-reviewer.md          # haiku(G2 標準)。コンテキスト非共有・読み取り専用
-│   ├── gate-reviewer-sonnet.md   # sonnet(G3 標準、G2 エスカレーション先)
-│   ├── gate-reviewer-opus.md     # opus(G0/G1/G4 標準、G3 エスカレーション先)
+│   ├── gate-reviewer.md          # 全ゲート共通。モデルは呼び出しごとに指定。読み取り専用
 │   ├── worker.md                 # isolation: worktree
 │   └── verifier.md
 ├── commands/
@@ -59,7 +60,7 @@ tasuki/
 
 orchestrator は agent としては存在しない。
 Claude Code の subagent は既定で別の subagent を起動できないため([ROADMAP.md](ROADMAP.md) 検証結果)、orchestrator は `/tasuki:loop` を実行するメインセッションが務める。
-また agent frontmatter の `model:` は起動ごとに変えられないため、ゲート別モデル(後述のレイヤードレート構造)は gate-reviewer のモデル固定3変種として実装する。
+ゲート別モデル(後述のレイヤードレート構造)は、**gate-reviewer を1つの agent とし、起動ごとに `model` を指定して**実現する(Agent の起動引数の `model` は agent 定義の `model` より優先される)。
 
 命名規約として、plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切る(衝突判定の対象はファイル名ではなく `name:`)。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。
@@ -81,7 +82,7 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | タスクの親子関係 | sub-issues |
 | 着手順 | issue dependencies |
 | ゲート判定と差し戻し理由 | issue コメント(監査ログを兼ねる) |
-| ゲート通過状況 | ラベル(`gate:g2-passed` 等) |
+| ゲート通過状況 | ラベル(`gate:start-passed` 等) |
 | 成果物 | ブランチと PR |
 | 判断原則の変更履歴 | 契約ファイルへの PR |
 
@@ -92,9 +93,9 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | ロール | 責務 | コンテキスト | 対応ゲート |
 |---|---|---|---|
 | orchestrator | 依存グラフ構築、レイヤー実行、差し戻し回数管理、エスカレーション。**コードを書かない** | 全体(ただし要約のみ保持) | 全ゲートの呼び出し元 |
-| decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | G1 被検査者 |
-| gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | G0〜G4 |
-| worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | GM 被検査者 |
+| decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | 分割ゲートの被検査者 |
+| gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | 受理から統合までの全ゲート |
+| worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | 形式ゲートの被検査者 |
 | verifier | 成功基準と打ち切り条件の判定(maker と別コンテキスト) | 実行結果+基準のみ | 内側ループの出口 |
 | 人間 | 最終マージ、axis-question の承認、エスカレーション受け | — | 最終ゲート |
 
@@ -107,26 +108,57 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 レイヤー完了ごとに default branch を更新してから次レイヤーへ進む。
 依存の循環はエラーとして検出し、報告して停止する。
 
+```mermaid
+flowchart TD
+    accTitle: レイヤー実行の構造
+    accDescr: 同じレイヤーの子 issue は並行して実装され、それぞれ ready PR になる。そのレイヤーの PR をすべて人間がマージして default branch が更新されてから、次のレイヤーの子 issue に着手する。
+    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+    classDef pending fill:#6e7781,stroke:#57606a,color:#fff
+
+    subgraph L1["レイヤー1(並行に実装)"]
+        A["#11 worker → ready PR"]:::work
+        B["#12 worker → ready PR"]:::work
+    end
+    A --> M["人間: レイヤー1の PR を全マージ"]:::human
+    B --> M
+    M --> D["default branch を更新"]:::work
+    D --> C
+    subgraph L2["レイヤー2(#11 と #12 に依存)"]
+        C["#13 worker → ready PR"]:::pending
+    end
+```
+
+レイヤー間の合流点が人間のマージであることが、この構造の要である。
+自動でマージしないため、前レイヤーの成果を人間が見ないまま次レイヤーが積み上がることがない。
+
 deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
 フェーズ3でレイヤー並列を有効化した。レイヤー内の子 issue は並行処理し、ゲート判定と issue への書き込みは orchestrator が直列で行う(観点 #20)。
 次レイヤーへの前進は、前レイヤーの ready PR がすべて人間にマージされてからとする(default branch の更新を合流点にする)。
 
 ## レイヤードレート構造(モデル選択)
 
-原則は、**最上位モデルはオーケストレーションに限定し、トークンの物量は worker レートで流す** ことにある。
-Fable 5 が計画と委譲を行い、作業は下位レートの worker(Sonnet)へ委譲することで、消費トークンの大半を worker レートで課金させる。
-個々のゲートのモデルは「頻度×誤判定の下流コスト」で決める。
+原則は、**最上位モデルは判断に限定し、トークンの物量は worker レートで流す** ことにある。
+判断(計画と委譲、ゲートの裁定)に上位モデルを当て、実装と照合は Sonnet に流すことで、消費トークンの大半を worker レートで課金させる。
+個々のゲートのモデルは「頻度 × 誤判定の下流コスト」で決める。
 誤 PASS はゲートより下流をすべて無駄にするが、誤 REJECT は前フェーズ1回の再実行で済み `max_iterations` で有界という非対称性がある。
+
+実装(worker)を上位モデルにするかは、この配分の主要な選択肢である。
+実装が弱いと差し戻しのたびに実装と検査が再実行されるため、反復が増えるなら上位モデルのほうが安くなりうる。
+v1 では **worker を Sonnet に置き、コストの支配項を worker レートに留める** 方を採る。
+実運用のメトリクス(差し戻し回数とモデル別判定回数)で反復が多いと分かった場合に、この配分を見直す。
 
 | 層 | ロール | モデル | 根拠 |
 |---|---|---|---|
 | 統括 | orchestrator | Fable 5 | 極少トークン、最高判断。計画、依存グラフ、委譲、エスカレーション裁定のみ。**ゲート判定は兼ねない**(maker/checker 分離とレート戦略の両方が崩れるため) |
-| 高レバレッジ判定 | G0 / G1 / G4 reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
-| 中頻度判定 | G3 reviewer / decomposer | Sonnet(G3 は Opus へ昇格可) | 意味検証だが毎反復発生 |
-| 高頻度照合 | G2 reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
-| 物量 | worker / verifier | Sonnet | トークンの大半。worker レート課金の主戦場 |
+| 高レバレッジ判定 | 受理 / 分割 / 統合ゲートの reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
+| 中頻度判定 | 成果ゲートの reviewer / decomposer | Sonnet(成果ゲートは Opus へ昇格可) | 意味検証だが毎反復発生 |
+| 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
+| 物量 | worker / verifier / decomposer | Sonnet | トークンの大半。worker レート課金の主戦場 |
 
-実装上、reviewer のモデルは gate-reviewer の3変種(`tasuki-gate-reviewer` = haiku、`-sonnet`、`-opus`)への振り分けで決まり、昇格は変種の切り替えである。
+実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。
+昇格は同じ agent を上位モデルで呼び直すことであり、agent を切り替えることではない。
+ゲート別の判定基準は `tasuki:gate-review` skill の「ゲート別の特記事項」が単一の正である。
 orchestrator のモデルはメインセッションのモデルそのものであり、plugin からは強制できない(`/tasuki:loop` の実行時に Fable 5 を選ぶことを推奨とする)。
 
 ### エスカレーション規則(非対称ルール)
