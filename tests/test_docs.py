@@ -419,7 +419,7 @@ def test_replan_path_is_designed() -> None:
     # decomposer 側にモードがあること
     dec = (ROOT / "agents/decomposer.md").read_text()
     assert "差分分割モード" in dec
-    assert "改訂と撤回を宣言できるのは実行前または差し戻し中の子だけ" in dec
+    assert "改訂と撤回を宣言できるのは統合ブランチへ未取り込みの子だけ" in dec
     # ラベルの作成と可視化
     assert "loop:replan" in (ROOT / "commands/loop-init.md").read_text()
     assert "loop:replan" in (ROOT / "commands/loop-status.md").read_text()
@@ -438,6 +438,32 @@ def test_base_sync_checkpoints_are_designed() -> None:
     assert "hotfix 側に特別な経路は要らない" in loop
     # worker 実行中は base を動かさない
     assert "worker が実行中の間は取り込まない" in loop
+
+
+def test_base_sync_does_not_flag_upstream_changes() -> None:
+    """定点取り込みの検知が hotfix 由来の変更を worker の改変と誤認しないこと。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "default branch 側から来た変更" in loop
+    assert "worker の改変と誤認しない" in loop
+
+
+def test_replan_refiling_matches_open_children_only() -> None:
+    """replan の再起票の冪等判定が撤回済み(closed)の子に誤マッチしないこと。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "open の子だけと突き合わせる" in loop
+
+
+def test_section0_numbering_consistent() -> None:
+    """§0 の項番が連番であり、本文中の §0.N 参照が実在する項番を指すこと。
+
+    項目挿入で番号が重複すると、§0.N の参照が別の項目を指したまま読める(実害を踏んだ)。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    sec0 = loop.split("## 0. ")[1].split("\n## ")[0]
+    nums = [int(m) for m in re.findall(r"^(\d+)\. ", sec0, re.M)]
+    assert nums == list(range(1, len(nums) + 1)), nums
+    refs = {int(m) for m in re.findall(r"§0\.(\d+)", loop)}
+    assert refs <= set(nums), refs
 
 
 def test_undone_items_have_issue_drafts() -> None:
