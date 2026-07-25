@@ -450,7 +450,9 @@ def test_parent_pr_body_is_staged_and_traceable() -> None:
     """
     loop = (ROOT / "commands/loop.md").read_text()
     assert "前半(作成時から置く): 大観" in loop
-    assert "check-runs 全緑を確認してから追記する" in loop
+    # 承認材料は本文の編集ではなく新規コメント(タイムラインの最後に現れる)
+    assert "「新規コメント」として投稿する" in loop
+    assert "check-runs 全緑を確認してから" in loop
     assert "どの子(#N)で決めたか" in loop
     assert "どこで検められたか" in loop
     assert "どの子の作業で見つかったかを添える" in loop
