@@ -231,6 +231,7 @@ jobs:
 - `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
 - `loop:review`(出荷前レビュー待ち。親 issue に付く。人間が親 PR に `/code-review` を回す番)
 - `loop:pause`(人間による一時停止。親 issue に付けると新しい委譲を止める)
+- `loop:replan`(要件変更の再計画要求。親本文を編集してから付けると、合流点で計画を作り直す)
 - `tasuki:accepted`(外部起票の親 issue をループ対象にする opt-in。maintainer が本文を読んでから付ける)
 - `tasuki:child`(ループが起票した子 issue の明示。一覧のフィルタ用)
 - `loop:triage`(人間の裁定待ち)
