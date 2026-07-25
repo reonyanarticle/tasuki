@@ -189,6 +189,19 @@ def test_no_nakaguro_in_parallel_enumeration(path: Path) -> None:
     assert not offenders, offenders
 
 
+_DATE_PATTERN = re.compile(r"20\d{2}-\d{2}|20\d{2}年")
+
+
+@pytest.mark.parametrize("path", _WRITING_TARGETS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_no_dates_in_docs(path: Path) -> None:
+    """ドキュメントに日付を書かない(CLAUDE.md のドキュメント規約)。
+
+    いつ対応したかはコミットとリリースが記録する。本文の日付は書いた瞬間から古くなる。
+    """
+    offenders = [(i, line.strip()) for i, line in _prose_lines(path) if _DATE_PATTERN.search(line)]
+    assert not offenders, offenders
+
+
 def test_baton_contract_covers_set_signals() -> None:
     """契約の書き方 skill が 分割ゲート の集合レベル基準(set_signals)も教えること。
 
