@@ -18,3 +18,7 @@ jobs:
       - run: uv run black --check .
       - run: uv run basedpyright
       - run: uv run pytest -q
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude plugin validate .   # manifest と構造の公式検証(LLM は呼ばない)

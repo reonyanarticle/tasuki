@@ -1,0 +1,8 @@
+# 成果ゲート: 対応表の無いレポートは TOO_ABSTRACT
+gate: outcome
+expected_verdict: TOO_ABSTRACT
+input: |
+  ## 結論
+  うまく動くようになりました。テストも通っています。
+  ## 再現手順
+  uv run pytest

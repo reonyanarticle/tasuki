@@ -1,0 +1,17 @@
+# 着手ゲート: 実装方式の指定は TOO_CONCRETE
+gate: start
+expected_verdict: TOO_CONCRETE
+input: |
+  ## 対応する親要件
+  完了の定義「設定を YAML で持てる」
+  ## 目的
+  設定読み込みを実装する。PyYAML の safe_load を使い、Config dataclass に
+  frozen=True を付け、シングルトンパターンで保持すること。
+  ## 受け入れ条件
+  - AC-1: config.yaml の値が起動時に読み込まれる
+  ## 成功基準
+  - SC-1: 読み込み値のテストがある
+  ## 打ち切り条件
+  - 3 回のイテレーションで満たせなければ中断
+  ## 予算(max_iterations)
+  3
