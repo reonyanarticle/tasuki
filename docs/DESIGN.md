@@ -154,7 +154,7 @@ v1 では **worker を Sonnet に置き、コストの支配項を worker レー
 |---|---|---|---|
 | 統括 | orchestrator | Fable 5 | 極少トークン、最高判断。計画、依存グラフ、委譲、エスカレーション裁定のみ。**ゲート判定は兼ねない**(maker/checker 分離とレート戦略の両方が崩れるため) |
 | 高レバレッジ判定 | 受理 / 分割 / 統合ゲートの reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
-| 中頻度判定 | 成果ゲートの reviewer / decomposer | Sonnet(成果ゲートは Opus へ昇格可) | 意味検証だが毎反復発生 |
+| 中頻度判定 | 成果ゲートの reviewer | Sonnet(Opus へ昇格可) | 意味検証だが毎反復発生 |
 | 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
 | 物量 | worker / verifier / decomposer | Sonnet | トークンの大半。worker レート課金の主戦場 |
 

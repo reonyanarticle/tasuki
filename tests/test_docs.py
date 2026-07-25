@@ -277,6 +277,11 @@ def test_readme_documents_model_assignment() -> None:
         assert f"model: {model}" in text, (name, model)
     # 配分を選んだ理由が書かれていること(根拠なく変えられないようにする)
     assert "コストの支配項を worker レートに留める" in r
+    # DESIGN のモデル表も同じ配分を指すこと(README と DESIGN の二重管理 drift の検出。
+    # worker のモデルを変えた実績があり、そのとき両方の編集が必要だった)
+    d = (ROOT / "docs/DESIGN.md").read_text()
+    assert "worker を Sonnet に置き" in d
+    assert "| 物量 | worker / verifier / decomposer | Sonnet |" in d
 
 
 def test_readme_explains_mechanism() -> None:
