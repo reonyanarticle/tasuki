@@ -409,3 +409,15 @@ def test_external_author_optin_is_designed() -> None:
     assert "tasuki:accepted" in sec
     # opt-in は本文にのみ効く、という限界の明示(過大主張しない)
     assert "コメントまでは守れない" in sec
+
+
+def test_child_visibility_hygiene() -> None:
+    """子 issue は機械の作業単位として、取り込み時に閉じ、一覧から絞れること(案C)。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "tasuki:child" in loop
+    assert "子 issue を close する" in loop
+    assert "保険として残す" in loop  # Closes 列挙の位置づけ
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "tasuki:child" in init
+    assert "no:parent-issue" in init
+    assert "no:parent-issue" in (ROOT / "README.md").read_text()

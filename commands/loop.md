@@ -79,7 +79,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 
 - **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict のみ)。反復は `max_iterations_per_gate`。分割ゲートは opus 判定のため昇格先は無く、超過で `loop:triage`
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、`gate:split-returned` と `loop:triage` を付けて修正待ちにする
-- **PASS** → 分割案の場合、起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
+- **PASS** → 分割案の場合、起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
 
 `gate:split-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加、削除、blocked-by の変更を毎 run 検知)は分割ゲートを再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
 
@@ -251,7 +251,7 @@ PASS したら `gate:outcome-passed` を付け、ラベルを片付けて(共通
 - **`cancelled` の job がある** → 失敗として扱わない。反復中の push で `concurrency` が旧 run を打ち切った結果であることが多いため、最新コミットの run を確認し直す。最新コミットに対する完了 run が無ければ `gh run rerun` で1回だけ走らせ直し、それでも `cancelled` が残る場合は `loop:triage`(打ち切られた run を差し戻し理由にすると、欠陥が無いまま `max_iterations_per_gate` を溶かす)
 - **`skipped` の job がある** → **PASS とみなさない**(fail-closed)。`skipped` は concurrency の打ち切りでは発生せず、`if:` 条件や `needs` の不成立で job が実行されなかったことを意味する。形式ゲートを一度も通っていない実装を出荷判定に通さない。workflow の条件を確認し、解決できなければ `loop:triage`
 - **失敗した job がある** → checks-local と CI の食い違い(環境差、secrets 依存のテスト等)として findings を抽出し、新規 worker セッションへ差し戻す(内側ループ上限に計上)。**実装コミットが変わったら `gate:outcome-passed` を外し**、2d から通り直す(古いレポートの PASS で新しい実装を取り込まない)
-- **全 job 成功** → **orchestrator が子 PR を統合ブランチへマージする**(これは default branch への反映ではないため、ループが行ってよい)。子 issue に完了コメントを残し、`loop:in-progress` を外す。子 issue はここでは閉じない(親 PR の `Closes` が、人間の最終マージ時にまとめて閉じる)
+- **全 job 成功** → **orchestrator が子 PR を統合ブランチへマージする**(これは default branch への反映ではないため、ループが行ってよい)。子 issue に完了コメントを残し、`loop:in-progress` を外し、**子 issue を close する**(子の役目=要件と議論の置き場は取り込みで終わる。open のまま残すと一覧を汚す)。親 PR の `Closes` 列挙は保険として残す(既に閉じていれば無害、close し損ねがあれば拾う)
 
 **人間は子 PR をマージしない。** 子 PR は統合ブランチへの下請けの取り込みであり、人間の最終判断は親 PR(§3c)の1回に集約する。子 PR は閉じずに merged のまま残り、親 PR から辿れる。
 
@@ -293,7 +293,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 2. 返った所見を**そのまま信じない**。対象コードを読み、再現条件を確かめ、**実在するものだけ**を採用する(古いツリーに対する所見や、仕様どおりの挙動を欠陥と誤認した所見が混ざる)
 3. 採用した所見に修正が要るなら、該当する子 issue を特定して新規の worker セッションへ差し戻す(内側ループ上限に計上する)。修正は統合ブランチに向けた子 PR として 2d から通り直す
 4. **セキュリティ**:変更が認証、権限、外部入力、秘密情報、CI 設定のいずれかに触れる場合、または契約の `enabled_gates` に `checks-security` がある場合は、`/claude-security:claude-security` を回す。所見の扱いは 2 と同じ
-5. 問題が無ければ orchestrator が親 PR を ready 化する。**マージは人間が行う**(このマージが default branch への唯一の反映点であり、`Closes` により全子 issue が閉じる)。親 issue の close も人間が行う(完了の定義への最終適合は人間の判断)
+5. 問題が無ければ orchestrator が親 PR を ready 化する。**マージは人間が行う**(このマージが default branch への唯一の反映点。子 issue は取り込み時に close 済みで、`Closes` 列挙は close し損ねの保険)。親 issue の close も人間が行う(完了の定義への最終適合は人間の判断)
 
 **状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付ける。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
 再入時は、`loop:review` が付いていて統合ブランチの先端が verdict より新しくなければ「レビュー待ち」を維持し、レビューをやり直さない。
