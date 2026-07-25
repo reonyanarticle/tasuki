@@ -94,7 +94,9 @@ def _load_report(json_path: Path) -> dict:
     """
     try:
         report = json.loads(json_path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError は JSONDecodeError と UnicodeDecodeError の両方を捕らえる。
+        # 途中で kill された typecheck は UTF-8 の途中で切れたファイルを残しうる。
         print(f"basedpyright の出力を読めなかった: {exc}", file=sys.stderr)
         return {}
     return report if isinstance(report, dict) else {}

@@ -138,3 +138,17 @@ def test_broken_input_still_writes_sarif(tmp_path: Path, raw: str) -> None:
     out = tmp_path / "out.sarif"
     assert normalizer.convert(src, out) == 0
     assert json.loads(out.read_text())["version"] == "2.1.0"
+
+
+def test_binary_input_does_not_raise(tmp_path: Path) -> None:
+    """UTF-8 として壊れた出力でも例外を投げないこと。
+
+    kill された typecheck は多バイト文字の途中で切れたファイルを残しうる。
+    ここで UnicodeDecodeError が漏れると、後続の upload-sarif が
+    「ファイルが無い」で失敗し、本当の原因が隠れる。
+    """
+    src = tmp_path / "in.json"
+    src.write_bytes(b'{"generalDiagnostics": [{"message": "\xe6\x97')  # 途中で切れた UTF-8
+    out = tmp_path / "out.sarif"
+    assert normalizer.convert(src, out) == 0
+    assert json.loads(out.read_text())["version"] == "2.1.0"

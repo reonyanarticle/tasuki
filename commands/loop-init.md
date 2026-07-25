@@ -180,7 +180,8 @@ jobs:
           comment-pr: true
       - name: security gate      # 閾値以上の findings で job を落とす(コメントを出すだけにしない)
         env:
-          FINDINGS: ${{ steps.review.outputs.<findings 件数の output 名> }}
+          # 契約の gates.gm-security.blocking_threshold 以上の重大度に絞った件数を渡す
+          FINDINGS: ${{ steps.review.outputs.<blocking_threshold 以上の findings 件数の output 名> }}
         run: |
           if [ -z "${FINDINGS}" ]; then
             echo "::error::security-review の findings 件数を取得できなかった"
@@ -209,7 +210,7 @@ jobs:
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の GM 判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフック、conftest.py)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
-- **security job を生成するなら、findings 件数の output 名を固定した SHA の `action.yml` から解決して埋める**。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
+- **security job を生成するなら、契約の `gates.gm-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する

@@ -70,7 +70,7 @@ worker を起動するたびに WIP(観点 #24)を再確認し、上限到達中
 GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定後に必ず削除する。開始時に同名の残骸があれば前回クラッシュの残りとして先に削除する(冪等)。
 依存(blocked-by)が解決している子 issue から着手する。
 子 issue への割り当ては assignee 設定を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
-ただし **担当したまま落ちた実行を回収する経路を持つ**。`loop:in-progress` が付いた子 issue について、最後のループ由来コメント(verdict、レポート、開始コメント)から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee と `loop:in-progress` を外し、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
+ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、最後のループ由来コメント(verdict、レポート、質問、回収コメント)から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
 この回収が無いと、クラッシュした実行が担当した子 issue は以後すべての run から永久にスキップされ、`loop:triage` にも上がらないまま停止する。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
