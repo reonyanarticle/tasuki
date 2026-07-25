@@ -42,7 +42,7 @@ IE(工程分析)の「検査、運搬、停滞は付加価値を生まない」�
 - 着手ゲート通過の子 issue を worker が worktree 上で実装し、draft PR 作成、形式ゲート(CI)実行まで到達する
 - 差し戻し2連続で sonnet へのエスカレーションが発火する
 
-### フェーズ1の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリで headless 実行)
+### フェーズ1の E2E 実施結果(tasuki-e2e リポジトリで headless 実行)
 
 | 受け入れ条件 | 結果 |
 |---|---|
@@ -70,7 +70,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 - 書き方の不足の差し戻しでは、worker が実装に触れずレポートのみを新規セッションで再出力する
 - 成果ゲートの PASS 後にのみ ready 化される(checks-ci と併せて)
 
-### フェーズ2の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリ)
+### フェーズ2の E2E 実施結果(tasuki-e2e リポジトリ)
 
 | 受け入れ条件 | 結果 |
 |---|---|
@@ -98,7 +98,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 - 全子 issue のマージ後に統合ゲートが親要件へのロールアップを照合し、孤児の親要件があれば差し戻して追加分割を提案する
 - 受理 / 分割 / 統合ゲートの判定例 fixture(各2件以上)で人間ラベルと全一致する(目盛り合わせ)
 
-### フェーズ3の E2E 実施結果(2026-07-23、tasuki-e2e リポジトリ)
+### フェーズ3の E2E 実施結果(tasuki-e2e リポジトリ)
 
 | 受け入れ条件 | 結果 |
 |---|---|
@@ -111,11 +111,11 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 
 フェーズ3レビュー(3観点、確定16件)の修正のうち、クラッシュ復旧系(部分起票の突合、g0-returned 再入、分割案の verdict 添付からの復旧等)は手順、テスト検証のみで実走未発火。実運用で自然発火した際が実地検証になる。
 
-2026-07-24 に claude-security スキャン(7観点)を実施し、信頼境界の設計上の弱点を確定した([SECURITY.md](SECURITY.md))。
+claude-security スキャン(7観点)を実施し、信頼境界の設計上の弱点を確定した([SECURITY.md](SECURITY.md))。
 未検証の issue / コメント本文が Bash を持つ worker / verifier に流れる点が根本原因で、指示レベルの緩和を全 agent に入れたうえで、v1 の適用範囲を信頼できる issue のリポジトリに限定すると明記した。
 作者認証と worker/verifier の sandbox は v2 のハードニングとする。
 
-## v1.1: 統合ブランチと親 PR への集約(2026-07-25)
+## v1.1: 統合ブランチと親 PR への集約
 
 フェーズ3完了後、実運用レビューを受けて人間の関与を再設計した。
 
@@ -124,7 +124,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 - 実装方針コメント(worker の第1手)、出荷前レビュー(5観点)、loop:pause、loop:review、実験プロファイルの契約解決(gates[].phase)、tasuki:accepted(外部起票の opt-in)、tasuki:child と取り込み時クローズ
 - テスト基盤: claude plugin validate(CI)+ LLM fixture runner(RUN_LLM_TESTS=1)
 
-### v1.1 の E2E 実施結果(2026-07-25、tasuki-e2e-v2 リポジトリ)
+### v1.1 の E2E 実施結果(tasuki-e2e-v2 リポジトリ)
 
 複数モジュールの経費精算アプリを種に、Decimal 移行(5子、3レイヤー、分岐と合流あり)で検証した。
 
@@ -137,7 +137,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 | pause / 二重実行 / 承認コメント | 達成 |
 | リポジトリ由来 agent と plugin agent の呼び出し | 達成(headless で双方向を実機確認) |
 
-## v1.2: 走行中の変化への追従(2026-07-25)
+## v1.2: 走行中の変化への追従
 
 アジャイル運用の難所分析で特定した2つのギャップを閉じた。
 
@@ -148,8 +148,8 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 
 ## 未決事項
 
-1. ~~受理ゲートのコスト見積もりを誰が書くか~~ **決着(2026-07-23)**：起票者(人間)がテンプレ必須欄として記入する(門前払いと整合する最小構成)。decomposer による見積もり案と人間承認のフローは v2 予約
-2. ~~`/tasuki:loop` の起動形態~~ **決着(2026-07-23)**：v1 は手動起動のみ。スケジュール実行(automations)は v2 予約
+1. ~~受理ゲートのコスト見積もりを誰が書くか~~ **決着**：起票者(人間)がテンプレ必須欄として記入する(門前払いと整合する最小構成)。decomposer による見積もり案と人間承認のフローは v2 予約
+2. ~~`/tasuki:loop` の起動形態~~ **決着**：v1 は手動起動のみ。スケジュール実行(automations)は v2 予約
 3. experiment プロファイルの成果物置き場。実験ログや生成モデル等の大容量成果物の保存先規約(GitHub 外ストレージとの接続)
 
 ## 実装時検証事項(着手前に公式ドキュメントで確認)
@@ -165,19 +165,19 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 6. GitHub sub-issues / issue dependencies。`gh` CLI と REST API の対応範囲。未対応操作は GraphQL API へフォールバック
 7. plugin からの CI workflow ファイル生成。GitHub Apps / Actions の権限(`workflows` 書き込み権限が必要な点)
 
-### 検証結果(2026-07-23、公式ドキュメントで確認済み)
+### 検証結果(公式ドキュメントで確認済み)
 
-1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(2026-07-25 追認。これによりモデル固定の変種を分ける必要は無い)
+1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools: Bash(gh *)` で絞る
 5. **差異あり**：組み込みスラッシュコマンドは `claude -p` から呼べない。対応として形式ゲートの security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
-6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0(2026-06)からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
-7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記(2026-07-23)**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
+6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
+7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
 
 **設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
 このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
 ゲート別モデルは、gate-reviewer を1つの agent とし、Agent の起動引数で `model` を指定して実現する。
 エスカレーションは同じ agent を上位モデルで呼び直すことである。
-(**2026-07-25 訂正**:当初は「agent frontmatter の `model:` が静的なためモデル固定3変種にする」としていたが、起動ごとの `model` 指定が可能であることを確認したため統合した。起動引数の `model` は agent 定義の `model` より優先される。)
+(**訂正**:当初は「agent frontmatter の `model:` が静的なためモデル固定3変種にする」としていたが、起動ごとの `model` 指定が可能であることを確認したため統合した。起動引数の `model` は agent 定義の `model` より優先される。)
 worker からプロジェクト subagent への委譲は、導入先の `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 設定によるオプトインで可能にする([DESIGN.md](DESIGN.md))。
