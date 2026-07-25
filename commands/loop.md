@@ -318,7 +318,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 **レビュー観点(5つ)**
 
 出典は2つある。
-Google のコードレビュー指針(design を最重要とし、functionality、complexity、tests、naming と続く)と、Findy Library の「What review verifies」(functional / non-functional / design & architecture / test suite / readability の5観点)である。
+[Google のコードレビュー指針](https://google.github.io/eng-practices/review/reviewer/looking-for.html)(design を最重要とし、functionality、complexity、tests、naming と続く)と、[Findy Library の Code Review](https://lib.findy.co.jp/development/code-review.md)「What review verifies」(functional / non-functional / design & architecture / test suite / readability の5観点)である。
 両者はほぼ同じ範囲を指しており、これを tasuki の1親 issue ぶんの変更に合わせて畳んだ。
 
 | # | 観点 | 見るもの |
