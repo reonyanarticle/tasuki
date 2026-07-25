@@ -440,3 +440,31 @@ def test_parent_pr_is_designed_for_approval() -> None:
     # ready 化は 3c 入場時(人間に draft を渡さない)
     assert "親 PR を ready 化する" in loop
     assert loop.index("親 PR を ready 化する") < loop.index("これは人間が起動するコマンドである")
+
+
+def test_parent_pr_body_is_staged_and_traceable() -> None:
+    """親 PR 本文が「大観が先、承認材料は CI 全緑の後」の2段構成であること。
+
+    検証が通る前に承認の文言を書くと、赤のまま「承認してほしい」と読める
+    本文が世に出る。判断には出どころ(どの子)と検証点を必ず添える。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "前半(作成時から置く): 大観" in loop
+    assert "check-runs 全緑を確認してから追記する" in loop
+    assert "どの子(#N)で決めたか" in loop
+    assert "どこで検められたか" in loop
+    assert "どの子の作業で見つかったかを添える" in loop
+
+
+def test_toc_adaptation_is_reflected() -> None:
+    """TOC の記述が新構造(制約通過の最小化+親予算のバッチ)に更新されていること。"""
+    phil = (ROOT / "docs/PHILOSOPHY.md").read_text()
+    assert "親 PR の1回に最小化" in phil
+    gates = (ROOT / "docs/GATES.md").read_text()
+    assert "親の粒度" in gates
+    # A: 受理ゲートが承認サイズを見る
+    skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "承認のサイズも見る" in skill
+    # C: レイヤー報告は覗いてよい任意のチェックポイント
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "覗いてよい任意のチェックポイント" in loop
