@@ -65,7 +65,7 @@ GM ハイブリッド(GM-local / GM-ci)、task-question の回答反映と再入
 **フェーズ2の受け入れ条件(完了の定義)**：
 
 - `enabled_gates` に `g3` を含む契約で、verifier の met 後に worker のレポートが G3(sonnet)で照合される
-- G3 の判定例 fixture 3件(PASS / TOO_ABSTRACT / TOO_CONCRETE)で、gate-reviewer-sonnet の判定が人間の正解ラベルと3件中3件一致する(目盛り合わせ)
+- G3 の判定例 fixture 3件(PASS / TOO_ABSTRACT / TOO_CONCRETE)で、sonnet で呼んだ gate-reviewer の判定が人間の正解ラベルと3件中3件一致する(目盛り合わせ)
 - 対応表または結論を欠くレポートが TOO_ABSTRACT、生ログ貼り付けが TOO_CONCRETE で差し戻される
 - 書き方の不足の差し戻しでは、worker が実装に触れずレポートのみを新規セッションで再出力する
 - G3 PASS 後にのみ ready 化される(GM-ci と併せて)
@@ -136,7 +136,7 @@ G3 レビュー(3観点、確定16件)後の再実走では、拡充した契約
 
 ### 検証結果(2026-07-23、公式ドキュメントで確認済み)
 
-1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ
+1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(2026-07-25 追認。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools: Bash(gh *)` で絞る
@@ -146,5 +146,7 @@ G3 レビュー(3観点、確定16件)後の再実走では、拡充した契約
 
 **設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
 このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
-また agent frontmatter の `model:` は静的なため、ゲート別モデルは gate-reviewer の3変種(haiku / sonnet / opus)として実装し、エスカレーションは変種の切り替えで行う。
+ゲート別モデルは、gate-reviewer を1つの agent とし、Agent の起動引数で `model` を指定して実現する。
+エスカレーションは同じ agent を上位モデルで呼び直すことである。
+(**2026-07-25 訂正**:当初は「agent frontmatter の `model:` が静的なためモデル固定3変種にする」としていたが、起動ごとの `model` 指定が可能であることを確認したため統合した。起動引数の `model` は agent 定義の `model` より優先される。)
 worker からプロジェクト subagent への委譲は、導入先の `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 設定によるオプトインで可能にする([DESIGN.md](DESIGN.md))。

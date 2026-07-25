@@ -25,7 +25,7 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 4. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
 5. 二重起動の防止(観点 #20)：親 issue に自分より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す
 6. WIP 確認(観点 #24)：`loop:pr` ラベルの付いた open PR が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す
-7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(契約の `gates.g0.reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer-opus` へ。それ以外の名前ならその導入先プロジェクト agent へ)。渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+7. **G0(受理ゲート)**:親 issue に `gate:g0-passed` が無ければ判定する。ただし **全子 issue がマージ済みの親には降りゲート(G0 / G1)を遡及適用しない**(enabled_gates の拡張前に完走した親は G4 のみ判定する。この遡及 G4 が不要なら人間が親を close して畳んでよい)。また `gate:g0-returned` が付いている場合は、親の `lastEditedAt` が最終 G0 verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の decomposition フェーズ `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:g0-passed` を付け、`gate:g0-returned` と G0 由来の `loop:triage` を外す。差し戻し → `gate:g0-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(G1、レイヤー構成)
 
@@ -40,7 +40,7 @@ sub-issues で子 issue 一覧を得る。
 ### 1b. G1(分割ゲート)
 
 親 issue に `gate:g1-passed` が無ければ判定する。
-**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer-opus`)。渡すのは次の3つだけ。
+**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは次の3つだけ。
 
 - 被検査物(分割案 YAML または既存子 issue 群の本文)
 - 親 issue 本文(要件の対応照合用)
@@ -92,7 +92,17 @@ GM-local の一時 worktree は子 issue ごとに固有パスで作り、判定
 ### 2b. G2(契約照合)
 
 reviewer へ委譲する。
-**reviewer の解決規則**：契約の `gates[].reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer`(haiku)へ。それ以外の名前なら、その名前の導入先プロジェクト agent へ委譲する(orchestrator はメインセッションなのでプロジェクト agent を直接呼べる。出力契約は同じ verdict JSON)。
+**reviewer の解決規則**：契約の `gates[].reviewer` が `gate-reviewer` なら plugin の `tasuki-gate-reviewer` へ委譲する。それ以外の名前なら、その名前の導入先プロジェクト agent へ委譲する(orchestrator はメインセッションなのでプロジェクト agent を直接呼べる。出力契約は同じ verdict JSON)。
+
+**モデルの指定**：gate-reviewer は1つの agent であり、**判定モデルは呼び出しごとに指定する**(Agent の起動時に `model` を渡す。agent 定義の `model` より優先される)。契約の `gates[].model` を既定とし、省略時は下表による。
+
+| ゲート | 標準モデル | エスカレーション先 |
+|---|---|---|
+| G0 / G1 / G4 | opus | 無し(超過で `loop:triage`) |
+| G2 | haiku | sonnet |
+| G3 | sonnet | opus |
+
+エスカレーションは**同じ agent を上位モデルで呼び直すこと**である(別 agent への切り替えではない)。
 
 渡すのは次の3つだけ(worker や過去セッションのコンテキストは渡さない)。
 
@@ -105,8 +115,8 @@ reviewer へ委譲する。
 
 **エスカレーション規則**：
 
-- `confidence: low` の PASS → 破棄し、`tasuki-gate-reviewer-sonnet` で再判定する(low の REJECT はそのまま差し戻してよい)
-- 同一ゲートで差し戻し2連続 → 次回判定を `tasuki-gate-reviewer-sonnet` へ昇格する
+- `confidence: low` の PASS → 破棄し、同じ agent を **sonnet** で呼び直して再判定する(low の REJECT はそのまま差し戻してよい)
+- 同一ゲートで差し戻し2連続 → 次回判定を **sonnet** へ昇格する
 - 差し戻しが `max_iterations_per_gate` を超過 → 停止。状況を要約し「契約の不備 / タスクの筋の悪さ / モデル能力の限界」を切り分けたコメントを親 issue に残し、`loop:triage` ラベルを付ける
 
 **差し戻し先の読み替え**：`return_to: decomposer` の差し戻しは、子 issue の由来で宛先を分ける。本文末尾に `via tasuki-decomposer` がある子は新規の decomposer セッションへ(子 issue 本文の修正案を作らせ、orchestrator が issue を更新する)。人間起票の子は起票者宛に読み替え、verdict コメントで mention し `loop:triage` を付けて修正待ちにする。
@@ -168,7 +178,7 @@ verifier の返す JSON は orchestrator が機械的に読むための内部デ
 不足があれば LLM を呼ばずに `gate:g3-returned` を付け、不足欄を列挙したコメントを残して、レポート再出力の worker を起動する。
 
 門前払いを通過したら reviewer へ委譲する。
-解決規則は 2b と同じ(契約の `gates.g3.reviewer` が `gate-reviewer` なら `tasuki-gate-reviewer-sonnet` へ。`escalate_to: opus` は `tasuki-gate-reviewer-opus` へ)。
+解決規則は 2b と同じ(既定は `tasuki-gate-reviewer` を **sonnet** で呼び、`escalate_to: opus` の昇格時は同じ agent を **opus** で呼ぶ)。
 
 渡すのは次の3つだけ。
 
@@ -240,7 +250,7 @@ Google のコードレビュー指針(design を最重要とし、functionality�
 
 最終レイヤーまで完了し、**全子 issue が決着(PR のマージ、または人間による不採用クローズ)したら**判定する。不採用クローズされた子の親要件は「未充足」として G4 に渡し、要件の縮小(親本文の修正)か追加分割かを人間に問う材料にする。
 G4 が照合する契約は integration フェーズの `receives` 定義(全親要件⇔子成果の対応、孤児の親要件なし)である。
-**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer-opus`)。渡すのは次の3つだけ。
+**§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは次の3つだけ。
 
 - 親 issue 本文(要件)
 - 各子 issue の最終レポート(リンクと要旨)

@@ -32,7 +32,7 @@ class TestAgents:
 
 
 def test_gate_reviewers_are_read_only() -> None:
-    """gate-reviewer 3変種は読み取り専用(Bash / Write / Edit を持たない)。"""
+    """gate-reviewer は読み取り専用(Bash / Write / Edit を持たない)。"""
     for path in AGENT_FILES:
         if "gate-reviewer" not in path.name:
             continue
@@ -48,15 +48,24 @@ def test_worker_isolation_and_delegation() -> None:
     assert "Agent" in tools
 
 
-def test_reviewer_model_ladder() -> None:
-    """レイヤードレート構造: 3変種のモデル固定が設計どおりであること。"""
-    expected = {
-        "gate-reviewer.md": "haiku",
-        "gate-reviewer-sonnet.md": "sonnet",
-        "gate-reviewer-opus.md": "opus",
-    }
-    for filename, model in expected.items():
-        assert frontmatter(ROOT / "agents" / filename)["model"] == model, filename
+def test_reviewer_is_single_agent_with_per_call_model() -> None:
+    """gate-reviewer は1つの agent で、モデルは呼び出しごとに指定すること。
+
+    以前はモデル固定の3変種に分けていたが、Agent の起動引数で model を渡せる
+    (agent 定義の model より優先される)ため統合した。変種の復活を防ぐ。
+    """
+    reviewers = [p for p in AGENT_FILES if "gate-reviewer" in p.name]
+    assert [p.name for p in reviewers] == ["gate-reviewer.md"], reviewers
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "判定モデルは呼び出しごとに指定する" in loop
+    # ゲート別の標準モデルとエスカレーション先が手順に書かれていること
+    for token in ("opus", "haiku", "sonnet"):
+        assert token in loop, token
+    # ゲート別の判定基準は skill が単一の正であること
+    skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "## ゲート別の特記事項" in skill
+    for gate in ("G0(受理)", "G1(分割)", "G2(着手)", "G3(成果)", "G4(統合)"):
+        assert gate in skill, gate
 
 
 @pytest.mark.parametrize("path", COMMAND_FILES + SKILL_FILES, ids=lambda p: str(p.parent.name))
@@ -70,7 +79,6 @@ def test_loop_references_existing_agents() -> None:
     loop_text = (ROOT / "commands/loop.md").read_text()
     for name in (
         "tasuki-gate-reviewer",
-        "tasuki-gate-reviewer-sonnet",
         "tasuki-worker",
         "tasuki-verifier",
     ):

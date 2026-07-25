@@ -13,7 +13,7 @@ budgets:
   wip_limit_prs: 3                # 未レビュー PR の上限(#24)。超過で新規 worker 起動を停止
   stale_assignment_minutes: 60    # 停止した実行が残した assignee の回収までの経過時間(#20)
 
-# モデルは agent 定義に固定されている(worker/verifier = sonnet、gate-reviewer は haiku/sonnet/opus の3変種)。
+# モデルは agent 定義に固定されている(worker と verifier = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 phases:

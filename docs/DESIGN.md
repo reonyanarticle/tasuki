@@ -41,9 +41,7 @@ tasuki/
 │   └── mermaid/SKILL.md          # 図種の決定手順と記法(汎用。tasuki 固有の判断は持たない)
 ├── agents/
 │   ├── decomposer.md
-│   ├── gate-reviewer.md          # haiku(G2 標準)。コンテキスト非共有・読み取り専用
-│   ├── gate-reviewer-sonnet.md   # sonnet(G3 標準、G2 エスカレーション先)
-│   ├── gate-reviewer-opus.md     # opus(G0/G1/G4 標準、G3 エスカレーション先)
+│   ├── gate-reviewer.md          # 全ゲート共通。モデルは呼び出しごとに指定。読み取り専用
 │   ├── worker.md                 # isolation: worktree
 │   └── verifier.md
 ├── commands/
@@ -61,7 +59,7 @@ tasuki/
 
 orchestrator は agent としては存在しない。
 Claude Code の subagent は既定で別の subagent を起動できないため([ROADMAP.md](ROADMAP.md) 検証結果)、orchestrator は `/tasuki:loop` を実行するメインセッションが務める。
-また agent frontmatter の `model:` は起動ごとに変えられないため、ゲート別モデル(後述のレイヤードレート構造)は gate-reviewer のモデル固定3変種として実装する。
+ゲート別モデル(後述のレイヤードレート構造)は、**gate-reviewer を1つの agent とし、起動ごとに `model` を指定して**実現する(Agent の起動引数の `model` は agent 定義の `model` より優先される)。
 
 命名規約として、plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切る(衝突判定の対象はファイル名ではなく `name:`)。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。
@@ -128,7 +126,9 @@ Fable 5 が計画と委譲を行い、作業は下位レートの worker(Sonnet)
 | 高頻度照合 | G2 reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
 | 物量 | worker / verifier | Sonnet | トークンの大半。worker レート課金の主戦場 |
 
-実装上、reviewer のモデルは gate-reviewer の3変種(`tasuki-gate-reviewer` = haiku、`-sonnet`、`-opus`)への振り分けで決まり、昇格は変種の切り替えである。
+実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。
+昇格は同じ agent を上位モデルで呼び直すことであり、agent を切り替えることではない。
+ゲート別の判定基準は `tasuki:gate-review` skill の「ゲート別の特記事項」が単一の正である。
 orchestrator のモデルはメインセッションのモデルそのものであり、plugin からは強制できない(`/tasuki:loop` の実行時に Fable 5 を選ぶことを推奨とする)。
 
 ### エスカレーション規則(非対称ルール)
