@@ -28,7 +28,7 @@ providers.yaml が単一ソースであり、CI workflow、orchestrator のロ�
 **マージ判断の正は CI** であり、verifier の met と成果ゲートの PASS の後に、最終コミットの check-runs 全成功を確認してから PR を ready 化する(checks-ci)。
 工程内検査を手元に置き、出荷検査を CI に置く分担である。
 
-security-review Action の制約は4つある(2026-07 時点の README とドキュメントで確認)。
+security-review Action の制約は4つある(採用時に README とドキュメントで確認した)。
 
 - `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点 #15)
 - この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。このため **security job はオプトイン**とし、既定では生成しない。`/tasuki:loop-init` で選択した場合のみ job を生成し `enabled_gates` に `checks-security` を追加する(条件スキップによる見かけの成功は作らない)

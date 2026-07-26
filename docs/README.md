@@ -19,6 +19,7 @@ tasuki の設計文書一式。
 | [ROADMAP.md](ROADMAP.md) | 導入。v1 スコープ、段階導入(フェーズ1〜3)、未決事項、実装時検証事項 |
 | [SECURITY.md](SECURITY.md) | 脅威モデルと信頼境界。v1 は信頼 issue 限定。守る範囲(CI)と守らない範囲(注入)、v2 ハードニング |
 | [PYTHON.md](PYTHON.md) | この plugin リポジトリ自身の Python コーディング規約(lint = Ruff、整形 = Black、型 = basedpyright) |
+| [FAQ.md](FAQ.md) | 導入時に実際に聞かれた質問と答え(worktree 分離、子 PR の扱い、replan、hotfix、起票支援) |
 
 ## 概念の置き場所
 
