@@ -517,6 +517,8 @@ def test_field_review_fixes_are_designed() -> None:
         assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
     # 併用の制約(状態機械が重ならないこと)
     assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
+    # 直列親の依存(先行親の未マージ成果を worker が複製した実地事故の再発防止)
+    assert "先行親の親 PR がマージされてから起動する" in loop
 
 
 def test_undone_items_have_issue_drafts() -> None:
