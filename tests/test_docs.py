@@ -321,7 +321,8 @@ def test_operations_documents_preship_review_and_output_rules() -> None:
     """運用文書に出荷前レビューと、issue 出力の原則があること。"""
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
     assert "## 出荷前レビュー" in ops
-    assert "/code-review" in ops and "/claude-security:claude-security" in ops
+    assert "`preship_review`" in ops  # 自動実行の規模制御(人間起動は manual のみ)
+    assert "/claude-security:claude-security" in ops
     assert "## issue に残す出力の原則" in ops
     assert "<details>" in ops
 

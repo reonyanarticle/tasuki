@@ -18,11 +18,11 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh *)
 
 - `loop:pause` ラベルの親 issue(一時停止中。外せば次の run が再開する)
 - `loop:replan` ラベルの親 issue(要件変更の再計画待ち。次の run の合流点で計画を作り直す)
-- `loop:review` ラベルの親 issue(出荷前レビュー待ち。人間が親 PR に `/code-review` を回す番)
+- `loop:review` ラベルの親 issue(出荷前レビューの実行中または結果反映中。契約が `preship_review.mode: manual` のときだけ、人間がレビューを起動する番)
 - `loop:triage` ラベルの issue(エスカレーション。Fable 裁定の3分類コメントがあれば要約を併記)
 - 未回答の task-question(質問コメントに回答が付いていない issue)
 - 承認待ちの axis-question(契約ファイル変更 PR で open のもの)
-- ready 化済みで未マージの PR(マージは常に人間)
+- ready 化済みで未マージの**親 PR**(マージは常に人間。子 PR はループが取り込むため含めない)
 
 ## 2. 進行状況
 
@@ -53,4 +53,4 @@ issue コメントの verdict JSON を集計して表示する。
 
 ## 4. WIP 状態
 
-`loop:pr` ラベルの付いた open PR 数と契約の `wip_limit_prs` を並べて表示し、超過している場合は「新規 worker は起動されない。ボトルネックは人間レビュー帯域」と明示する(観点「スループット管理」)。
+ready(draft でない)の**親 PR** 数と契約の `wip_limit_prs` を並べて表示(子 PR と draft は数えない。子 PR はループが取り込むため人間の帯域を表さない)し、超過している場合は「新規 worker は起動されない。ボトルネックは人間レビュー帯域」と明示する(観点「スループット管理」)。

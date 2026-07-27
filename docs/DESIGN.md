@@ -224,6 +224,7 @@ v1 では **worker を Sonnet に置き、コストの支配項を worker レー
 | 中頻度判定 | 成果ゲートの reviewer | Sonnet(Opus へ昇格可) | 意味検証だが毎反復発生 |
 | 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
 | 物量 | worker / verifier / decomposer | Sonnet | トークンの大半。worker レート課金の主戦場 |
+| 出荷前レビュー | 5観点レビューの subagent | Sonnet | 所見の採否は orchestrator が判断するため上位モデル不要。規模は契約の preship_review で制御 |
 
 実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。
 昇格は同じ agent を上位モデルで呼び直すことであり、agent を切り替えることではない。

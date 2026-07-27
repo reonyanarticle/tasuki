@@ -8,7 +8,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 1. 言語検出 → language pack 選択(各 pack の `detect` に挙がったファイルの有無で判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
 3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
-4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、形式ゲート + 成果ゲート通過で ready 化する
+4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
@@ -71,12 +71,12 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 
 形式ゲートと成果ゲートを通っても、**コードの設計と正しさは誰も見ていない**。
 形式ゲートは機械判定、成果ゲートはレポートの形式照合であり、どちらも実装の良否を扱わない。
-そこで ready 化の直前に、人間が起動するレビューを1回挟む(`/tasuki:loop` の `2g`)。
+そこで親 PR に対して、orchestrator が subagent でレビューを自動実行する(loop.md の 3c「出荷前レビュー」)。
 
-- 実行条件は「成果ゲート PASS かつ checks-ci が全 job 成功」。反復のたびには行わず、実装が固まってから1回だけ行う
-- `/code-review` を5観点(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)で回す。**1観点ずつ5回に分ける**(一度に渡すと観点が薄まる)
-- 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` も回す
-- 所見はそのまま採用しない。どのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを直す
+- 実行条件は「統合ゲート PASS、親 PR の check-runs 全緑、統合ブランチの merge-base が default branch の先端と一致」。反復のたびには行わず、フィーチャーの完成形(親 PR の全差分)に対して1回行う
+- 5観点(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)を、契約の `preship_review` の規模で回す(既定 scaled: 小さい diff は1セッションに5観点、大きい diff は観点別5セッション。manual にすると従来どおり人間が起動する)
+- 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
+- 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
 観点の出典は Google のコードレビュー指針と Findy Library の「What review verifies」で、両者はほぼ同じ範囲を指している。
 

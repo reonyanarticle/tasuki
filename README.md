@@ -69,7 +69,8 @@ flowchart TD
     split -->|OK| C["子 issue を起票"]:::work
     C --> IN["各子 issue: 実装と検査<br/>(下図。統合ブランチへ取り込み)"]:::work
     IN --> integration{"統合ゲート"}:::gate
-    integration -->|OK| HM["人間: 親 PR をマージし close"]:::human
+    integration -->|OK| PR["出荷前レビュー(subagent が自動実行)<br/>承認コメント投稿 → 親 PR を ready 化"]:::work
+    PR --> HM["人間: 親 PR をマージし close"]:::human
 
     T["人間: triage で issue を直す"]:::human
     intake -.->|差し戻し| T
@@ -77,24 +78,27 @@ flowchart TD
     integration -.->|孤児要件| T
 ```
 
-各子 issue の内側は、着手ゲートから ready PR までを次の順に通る。
-形式(形式ゲート)と成果(成果ゲート)の差し戻しは worker に戻り、着手(着手ゲート)の差し戻しだけが人間に返る。
+各子 issue の内側は、着手ゲートから統合ブランチへの取り込みまでを次の順に通る。
+形式(形式ゲート)と成果(成果ゲート)の差し戻しは worker に戻る。
+着手(着手ゲート)の差し戻しは、ループが起票した子なら decomposer が直し、人間が書いた子だけが人間に返る。
 
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件がゲートを通る流れ
-    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合を経て成果ゲートに至り、子 PR が統合ブランチへ取り込まれる。形式ゲートと成果ゲートの差し戻しは worker に戻り、着手ゲートの差し戻しは人間に戻る。
+    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合、成果ゲート、CI の全緑を経て、orchestrator が子 PR を ready 化して統合ブランチへ取り込む。形式、成果、CI の差し戻しは worker に戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
 
-    start{"着手ゲート"}:::gate -->|OK| W["worker が実装"]:::work
-    W --> checks{"形式ゲート"}:::gate
+    start{"着手ゲート"}:::gate -->|OK| W["worker が実装(draft 子 PR)"]:::work
+    W --> checks{"形式ゲート(手元)"}:::gate
     checks -->|OK| V["verifier が基準照合"]:::work
     V --> outcome{"成果ゲート"}:::gate
-    outcome -->|OK| R["draft PR を ready 化"]:::work
+    outcome -->|OK| CI{"CI 全緑(出荷ゲート)"}:::gate
+    CI -->|OK| R["orchestrator が ready 化し<br/>統合ブランチへ取り込み(子 issue close)"]:::work
     checks -.->|NG| W
     outcome -.->|NG| W
+    CI -.->|NG| W
     start -.->|差し戻し| T["人間へ"]:::human
 ```
 
@@ -123,13 +127,13 @@ claude --plugin-dir /path/to/tasuki
 2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない。書き方に自信が無ければ `/tasuki:draft` に1文で要望を伝えると、リポジトリの裏取りと質問で下書きを作り、受理ゲートと同じ基準で事前審査してから起票する(粒度が書き手のスキルに依存しない)
 3. `/tasuki:loop <親 issue 番号>` を実行する。ループがまず issue をレビューする。受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
 4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
-5. **人間が見るのは親 PR だけ**。全子の成果は統合ブランチにまとまり、統合ゲートと出荷前レビューを経て親 PR が ready になる。それをマージすれば全子 issue が閉じる(子 PR は参照用に残る)
+5. **人間が見るのは親 PR だけ**。全子の成果は統合ブランチにまとまり、統合ゲートの後、承認材料のコメントとともに親 PR が ready になり、出荷前レビュー(5観点)も subagent が自動で走る。読んでマージすれば全子 issue が閉じる(子 PR は参照用に残る)
 
 レビューは loop の中で gate が行い、ダメなときだけ triage であなたに返る。
 issue を書く前に別途レビューさせる工程は要らない。
 
 走行中の変化には2つの経路がある。
-**要件を変えたくなったら**、親 issue 本文を編集して `loop:replan` ラベルを付ける(実行中の作業を走り切らせてから、ゲートを通して計画を作り直す。編集だけでは反映されない)。
+**要件を変えたくなったら**、親 issue 本文を編集して `loop:replan` ラベルを付ける(実行中の作業を走り切らせてから、ゲートを通して計画を作り直す。編集だけでは反映されない)。取り込み済みの成果は巻き戻さず、変更は未着手の子の改訂と撤回、追加の子で適応する。
 **hotfix はそのまま default branch へマージしてよい**(ループがレイヤーの区切りで統合ブランチへ取り込み、親 PR の承認前には必ず最新の default branch を含めた状態にする)。
 
 補足(任意だが推奨):ゲートのレビュアーは契約の「待ち位置」という自然言語で判定するため、最初は人間の感覚とズレる。
@@ -160,7 +164,7 @@ tasuki はローカルに状態ファイルを持たない。
 tasuki は次の4つで止める。
 
 - **反復予算**:ゲートごとの差し戻し回数(`max_iterations_per_gate`)と、実装の反復回数(子 issue の `予算(max_iterations)`)に上限がある。超えたら人間へ渡す
-- **WIP 上限**:未マージの ready PR が `wip_limit_prs` に達したら新しい実装を始めない。ボトルネックは人間のレビュー帯域だと明示する
+- **WIP 上限**:人間のマージ待ちの親 PR が `wip_limit_prs` に達したら新しい実装を始めない。ボトルネックは人間のレビュー帯域だと明示する
 - **fail-closed**:CI の結果が1件も無い、あるいは job が実行されなかった場合は「成功」とみなさない。検査を通っていない実装は出荷判定に進めない
 - **マージは常に人間**:default branch への反映は、統合ブランチをまとめた親 PR の人間マージの1回だけ。子 PR はループが統合ブランチへ取り込む(人間は必要なときだけ開く)
 
@@ -176,7 +180,7 @@ tasuki は次の4つで止める。
 ```mermaid
 gitGraph
     accTitle: ブランチの流れ
-    accDescr: 子 PR は統合ブランチへ合流し、ループが取り込む。main に入る経路は親 PR の人間マージただ1つである。
+    accDescr: 子 PR は統合ブランチへ合流し、ループが取り込む。ループ外の hotfix はレイヤーの区切りで main から統合ブランチへ取り込まれる。main に入る経路は親 PR の人間マージただ1つである。
     commit id: "main"
     branch loop/parent-1
     commit id: "統合ブランチ開始"
@@ -192,6 +196,10 @@ gitGraph
     checkout loop/parent-1
     merge child-3 id: "取り込み(並行)"
     merge child-4 id: "取り込み(並行) "
+    checkout main
+    commit id: "hotfix(ループ外)"
+    checkout loop/parent-1
+    merge main id: "定点: main を取り込む"
     checkout main
     merge loop/parent-1 id: "親PR: 人間がマージ" type: HIGHLIGHT
 ```
@@ -233,6 +241,7 @@ worker が検査設定やテストを書き換えていれば、それ自体が�
 | decomposer | 親 issue を子へ分割 | Sonnet |
 | worker | **実装を書く**。worktree 分離 | Sonnet |
 | verifier | 成功基準と打ち切り条件の照合 | Sonnet |
+| 出荷前レビュー | 親 PR の5観点レビュー(subagent、規模は契約の preship_review) | Sonnet |
 
 **誤って通す(誤 PASS)ほうが、誤って差し戻す(誤 REJECT)より高くつく。**
 誤 PASS はそのゲートより下流の作業をすべて無駄にするが、誤 REJECT は前工程を1回やり直すだけで済み、反復上限で有界である。

@@ -2,6 +2,7 @@
 
 tasuki の設計文書一式。
 実装の正はこの docs であり、コードと食い違いを見つけたら docs を直してから実装する。
+ただし開発規約(コード規約とドキュメント規約)だけは [.claude/rules/](../.claude/rules/) が正である。
 
 ## 読む順序
 
@@ -28,3 +29,4 @@ tasuki の設計文書一式。
 - ゲートのモデルとエスカレーション → DESIGN
 - 契約 YAML の書き方 → CONTRACTS
 - 実装をどこから始めるか → ROADMAP
+- 出荷前レビュー(自動実行と規模制御) → OPERATIONS と CONTRACTS の preship_review
