@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh search:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git branch:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git branch:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
 ---
 
 # /tasuki:loop

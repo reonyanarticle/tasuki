@@ -24,7 +24,7 @@ phases:
     receives:
       from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
-      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない"]
+      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な価値の同居)"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
     hands_off:
       to: implementation
@@ -33,7 +33,7 @@ phases:
       from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
       too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない"]
-      too_concrete_signals: ["特定ライブラリ・実装方式の指定"]
+      too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
     hands_off:
       to: report
       exit_criteria_required: true

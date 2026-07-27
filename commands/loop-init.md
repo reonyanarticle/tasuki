@@ -253,8 +253,9 @@ jobs:
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 
-最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
+最後に、運用開始前の必須手順として初期 fixture 5件の用意を案内する(上の自動下書きを使ってよいが、採用の判断は人間。手順は `tasuki:baton-contract` skill。置き場所は `.tasuki/fixtures/`)。
 
 ## 完了報告
 
-生成、変更したファイルの一覧と、未完了の手動作業(secret 設定、branch protection、fixture 手書き、spawn depth 設定)を分けて報告する。
+生成、変更したファイルの一覧と、未完了の手動作業(**生成物のコミットと push**、secret 設定、branch protection、fixture の採用、spawn depth 設定)を分けて報告する。
+このコマンドはリポジトリの履歴に書き込まない(コミットは人間が内容を見てから行う。許可にも git commit を含めていない)。

@@ -651,6 +651,24 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
     assert "author_association" in draft  # 代理起票が opt-in を素通りする件の明示
 
 
+def test_contracts_sample_matches_profiles() -> None:
+    """CONTRACTS.md の契約サンプルが実プロファイルの判定シグナルからずれないこと。
+
+    サンプルは正典を名乗るため、profiles/ の変更(承認サイズ、但し書き)を写し損ねると
+    導入先が古いスキーマを正として上書きしてしまう。
+    """
+    sample = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "完了の定義が1回のレビューで判断できる範囲を超えている" in sample
+    assert "要件でありここに含めない" in sample
+
+
+def test_loop_init_does_not_commit() -> None:
+    """loop-init は履歴に書き込まない(コミットは人間)ことが明記され、許可とも一致すること。"""
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "コミットは人間が内容を見てから行う" in init
+    assert "git commit" not in init.split("---")[1]  # 許可に無い
+
+
 def test_code_review_round2_fixes() -> None:
     """2周目のレビュー所見(クラッシュ孤児、生存確認の権限、フォールバック等)の修正が残っていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
