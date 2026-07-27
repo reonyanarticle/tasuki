@@ -105,38 +105,105 @@ gate-reviewer が maker の作業コンテキストを共有しない点は要�
 ## Lead-Worker 型の実行構造
 
 orchestrator が依存グラフからレイヤーを作り、レイヤー内は worker 並列、レイヤー間は直列で実行する。
-レイヤー完了ごとに default branch を更新してから次レイヤーへ進む。
+レイヤー内の子 issue は並行処理し、ゲート判定と issue への書き込みは orchestrator が直列で行う(観点 #20)。
 依存の循環はエラーとして検出し、報告して停止する。
+
+次レイヤーへの前進は、前レイヤーの全子が**統合ブランチ**へ取り込まれてからとする。
+合流点は統合ブランチの更新であり、人間のマージを待たない。
+**人間がマージするのは親 PR(統合ブランチ → default branch)の1回だけ**であり、default branch への反映は常に人間の手を経る。
+合流点(§3a)は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
+deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
 
 ```mermaid
 flowchart TD
     accTitle: レイヤー実行の構造
-    accDescr: 同じレイヤーの子 issue は並行して実装され、それぞれ ready PR になる。そのレイヤーの PR をすべて人間がマージして default branch が更新されてから、次のレイヤーの子 issue に着手する。
+    accDescr: 同じレイヤーの子 issue は並行して実装され、ゲートを通った子 PR をループが統合ブランチへ取り込む。全子の取り込みが合流点で、そこで再計画の発効と default branch の取り込みを行ってから次レイヤーに着手する。人間のマージは最後の親 PR の1回だけ。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
     classDef pending fill:#6e7781,stroke:#57606a,color:#fff
 
     subgraph L1["レイヤー1(並行に実装)"]
-        A["#11 worker → ready PR"]:::work
-        B["#12 worker → ready PR"]:::work
+        A["#11 worker → 子 PR"]:::work
+        B["#12 worker → 子 PR"]:::work
     end
-    A --> M["人間: レイヤー1の PR を全マージ"]:::human
+    A --> M["ループが統合ブランチへ取り込み<br/>(CI 全緑 → ready 化 → merge)"]:::work
     B --> M
-    M --> D["default branch を更新"]:::work
-    D --> C
+    M --> J["合流点: replan 発効 / default branch の定点取り込み"]:::work
+    J --> C
     subgraph L2["レイヤー2(#11 と #12 に依存)"]
-        C["#13 worker → ready PR"]:::pending
+        C["#13 worker → 子 PR"]:::pending
     end
+    C --> FIN["統合ゲート → 出荷前レビュー(subagent)→ 親 PR ready 化"]:::work
+    FIN --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human
 ```
 
-レイヤー間の合流点が人間のマージであることが、この構造の要である。
-自動でマージしないため、前レイヤーの成果を人間が見ないまま次レイヤーが積み上がることがない。
+## ループ詳細フロー
 
-deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
-フェーズ3でレイヤー並列を有効化した。レイヤー内の子 issue は並行処理し、ゲート判定と issue への書き込みは orchestrator が直列で行う(観点 #20)。
-次レイヤーへの前進は、前レイヤーの全子が**統合ブランチ**へ取り込まれてからとする(合流点は統合ブランチの更新であり、人間のマージを待たない)。
-子 PR は統合ブランチに向き、ゲート通過後にループが取り込む。
-**人間がマージするのは親 PR(統合ブランチ → default branch)の1回だけ**であり、default branch への反映は常に人間の手を経る。
+`/tasuki:loop` の1 run が通る経路の全体である(手順の正は [commands/loop.md](../commands/loop.md)。この図は§番号への地図)。
+
+```mermaid
+flowchart TD
+    accTitle: ループ詳細フロー
+    accDescr: 起動から人間のマージまでの全経路。前提チェックと受理ゲート、分割と起票、統合ブランチと親 PR の準備、レイヤーごとの着手ゲートから取り込みまでの内側ループ、合流点での再計画と定点取り込み、統合ゲート、出荷前レビュー、承認コメント、人間のマージ。差し戻しは点線で示す。
+    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    classDef gate fill:#8250df,stroke:#6639ba,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+    classDef stop fill:#cf222e,stroke:#a40e26,color:#fff
+
+    S0["§0 前提と状態復元<br/>信頼チェック / 門前払い / 要件変更検知 / WIP"]:::work --> G0{"受理ゲート<br/>opus"}:::gate
+    G0 -->|PASS| S1a["§1a decomposer が分割案<br/>(既存子があれば突合)"]:::work
+    G0 -.->|差し戻し| TRI["loop:triage(人間の裁定待ち)"]:::stop
+    S1a --> G1{"分割ゲート<br/>opus(集合判定)"}:::gate
+    G1 -->|PASS| S1b["§1b 起票(1子1ファイル)<br/>依存設定 / tasuki:child"]:::work
+    G1 -.->|差し戻し| S1a
+    S1b --> S1c["§1c 統合ブランチ loop/parent-N<br/>空コミット + draft 親 PR(Closes 列挙)"]:::work
+    S1c --> LOOP
+
+    subgraph LOOP ["§2 現在レイヤーの各子(並行)"]
+        G2{"着手ゲート<br/>haiku → sonnet"}:::gate -->|PASS| W["§2c worker(sonnet、worktree)<br/>方針コメント → 実装 → draft 子 PR"]:::work
+        W --> CL["§2d checks-local<br/>一時 worktree で lint / format / typecheck / test<br/>+ テスト改変とガバナンス検知"]:::work
+        CL -->|緑| V["§2e verifier(sonnet)<br/>再実行で SC 照合 + drift 検査"]:::work
+        CL -.->|赤| W
+        V -->|met| G3{"成果ゲート<br/>sonnet → opus"}:::gate
+        V -.->|continue / abort| W
+        G3 -->|PASS| CI["§2g checks-ci(fail-closed)"]:::work
+        G3 -.->|書き方| RPT["レポートのみ再出力"]:::work
+        RPT -.-> G3
+        CI -->|全緑| MG["ready 化 → 統合ブランチへマージ<br/>子 issue を close"]:::work
+        CI -.->|失敗| W
+    end
+
+    MG --> S3a["§3a 合流点<br/>replan 発効(§1d) / 定点1: default branch 取り込み"]:::work
+    S3a -->|次レイヤーあり| LOOP
+    S3a -->|全レイヤー完了| G4{"統合ゲート<br/>opus(親要件⇔子成果)"}:::gate
+    G4 -->|PASS| S3c["§3c 定点2: merge-base 一致<br/>出荷前レビュー(subagent、preship_review で規模制御)"]:::work
+    G4 -.->|孤児要件| TRI
+    S3c --> AP["承認コメント投稿 → 親 PR ready 化"]:::work
+    AP --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human
+```
+
+## 子 issue の状態遷移
+
+状態はすべて GitHub のラベルと open / closed で表現される(ローカル状態なし)。
+
+```mermaid
+stateDiagram-v2
+    accTitle: 子 issue の状態遷移
+    accDescr: 起票から取り込みまでの子 issue の状態。着手ゲートを通ると実装中になり、差し戻しは worker へ、裁定が要るものは triage で停止する。統合ブランチへの取り込みで close される。replan は未取り込みの子だけを改訂または撤回できる。
+
+    [*] --> Filed: 起票(tasuki:child)
+    Filed --> Started: 着手ゲート PASS(gate:start-passed)
+    Filed --> Returned: 差し戻し(gate:start-returned)
+    Returned --> Filed: 本文修正(decomposer または起票者)
+    Started --> InProgress: worker 委譲(loop:in-progress + assignee)
+    InProgress --> InProgress: checks-local / verifier / 成果ゲートの反復
+    InProgress --> Merged: CI 全緑 → 統合ブランチへ取り込み(close)
+    InProgress --> Triage: 予算超過 / abort(loop:triage)
+    Triage --> Filed: 人間がラベルを外す
+    Filed --> Retired: replan で撤回(close + 撤回コメント)
+    Merged --> [*]
+    Retired --> [*]
+```
 
 ## レイヤードレート構造(モデル選択)
 

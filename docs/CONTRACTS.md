@@ -55,7 +55,7 @@ phases:
 templates:                        # issue テンプレの必須欄(着手ゲートの門前払いの機械チェック対象)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
-  report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク]
+  report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク, 参照した skill と委譲した subagent]
   pr_required_fields: [概要, 対応する親要件, 受け入れ条件の充足, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
 
 gates:
@@ -180,7 +180,7 @@ providers:
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
 | 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) |
-| レポート | 要件 ID ⇔結果の対応表 / 結論 / 再現手順(コマンドと環境) / 生データへのリンク |
+| レポート | 要件 ID ⇔結果の対応表 / 結論 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 
 必須欄の空チェックが着手ゲートの門前払いに直結する。
