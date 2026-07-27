@@ -663,7 +663,8 @@ def test_code_review_round2_fixes() -> None:
     draft = (ROOT / "commands/draft.md").read_text()
     assert "Bash(git fetch:*)" in draft.split("---")[1]
     assert "origin/<default branch>" in draft  # 追跡ブランチの古さを踏まない
-    assert "head ブランチが `loop/parent-` で始まる" in (ROOT / "commands/loop-status.md").read_text()
+    status_md = (ROOT / "commands/loop-status.md").read_text()
+    assert "head ブランチが `loop/parent-` で始まる" in status_md
 
 
 def test_undone_items_have_issue_drafts() -> None:
