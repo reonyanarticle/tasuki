@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh auth refresh:*), Bash(gh label:*), Bash(gh secret set:*), Bash(gh repo view:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh auth refresh:*), Bash(gh label:*), Bash(gh secret set:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -257,5 +257,7 @@ jobs:
 
 ## 完了報告
 
-生成、変更したファイルの一覧と、未完了の手動作業(**生成物のコミットと push**、secret 設定、branch protection、fixture の採用、spawn depth 設定)を分けて報告する。
-このコマンドはリポジトリの履歴に書き込まない(コミットは人間が内容を見てから行う。許可にも git commit を含めていない)。
+**生成物はブートストラップ用ブランチ(`tasuki/init`)にコミットして push し、default branch への PR を1件開く。**
+default branch へ直接 push しない。
+生成物(契約、CI workflow、テンプレート)はガバナンスの制定であり、人間承認を経て default branch に入る。承認の形はループ本体と同型である(機械はコミットと push と PR 作成まで、反映は人間のマージだけ)。
+最後に、PR の URL と、未完了の手動作業(**ブートストラップ PR のレビューとマージ**、secret 設定、branch protection、fixture の採用、spawn depth 設定)を分けて報告する。

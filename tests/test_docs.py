@@ -662,11 +662,18 @@ def test_contracts_sample_matches_profiles() -> None:
     assert "要件でありここに含めない" in sample
 
 
-def test_loop_init_does_not_commit() -> None:
-    """loop-init は履歴に書き込まない(コミットは人間)ことが明記され、許可とも一致すること。"""
+def test_loop_init_ships_via_bootstrap_pr() -> None:
+    """loop-init の生成物は PR で入る(機械は PR 作成まで、default branch への反映は人間のマージ)。
+
+    手動コミットを人間に求める形は、関与を承認1回に純化する思想に反する(実際に一度誤設計した)。
+    """
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "コミットは人間が内容を見てから行う" in init
-    assert "git commit" not in init.split("---")[1]  # 許可に無い
+    assert "ブートストラップ用ブランチ(`tasuki/init`)にコミットして push し" in init
+    assert "default branch へ直接 push しない" in init
+    assert "反映は人間のマージだけ" in init
+    frontmatter = init.split("---")[1]
+    for grant in ("Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr create:*)"):
+        assert grant in frontmatter, grant
 
 
 def test_code_review_round2_fixes() -> None:
