@@ -616,6 +616,25 @@ def test_references_are_readable(path: Path) -> None:
     assert not offenders, offenders
 
 
+def test_commands_declare_data_boundary_and_least_privilege() -> None:
+    """未検証データを読むコマンドが、境界の宣言と最小権限を持つこと。
+
+    セキュリティスキャンの指摘: 読み取り専用は文章の宣言では担保されない(権限で表現する)。
+    引数が gh の呼び出しに入るコマンドは、値の検証を手順に持つ。
+    """
+    for name in ("loop-status", "draft"):
+        text = (ROOT / f"commands/{name}.md").read_text()
+        assert "data-boundary" in text, name  # 入力を未検証データとして扱う
+        assert "Bash(gh *)" not in text, name  # 書き込み系まで前承認する粗い許可を持たない
+    # 引数が gh の呼び出しに入る(番号を取る)コマンドは値を検証する。
+    # draft の引数は自由文で、本文ファイル経由でしか使われないため対象外。
+    assert "正の整数であることを確認" in (ROOT / "commands/loop-status.md").read_text()
+    draft = (ROOT / "commands/draft.md").read_text()
+    assert "Bash(git *)" not in draft  # 事実上の任意実行を持たない
+    assert "default branch(信頼された版)から** 読む" in draft  # 物差しは検めた版から
+    assert "author_association" in draft  # 代理起票が opt-in を素通りする件の明示
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
