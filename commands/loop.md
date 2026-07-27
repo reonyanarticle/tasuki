@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh search:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git branch:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh search:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git branch:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
 ---
 
 # /tasuki:loop
@@ -69,7 +69,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 6. **状態はラベルと issue コメントから復元する。** ローカルに状態ファイルを持たない。各子 issue の `gate:*` ラベルと既存 verdict コメントを読み、途中から再開する
 7. 二重起動の防止(観点「並行整合性」)：親 issue に自分の run 開始時刻より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す。**投稿の直後にもう一度確認し、自分のより新しい開始コメントが現れていたら後着に譲って run を終了する**(同時開始の両者が事前確認をすり抜ける競合の緩和。厳密な排他ではない)
 8. **要件変更の検知(機械チェック、LLM なし)**:親 issue に `gate:split-passed` が付いている場合、親の `lastEditedAt` を最新の分割ゲート PASS verdict コメントの時刻と比較する(§0.10 の受理ゲート再判定と同じ GraphQL 比較)。本文がそれより新しく編集されているのに `loop:replan` ラベルが無ければ、「本文の編集を検知したが、再計画は行っていない。反映するには `loop:replan` を付ける」と親に1度だけコメントする(同じ `lastEditedAt` に対して再投稿しない。冪等)。このコメントを投稿するとき、リポジトリに `loop:replan` ラベルが無ければ先に作る(人間が付けるラベルは、付けようとした時点に存在しなければならない。loop-init が古い導入先への後方互換)。編集へ黙って自動追従しない(誤字修正のたびに再分割が走るのを防ぎ、再計画の意思決定を人間の明示に置く)。`loop:replan` が付いている場合の処理は §1d による
-9. WIP 確認(観点「スループット管理」)：**ready(draft でない)の親 PR** が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す(人間の判断待ちは親 PR に集約されているため、数えるのも親 PR である。子 PR と draft は数えない)
+9. WIP 確認(観点「スループット管理」)：**ready(draft でない)の親 PR**(親 PR の判定基準は head ブランチが `loop/parent-` で始まること) が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す(人間の判断待ちは親 PR に集約されているため、数えるのも親 PR である。子 PR と draft は数えない)
 10. **受理ゲート**:契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
 
 ## 1. 分割と実行計画(分割ゲート、レイヤー構成)
@@ -155,7 +155,7 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 依存(blocked-by)が解決している子 issue から着手する。
 **`loop:triage` が付いた子には着手しない**(人間の裁定待ち。verifier の abort 等はラベルが `gate:*-returned` でないため下の再入分岐に当たらず、見落とすと裁定前の打ち切りを勝手に再実行してしまう)。人間がラベルを外した子は通常の再入対象に戻る。
 子 issue への割り当ては assignee 設定(`gh issue edit --add-assignee @me`)を CAS 的に扱う(設定済みなら他の実行が担当中とみなし触らない)。
-**assign と同時に「⏳ 着手(run 識別つき)」コメントを1件残す**(ループ由来の割り当てであることの印。これが人間の手動 assign との判別と、直後にクラッシュした場合の基準時刻を兼ねる)。
+**先に「⏳ 着手(run 識別つき)」コメントを1件残し、その直後に assign する**(この順序が要件である。逆順で assign とコメントの間に落ちると、ループ由来コメントの無い assignee が残り、下の規則で人間の手動割り当てと誤認されて永久にスキップされる。コメント先行なら、落ちても assignee が無いだけで次の run が普通に再入する。残った着手コメントは冪等規則で無害)。
 ループ由来コメントが1件も無い assignee は人間の手動割り当てとみなし、着手も回収もしない(担当中として扱い、人間が外すのを待つ)。
 ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、**基準時刻**から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
 基準時刻は「最後のループ由来コメント(着手、verdict、レポート、質問、回収コメント)の時刻」とする(assign と着手コメントは同時に行うため、ループの割り当てには必ず基準点がある)。
@@ -369,7 +369,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 2. **親 PR を ready 化する。** draft は「組み立て中」の印であり、統合ゲートを通った時点で組み立ては終わっている。人間に判断を求める PR が draft のままなのは誤った合図になる(レビューと差し戻しが出た場合は draft に戻して 2d へ)。
 
 **レビューは orchestrator が subagent で自動実行する**(人間の起動を待たない。人間の関与は結果を読んで親 PR をマージする1回に保つ)。
-これは動的なワークフローではなく固定のファンアウトであり、**規模は契約の `preship_review` で制御する**(レビュー subagent 1体あたりの消費は無視できないため、常時5体を固定しない)。
+これは動的なワークフローではなく固定のファンアウトであり、**規模は契約の `preship_review` で制御する**(このキーが無い旧契約では `mode: scaled`、`fanout_threshold_lines: 200` を既定として扱う)(レビュー subagent 1体あたりの消費は無視できないため、常時5体を固定しない)。
 
 - `mode: full` → 常に観点別5セッション
 - `mode: scaled`(既定) → 親 PR の diff 行数が `fanout_threshold_lines` 未満なら **1セッションに5観点を順に**回させる(小さい diff では観点の薄まりのリスクが低い)。以上なら観点別5セッションに分ける

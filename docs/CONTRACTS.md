@@ -10,8 +10,8 @@ profile: development
 budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
-  wip_limit_prs: 3                # 未レビュー PR の上限(#24)。超過で新規 worker 起動を停止
-  stale_assignment_minutes: 60    # 停止した実行が残した assignee の回収までの経過時間(#20)
+  wip_limit_prs: 3                # 人間のマージ待ちの ready 親 PR の上限(観点「スループット管理」)。超過で新規 worker 起動を停止
+  stale_assignment_minutes: 60    # 停止した実行が残した assignee の回収までの経過時間(観点「並行整合性」)
 
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。

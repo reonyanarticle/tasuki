@@ -123,15 +123,15 @@ flowchart TD
     classDef pending fill:#6e7781,stroke:#57606a,color:#fff
 
     subgraph L1["レイヤー1(並行に実装)"]
-        A["#11 worker → 子 PR"]:::work
-        B["#12 worker → 子 PR"]:::work
+        A["子A worker → 子 PR"]:::work
+        B["子B worker → 子 PR"]:::work
     end
     A --> M["ループが統合ブランチへ取り込み<br/>(CI 全緑 → ready 化 → merge)"]:::work
     B --> M
     M --> J["合流点: replan 発効 / default branch の定点取り込み"]:::work
     J --> C
-    subgraph L2["レイヤー2(#11 と #12 に依存)"]
-        C["#13 worker → 子 PR"]:::pending
+    subgraph L2["レイヤー2(子A と子B に依存)"]
+        C["子C worker → 子 PR"]:::pending
     end
     C --> FIN["統合ゲート → 出荷前レビュー(subagent)→ 親 PR ready 化"]:::work
     FIN --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human

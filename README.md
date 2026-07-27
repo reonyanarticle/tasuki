@@ -185,14 +185,14 @@ gitGraph
     branch loop/parent-1
     commit id: "統合ブランチ開始"
     branch child-2
-    commit id: "#2 基盤"
+    commit id: "子A 基盤"
     checkout loop/parent-1
     merge child-2 id: "ループが取り込む"
     branch child-3
-    commit id: "#3"
+    commit id: "子B"
     checkout loop/parent-1
     branch child-4
-    commit id: "#4"
+    commit id: "子C"
     checkout loop/parent-1
     merge child-3 id: "取り込み(並行)"
     merge child-4 id: "取り込み(並行) "

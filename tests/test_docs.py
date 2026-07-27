@@ -593,7 +593,7 @@ def test_worker_reports_used_skills_and_subagents() -> None:
     assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
 
 
-_KANTEN_BARE = re.compile(r"観点 #\d+")
+_KANTEN_BARE = re.compile(r"(?<![/\w])#\d+")
 _ISSUE_NUM_REF = re.compile(r"(?:PR|親|子|issue) #\d+")
 
 
@@ -607,7 +607,7 @@ def test_references_are_readable(path: Path) -> None:
     """
     offenders = []
     for i, line in _prose_lines(path):
-        if "番号だけの参照" in line:  # 規約文そのものが悪い例を引用する
+        if "番号だけの参照" in line or "#123 で修正" in line:  # 規約文そのものが悪い例を引用する
             continue
         if _KANTEN_BARE.search(line):
             offenders.append((i, "観点番号に名前が無い", line.strip()[:60]))
@@ -649,6 +649,21 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
     assert "Bash(git *)" not in draft  # 事実上の任意実行を持たない
     assert "default branch(信頼された版)から** 読む" in draft  # 物差しは検めた版から
     assert "author_association" in draft  # 代理起票が opt-in を素通りする件の明示
+
+
+def test_code_review_round2_fixes() -> None:
+    """2周目のレビュー所見(クラッシュ孤児、生存確認の権限、フォールバック等)の修正が残っていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "先に「⏳ 着手(run 識別つき)」コメントを1件残し、その直後に assign する" in loop
+    for grant in ("Bash(ps:*)", "Bash(tail:*)"):
+        assert grant in loop.split("---")[1], grant  # 長時間ジョブの生存確認に必要
+    assert "head ブランチが `loop/parent-` で始まる" in loop  # 親 PR の判定基準
+    assert "このキーが無い旧契約では `mode: scaled`" in loop  # preship_review のフォールバック
+    assert "Bash(gh --version)" in (ROOT / "commands/loop-init.md").read_text().split("---")[1]
+    draft = (ROOT / "commands/draft.md").read_text()
+    assert "Bash(git fetch:*)" in draft.split("---")[1]
+    assert "origin/<default branch>" in draft  # 追跡ブランチの古さを踏まない
+    assert "head ブランチが `loop/parent-` で始まる" in (ROOT / "commands/loop-status.md").read_text()
 
 
 def test_undone_items_have_issue_drafts() -> None:

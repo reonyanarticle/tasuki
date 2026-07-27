@@ -2,7 +2,7 @@
 description: 親 issue の対話式起票支援。生の要望から、リポジトリの裏取りと質問で親 issue の下書きを作り、受理ゲートと同じ契約で事前審査してから起票する
 argument-hint: "[やりたいことの1文(省略可)]"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh repo view:*), Bash(git show:*), Bash(git log:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh repo view:*), Bash(git fetch:*), Bash(git show:*), Bash(git log:*)
 ---
 
 # /tasuki:draft
@@ -13,7 +13,7 @@ allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), B
 
 ## 0. 契約の読み込み
 
-`.tasuki/profile.yaml` を **default branch(信頼された版)から** 読む(`git show <default branch>:.tasuki/profile.yaml`)。作業ツリーの写しを使わない(判定の物差しを、検めていない変更で置き換えられないようにする)。なければ `/tasuki:loop-init` を案内して中断する。
+`.tasuki/profile.yaml` を **default branch(信頼された版)から** 読む(`git fetch origin` してから `git show origin/<default branch>:.tasuki/profile.yaml`。ローカルの追跡ブランチは古いことがある)。作業ツリーの写しを使わない(判定の物差しを、検めていない変更で置き換えられないようにする)。なければ `/tasuki:loop-init` を案内して中断する。
 契約の `gates.intake.phase` が指すフェーズの `receives` 定義(waiting_level / too_abstract_signals / too_concrete_signals)と、`parent_issue_required_fields` を控える。
 以後の下書きと自己判定はこの2つだけを基準にする(このコマンド独自の基準を持たない。基準が2つあると、ここを通ったのにゲートで落ちる)。
 
