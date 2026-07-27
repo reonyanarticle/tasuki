@@ -117,6 +117,10 @@ gates:
 # checks-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
 enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 
+preship_review:                   # 出荷前レビュー(loop.md 3c)のコスト制御
+  mode: scaled                    # full = 常に観点別5セッション / scaled = diff 規模で自動選択 / manual = 人間が起動
+  fanout_threshold_lines: 200     # scaled のとき、観点別に分ける diff 行数の閾値
+
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
 question_routing:
