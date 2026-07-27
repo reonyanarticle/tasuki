@@ -406,7 +406,7 @@ def test_integration_branch_model() -> None:
     assert "loop/parent-<親番号>" in loop  # 統合ブランチ
     assert "人間が最終的に見るのはこの親 PR だけ" in loop
     assert "人間は子 PR をマージしない" in loop
-    assert "orchestrator が子 PR を統合ブランチへマージする" in loop
+    assert "orchestrator が子 PR を ready 化してから統合ブランチへマージする" in loop
     # 子 PR は Closes を使わない(統合ブランチ向けでは機能しない)
     worker = (ROOT / "agents/worker.md").read_text()
     assert "`Closes` は使わない" in worker
