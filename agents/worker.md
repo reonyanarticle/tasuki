@@ -42,7 +42,7 @@ worker への追加規定:Bash とネットワークは providers.yaml のコマ
 
    実装方針コメントとレポートへのリンクも本文に置く(判断材料が1クリックで辿れる状態にする)。
    **PR は統合ブランチ(`loop/parent-<親番号>`)に向ける。** 対応 issue は `Refs #<番号>` で書き、**`Closes` は使わない**(子 PR のマージ先は default branch ではないため `Closes` は機能せず、子 issue を閉じるのは人間による親 PR のマージである)
-6. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する
+6. **レポート**：Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する。**参照した skill と委譲した subagent の欄を必ず埋める**(読み込んだ skill 名と委譲先 agent 名を列挙。無ければ「なし」)
 7. **掃除**：一時ファイルを残さない(変更を加えた worktree は isolation の自動掃除対象外のため、ループ終了時に orchestrator が削除する)
 
 PR 作成の前に、同じ子 issue に対する既存 PR がないか確認する(冪等性、観点 #19)。

@@ -168,6 +168,7 @@ def _prose_lines(path: Path) -> list[tuple[int, str]]:
 _WRITING_TARGETS = [
     ROOT / "README.md",
     ROOT / "CLAUDE.md",
+    *sorted((ROOT / ".claude" / "rules").glob("*.md")),
     *sorted((ROOT / "docs").glob("*.md")),
     *sorted((ROOT / "commands").glob("*.md")),
     *sorted((ROOT / "agents").glob("*.md")),
@@ -219,7 +220,7 @@ def test_preship_review_phase_defined() -> None:
     assert "### 3c. 出荷前レビュー(親 PR、最終コード評価)" in loop
     assert "/code-review" in loop
     assert "/claude-security:claude-security" in loop
-    assert "1観点ずつ指定して5回に分ける" in loop  # 一度に回さない
+    assert "下表の5観点を1観点ずつ回す" in loop  # 一度に回さない(subagent で自動実行)
     for kanten in (
         "設計と統合",
         "正しさと境界条件",
@@ -545,6 +546,36 @@ def test_trace_review_findings_are_fixed() -> None:
     assert "手順のトレース" in claude_md
 
 
+def test_conventions_live_in_rules() -> None:
+    """コード規約とドキュメント規約は .claude/rules/ が正であること(CLAUDE.md に写しを残さない)。"""
+    assert (ROOT / ".claude/rules/code.md").exists()
+    docs_rule = (ROOT / ".claude/rules/docs.md").read_text()
+    assert "paths:" in docs_rule  # markdown 編集時に読み込まれる条件付きルール
+    assert "日付を書かない" in docs_rule
+    claude_md = (ROOT / "CLAUDE.md").read_text()
+    assert ".claude/rules/" in claude_md  # 置き場所の案内はある
+    assert "日付を書かない" not in claude_md  # 中身の写しは無い
+    assert "tasuki-` 接頭辞" not in claude_md
+
+
+def test_preship_review_runs_in_subagents() -> None:
+    """3c の5観点レビューは orchestrator が subagent で自動実行すること(人間の起動を待たない)。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "レビューは orchestrator が subagent で自動実行する" in loop
+    assert "観点ごとに独立のレビュー subagent" in loop
+    assert "これは人間が起動するコマンドである" not in loop
+    # セキュリティスキャンだけは人間案内のまま(別建て課金)
+    assert "実行を人間に案内する" in loop
+
+
+def test_worker_reports_used_skills_and_subagents() -> None:
+    """レポートに参照 skill と委譲 subagent の欄があること(成果の前提を辿れるようにする)。"""
+    report_skill = (ROOT / "skills/loop-report/SKILL.md").read_text()
+    assert "参照した skill と委譲した subagent" in report_skill
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
@@ -594,7 +625,8 @@ def test_parent_pr_is_designed_for_approval() -> None:
     assert "「選択と理由」から" in loop
     # ready 化は 3c 入場時(人間に draft を渡さない)
     assert "親 PR を ready 化する" in loop
-    assert loop.index("親 PR を ready 化する") < loop.index("これは人間が起動するコマンドである")
+    auto_review = "レビューは orchestrator が subagent で自動実行する"
+    assert loop.index("親 PR を ready 化する") < loop.index(auto_review)
 
 
 def test_parent_pr_body_is_staged_and_traceable() -> None:
