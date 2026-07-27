@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh *), Bash(git *)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh search:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git branch:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*)
 ---
 
 # /tasuki:loop
@@ -41,6 +41,11 @@ subagent は別の subagent を起動できないため、orchestrator はメイ
 **被判定物は、ゲート起動の直前に GitHub から取得し直し、reviewer のプロンプトへインラインで渡す。**
 reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_UNAVAILABLE の1往復を無駄にする)。
 中間ファイル(scratchpad 等)を参照させない。run の後半で揮発し、統合ゲートが古い写しで判定して confidence: low を生む事故が実地で起きた。
+
+**許可されていない操作が必要になったら、実行せずに中断して報告する。**
+この手順の許可は、実際に使う gh と git のサブコマンドに絞ってある(未検証の issue テキストが流れ込むセッションに、リポジトリ削除や secret 操作を前承認しないため)。
+言語 pack の検査コマンド(lint / format / typecheck / test)は導入先ごとに異なるためここに書けず、`/tasuki:loop-init` が許可の追加を提案する。
+なお、この絞り込みは事故と誤爆の面積を減らすものであり、注入への完全な防御ではない(v1 が信頼リポジトリ限定である理由は変わらない)。
 
 **フェーズ名をこの手順に書かない。** 各ゲートが検める受け渡し先は契約の `gates[].phase` が指す。フェーズの呼び名はプロファイルによって異なる(development は `implementation`、experiment は `execution`)ため、名前で直接引くと実験用のプロファイルで解決できなくなる。
 

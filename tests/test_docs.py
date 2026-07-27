@@ -629,6 +629,22 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
     # 引数が gh の呼び出しに入る(番号を取る)コマンドは値を検証する。
     # draft の引数は自由文で、本文ファイル経由でしか使われないため対象外。
     assert "正の整数であることを確認" in (ROOT / "commands/loop-status.md").read_text()
+    # 手順が使う操作は許可に含まれていること(絞り込みで機能を壊さない)
+    loop = (ROOT / "commands/loop.md").read_text()
+    for grant in (
+        "Bash(gh issue:*)",
+        "Bash(gh pr:*)",
+        "Bash(gh label:*)",
+        "Bash(git worktree:*)",
+        "Bash(git merge:*)",
+        "Bash(git push:*)",
+        "Write",
+    ):
+        assert grant in loop.split("---")[1], grant  # frontmatter に存在する
+    assert "許可されていない操作が必要になったら、実行せずに中断して報告する" in loop
+    for grant in ("Bash(gh issue create:*)", "Write"):
+        assert grant in (ROOT / "commands/draft.md").read_text().split("---")[1], grant
+
     draft = (ROOT / "commands/draft.md").read_text()
     assert "Bash(git *)" not in draft  # 事実上の任意実行を持たない
     assert "default branch(信頼された版)から** 読む" in draft  # 物差しは検めた版から

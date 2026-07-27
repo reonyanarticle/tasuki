@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh *), Bash(git *), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh auth status:*), Bash(gh auth refresh:*), Bash(gh label:*), Bash(gh secret set:*), Bash(gh repo view:*), Bash(gh api:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init

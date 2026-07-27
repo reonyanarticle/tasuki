@@ -2,7 +2,7 @@
 description: 親 issue の対話式起票支援。生の要望から、リポジトリの裏取りと質問で親 issue の下書きを作り、受理ゲートと同じ契約で事前審査してから起票する
 argument-hint: "[やりたいことの1文(省略可)]"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh repo view:*), Bash(git show:*), Bash(git log:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh repo view:*), Bash(git show:*), Bash(git log:*)
 ---
 
 # /tasuki:draft
@@ -59,7 +59,7 @@ allowed-tools: Agent, Skill, Read, Grep, Glob, Bash(gh issue create:*), Bash(gh 
 
 ## 6. 起票
 
-完成した下書きを提示し、**起票者の確認を得てから** `gh issue create` する(勝手に起票しない)。
+完成した下書きを提示し、**起票者の確認を得てから** `gh issue create --body-file` で起票する(本文はファイルに書き出してから渡す。複数行の本文を `--body` に直接流すと引用符とバッククォートで壊れる)。勝手に起票しない。
 **要望が起票者自身のものでない(第三者から受け取った)場合は、その旨を本文の背景に1行残す。** あなたの資格情報で起票すると `author_association` は OWNER や MEMBER になり、ループの外部起票チェック(`tasuki:accepted` の opt-in)を素通りする。由来を本文に残すことで、その判断を人間が後から検められる状態にする。
 参考メモ(実装方式への言及)があれば、起票直後に「参考メモ(要件ではない。分割と実装の判断材料)」として issue コメントに1件残す。
 `/tasuki:loop` は起動しない(起動は人間の明示による。次の一手として案内だけする)。
