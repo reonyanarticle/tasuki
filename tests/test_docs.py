@@ -519,6 +519,11 @@ def test_field_review_fixes_are_designed() -> None:
     assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
     # 直列親の依存(先行親の未マージ成果を worker が複製した実地事故の再発防止)
     assert "先行親の親 PR がマージされてから起動する" in loop
+    # 長時間ジョブと stale 回収の干渉(ログ更新時刻を生存確認に含める。二重起動の防止)
+    assert "ログの最終更新時刻と PID の生存も基準時刻の候補に含める" in loop
+    # 長時間ジョブの打ち切りは wall-clock 上限を必須とする(ハングと低速の区別)
+    dec2 = (ROOT / "agents/decomposer.md").read_text()
+    assert "wall-clock の上限" in dec2
 
 
 def test_undone_items_have_issue_drafts() -> None:
