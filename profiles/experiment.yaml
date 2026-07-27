@@ -154,6 +154,10 @@ enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-
 # checks-security はオプトイン。/tasuki:loop-init で security job を選択した場合に追加される
 # (anthropics/claude-code-security-review Action。CLAUDE_API_KEY による API 課金が別途発生)
 
+preship_review:                   # 3c 出荷前レビューのコスト制御
+  mode: scaled                    # full = 常に観点別5セッション / scaled = 規模で自動選択 / manual = 人間が起動
+  fanout_threshold_lines: 200     # scaled のとき、親 PR の diff がこの行数以上なら観点別に分ける
+
 model_selection: static
 
 question_routing:

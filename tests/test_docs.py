@@ -562,10 +562,19 @@ def test_preship_review_runs_in_subagents() -> None:
     """3c の5観点レビューは orchestrator が subagent で自動実行すること(人間の起動を待たない)。"""
     loop = (ROOT / "commands/loop.md").read_text()
     assert "レビューは orchestrator が subagent で自動実行する" in loop
-    assert "観点ごとに独立のレビュー subagent" in loop
     assert "これは人間が起動するコマンドである" not in loop
     # セキュリティスキャンだけは人間案内のまま(別建て課金)
     assert "実行を人間に案内する" in loop
+    # コスト制御: 固定5体ではなく契約の preship_review で規模を選ぶ
+    assert "`preship_review` で制御する" in loop
+    for mode in ("mode: full", "mode: scaled", "mode: manual"):
+        assert mode in loop, mode
+    import yaml
+
+    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+        c = yaml.safe_load((ROOT / prof).read_text())
+        assert c["preship_review"]["mode"] == "scaled", prof
+        assert c["preship_review"]["fanout_threshold_lines"] > 0, prof
 
 
 def test_worker_reports_used_skills_and_subagents() -> None:
