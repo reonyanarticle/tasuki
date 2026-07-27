@@ -651,6 +651,24 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
     assert "author_association" in draft  # 代理起票が opt-in を素通りする件の明示
 
 
+def test_security_reflects_implemented_hardening() -> None:
+    """SECURITY.md が v1 で実装済みの対策を v2 予約に残していないこと。
+
+    allowlist のサブコマンド絞り込みは v1 で実装した。予約側に残すと、
+    読者は未対応と誤読し、実装済みの対策を二重に作る。
+    """
+    sec = (ROOT / "docs/SECURITY.md").read_text()
+    assert "コマンドの allowlist はサブコマンド単位に絞る" in sec  # 守る範囲に移っている
+    assert "注入への完全な防御ではない" in sec  # 効果の限界も併記
+    # 予約側には「残余の遮断」だけが残る
+    reserved = sec.split("## v2 のハードニング")[1]
+    assert "allowlist の残余の遮断" in reserved
+    assert "サブコマンド単位に絞るか hook" not in reserved  # 旧文(未実装扱い)が消えている
+    # 実装の現物と一致していること
+    loop_front = (ROOT / "commands/loop.md").read_text().split("---")[1]
+    assert "Bash(git *)" not in loop_front and "Bash(gh *)" not in loop_front
+
+
 def test_contracts_sample_matches_profiles() -> None:
     """CONTRACTS.md の契約サンプルが実プロファイルの判定シグナルからずれないこと。
 
