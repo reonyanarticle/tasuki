@@ -1,8 +1,8 @@
 # tasuki ドキュメント
 
 tasuki の設計文書一式。
-実装の正はこの docs であり、コードと食い違いを見つけたら docs を直してから実装する。
-ただし開発規約(コード規約とドキュメント規約)だけは [.claude/rules/](../.claude/rules/) が正である。
+設計の正はこの docs であり、コードと食い違いを見つけたら docs を直してから実装する。
+ただし**ループの手順そのものの正は [commands/loop.md](../commands/loop.md)** であり(docs は手順を説明する側)、開発規約の正は [.claude/rules/](../.claude/rules/) である。
 
 ## 読む順序
 

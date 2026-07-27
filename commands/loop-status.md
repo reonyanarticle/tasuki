@@ -2,7 +2,7 @@
 description: tasuki ループの進行状況、triage inbox(人間の裁定待ち)、メトリクスを表示する。読み取り専用
 argument-hint: "[親 issue 番号]"
 disable-model-invocation: true
-allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh api:*), Bash(gh search:*)
+allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh api:*)
 ---
 
 # /tasuki:loop-status

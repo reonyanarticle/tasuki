@@ -46,6 +46,7 @@ tasuki/
 │   ├── worker.md                 # isolation: worktree
 │   └── verifier.md
 ├── commands/
+│   ├── draft.md                  # 親 issue の対話式起票支援
 │   ├── loop-init.md              # ブートストラップ
 │   ├── loop.md                   # ループ起動(親 issue 指定)。実行セッション= orchestrator
 │   └── loop-status.md            # 進行状況・メトリクス表示
@@ -176,9 +177,9 @@ flowchart TD
     MG --> S3a["§3a 合流点<br/>replan 発効(§1d) / 定点1: default branch 取り込み"]:::work
     S3a -->|次レイヤーあり| LOOP
     S3a -->|全レイヤー完了| G4{"統合ゲート<br/>opus(親要件⇔子成果)"}:::gate
-    G4 -->|PASS| S3c["§3c 定点2: merge-base 一致<br/>出荷前レビュー(subagent、preship_review で規模制御)"]:::work
+    G4 -->|PASS| S3c["§3c-1 定点2: merge-base 一致<br/>出荷前レビュー(subagent、preship_review で規模制御)"]:::work
     G4 -.->|孤児要件| TRI
-    S3c --> AP["承認コメント投稿 → 親 PR ready 化"]:::work
+    S3c --> AP["§3c-2 承認コメント投稿 → 親 PR ready 化"]:::work
     AP --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human
 ```
 

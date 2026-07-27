@@ -658,7 +658,8 @@ def test_security_reflects_implemented_hardening() -> None:
     読者は未対応と誤読し、実装済みの対策を二重に作る。
     """
     sec = (ROOT / "docs/SECURITY.md").read_text()
-    assert "コマンドの allowlist はサブコマンド単位に絞る" in sec  # 守る範囲に移っている
+    # 守る範囲(実装済み)に移っていること
+    assert "手順が実際に使う操作だけを列挙する" in sec
     assert "注入への完全な防御ではない" in sec  # 効果の限界も併記
     # 予約側には「残余の遮断」だけが残る
     reserved = sec.split("## v2 のハードニング")[1]
@@ -759,8 +760,11 @@ def test_parent_pr_is_designed_for_approval() -> None:
     assert "「選択と理由」から" in loop
     # ready 化は 3c 入場時(人間に draft を渡さない)
     assert "親 PR を ready 化する" in loop
+    # 順序: 機械のレビュー → 承認材料の投稿 → ready 化(先に承認を出すと差し戻しで撤回になる)
     auto_review = "レビューは orchestrator が subagent で自動実行する"
-    assert loop.index("親 PR を ready 化する") < loop.index(auto_review)
+    assert loop.index(auto_review) < loop.index("親 PR を ready 化する")
+    rev_sec = "### 3c-1. レビューの実行"
+    assert loop.index(rev_sec) < loop.index("### 3c-2. 承認材料の投稿と ready 化")
 
 
 def test_parent_pr_body_is_staged_and_traceable() -> None:
@@ -773,7 +777,7 @@ def test_parent_pr_body_is_staged_and_traceable() -> None:
     assert "前半(作成時から置く): 大観" in loop
     # 承認材料は本文の編集ではなく新規コメント(タイムラインの最後に現れる)
     assert "「新規コメント」として投稿する" in loop
-    assert "check-runs 全緑を確認してから" in loop
+    assert "レビューが所見なし、または所見の修正を取り込み終えてから" in loop
     assert "どの子(#N)で決めたか" in loop
     assert "どこで検められたか" in loop
     assert "どの子の作業で見つかったかを添える" in loop

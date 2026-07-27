@@ -2,7 +2,7 @@
 description: 親 issue の対話式起票支援。生の要望から、リポジトリの裏取りと質問で親 issue の下書きを作り、受理ゲートと同じ契約で事前審査してから起票する
 argument-hint: "[やりたいことの1文(省略可)]"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh repo view:*), Bash(git fetch:*), Bash(git show:*), Bash(git log:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue create:*), Bash(gh issue comment:*), Bash(gh issue view:*), Bash(gh repo view:*), Bash(git fetch:*), Bash(git show:*), Bash(git log:*)
 ---
 
 # /tasuki:draft

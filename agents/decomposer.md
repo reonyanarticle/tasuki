@@ -1,6 +1,6 @@
 ---
 name: tasuki-decomposer
-description: tasuki の decomposer。親 issue を、単独マージ可能な子 issue 群への分割案にする。分割ゲートの被検査者。フェーズ3で有効化。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
+description: tasuki の decomposer。親 issue を、単独マージ可能な子 issue 群への分割案にする。分割ゲートの被検査者。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 tools: Read, Grep, Glob
 ---
