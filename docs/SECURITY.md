@@ -22,7 +22,7 @@ GitHub 上のラベル、コメント、レポートには作者の認証が無�
 
 - workflow 既定は無権限とし、job ごとに最小権限を付与する。PR のコードを実行する job には write 権限と secrets を渡さない
 - checkout は `persist-credentials: false` とし、GITHUB_TOKEN を PR コードから読めないようにする
-- secrets は CI 環境にのみ置く(観点 #15)。security job は SHA 固定の Action で、生成時に SHA が解決できなければ workflow を出力しない
+- secrets は CI 環境にのみ置く(観点 #15(実行環境の隔離と権限最小化))。security job は SHA 固定の Action で、生成時に SHA が解決できなければ workflow を出力しない
 - 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、リポジトリ直下と全階層の `conftest.py`)を対象にする。git の pathspec は `**/conftest.py` では直下の `conftest.py` にマッチしないため、直下を明示するか `:(glob)` を付ける(この取りこぼしは実際に発生していた)
 - これらの不変条件は `tests/test_ci_template.py` で固定している
 

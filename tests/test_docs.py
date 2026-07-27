@@ -585,6 +585,31 @@ def test_worker_reports_used_skills_and_subagents() -> None:
     assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
 
 
+_KANTEN_BARE = re.compile(r"観点 #\d+(?![\d(])")
+_ISSUE_NUM_REF = re.compile(r"(?:PR|親|子|issue) #\d+")
+
+
+@pytest.mark.parametrize("path", _WRITING_TARGETS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_references_are_readable(path: Path) -> None:
+    """番号だけの参照を書かない(ドキュメント規約)。
+
+    「観点 #N」には名前を併記する(カタログを開かないと文意が取れないため)。
+    PR / issue 番号は本文の根拠にしない(読者がその番号を解決できる保証が無い)。
+    カタログ本体(GATES.md)の表と、ブランチ名 loop/parent-N は対象外。
+    """
+    if path.name == "GATES.md":
+        return
+    offenders = []
+    for i, line in _prose_lines(path):
+        if "番号だけの参照" in line:  # 規約文そのものが悪い例を引用する
+            continue
+        if _KANTEN_BARE.search(line):
+            offenders.append((i, "観点番号に名前が無い", line.strip()[:60]))
+        if _ISSUE_NUM_REF.search(line) and "loop/parent" not in line:
+            offenders.append((i, "PR / issue 番号の参照", line.strip()[:60]))
+    assert not offenders, offenders
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
