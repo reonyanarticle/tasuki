@@ -526,6 +526,25 @@ def test_field_review_fixes_are_designed() -> None:
     assert "wall-clock の上限" in dec2
 
 
+def test_trace_review_findings_are_fixed() -> None:
+    """第6観点「手順のトレース」の試走が検出した8欠陥の修正が残っていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "子 issue 本文と統合ブランチ名" in loop  # worker への受け渡し
+    assert "`loop:triage` が付いた子には着手しない" in loop  # 裁定前の再実行防止
+    assert "レビュー結果は親 PR のコメントに残す" in loop  # 3c の run またぎ
+    assert "マージが conflict で拒否された場合" in loop  # 子 PR の conflict 分岐
+    assert "着手も回収もしない" in loop  # 人間の手動 assign との判別
+    assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
+    assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
+    assert "解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR" in loop  # 取り込み後の赤
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "--base <統合ブランチ>" in worker
+    assert "統合ブランチとは限らない" in worker  # worktree base の明示
+    # 観点自体が関門に定義されていること
+    claude_md = (ROOT / "CLAUDE.md").read_text()
+    assert "手順のトレース" in claude_md
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
