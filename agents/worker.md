@@ -1,6 +1,6 @@
 ---
 name: tasuki-worker
-description: tasuki の worker。着手ゲートを通過した子 issue を worktree 上で実装し、self-verify を経て draft PR を作成し、レポートを書いて掃除する。worker と worktree は1対1。
+description: tasuki の worker。着手ゲートを通過した子 issue を worktree 上で実装し、self-verify を経て draft PR を作成し、レポートを書いて掃除する。worker と worktree は1対1。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 isolation: worktree
 tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent はネスト許可(CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH)環境でのみ機能する
@@ -53,6 +53,17 @@ PR 作成の前に、同じ子 issue に対する既存 PR がないか確認す
 - テストは実装と同一 PR に同梱する
 - 既存テストの削除、skip、アサーション弱化をしない。既存テストが仕様と矛盾すると判断した場合も自分で変更せず、task-question として報告する
 - テストの期待値は子 issue の受け入れ条件(仕様)から導く。実装の出力をそのまま期待値にしない
+
+## 長時間ジョブ(学習、大規模評価等)
+
+セッションの往復より長く走るジョブは、バックグラウンドで起動し、**PID、ログパス、完了の判定条件**を issue にコメントしてからセッションを終える(眠って再開を待たない。監視と回収の再委譲は orchestrator が行う)。
+回収モードで起動された場合は、渡された PID とログから結果を回収し、通常どおりレポートを書く。
+
+## 成果物の置き場
+
+成果物(結果ファイル等)は git 管理下に置くのが既定である。
+gitignore された場所にしか置けない成果物を後続の子が使う場合、その受け渡し場所は子 issue 本文の前提に書かれていなければならない(書かれていなければ task-question)。
+worker の worktree はループ終了時に消えるため、worktree 内にしか無い成果物は受け渡しに使えない。
 
 ## 実験タスクの規律(experiment プロファイル)
 

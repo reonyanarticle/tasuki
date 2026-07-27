@@ -496,6 +496,29 @@ def test_draft_command_is_designed() -> None:
     assert "/tasuki:draft" in (ROOT / "README.md").read_text()
 
 
+def test_field_review_fixes_are_designed() -> None:
+    """実運用レビューで確定した修正が手順と agent 定義に反映されていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "インラインで渡す" in loop  # 被判定物の直前取得(揮発ファイル禁止)
+    assert "ready 化してから統合ブランチへマージする" in loop  # 2g の draft 対応
+    assert "空コミットを1つ置いてから" in loop  # 親 PR 作成の前提
+    assert "長時間ジョブの公式プロトコル" in loop
+    assert "shell のワンライナーで行わない" in loop  # 起票の1ズレ事故
+    assert "defaultBranchRef" in loop  # main を仮定しない
+    assert "assignee を手で外すと" in loop  # 停止時の即時再入
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "PID、ログパス、完了の判定条件" in worker
+    assert "成果物の置き場" in worker
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "既存ゲートと外部レビューツールの棚卸し" in init
+    assert "判定例(fixture)の下書きを自動生成してよい" in init
+    # 契約の但し書き(統制条件は要件側)
+    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+        assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
+    # 併用の制約(状態機械が重ならないこと)
+    assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()

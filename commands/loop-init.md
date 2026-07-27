@@ -219,6 +219,11 @@ jobs:
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
 
+### 5b. 既存ゲートと外部レビューツールの棚卸し
+
+- **導入先の hooks と branch protection を検出する**(pre-push、PR 作成を検査する hook 等)。ループの PR 作成とマージがそれらに塞がれないかを確かめ、通し方(必要な事前コマンドや marker の更新)を契約の近くに記録する(親 PR 作成が導入先の PR ゲートに塞がれる事故が実地で起きた。hook はコマンド実行前に検査するため、「marker 更新+ PR 作成」を1コマンドに書くと通らない)
+- **出荷前レビューに使う外部 plugin(/code-review、claude-security 等)の導入状況を検出する**。未導入なら導入コマンド(marketplace add)を案内する(未導入でもループは動くが、3c の出荷前レビューの網羅が下がることを伝える)
+
 ### 6. ラベル作成
 
 `gh label create` で作成する(既存なら skip、冪等)。
@@ -237,6 +242,9 @@ jobs:
 - `loop:triage`(人間の裁定待ち)
 
 ### 7. バジェット確認と fixture の案内
+
+**判定例(fixture)の下書きを自動生成してよい。**
+導入先に設計文書(docs/、DESIGN.md、ADR 等)があれば、そこから「この親 issue は PASS のはず」「これは差し戻しのはず」の判定例の下書きを生成し、人間のレビューに出す(手書きより網羅が安定する。採用の判断は人間。手順の正は `tasuki:baton-contract` skill)。
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。

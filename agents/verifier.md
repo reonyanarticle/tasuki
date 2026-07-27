@@ -1,6 +1,6 @@
 ---
 name: tasuki-verifier
-description: tasuki の verifier。実行結果を成功基準と打ち切り条件に照合し、内側ループの継続 / 完了 / 打ち切りを判定する。maker(worker)と別コンテキストで動く。
+description: tasuki の verifier。実行結果を成功基準と打ち切り条件に照合し、内側ループの継続 / 完了 / 打ち切りを判定する。maker(worker)と別コンテキストで動く。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 tools: Bash, Read, Grep, Glob
 ---

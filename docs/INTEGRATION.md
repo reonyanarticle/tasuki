@@ -42,5 +42,6 @@ gate-reviewer が継承するのは CLAUDE.md(共有知識)までで、maker の
 ### 4. 非互換の明記
 
 Stop hook でセッションを回すループ系 plugin(ralph-wiggum 等)との併用は二重ループになるため禁止する。
+issue のラベルや assignee を状態機械として使う他のオーケストレーションとの併用は、対象 issue 集合が重ならない場合に限る(WIP 上限と assignee の CAS が tasuki 単独の書き込みを前提とするため)。
 `/tasuki:loop-init` の棚卸しで検出したら警告する。
 編集時 lint 等の一般 hooks は worker セッション内で通常どおり発火してよい(干渉しない)。
