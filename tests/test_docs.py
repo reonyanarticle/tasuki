@@ -38,10 +38,17 @@ def test_no_stale_references() -> None:
 
 
 def test_gates_catalog_has_25_perspectives() -> None:
-    """レビュー観点カタログは #1〜#25 が揃っていること。"""
+    """レビュー観点カタログは25観点が名前で揃っていること(番号は持たない)。"""
     text = (ROOT / "docs/GATES.md").read_text()
-    rows = re.findall(r"^\| (\d+) \|", text, re.M)
-    assert [int(n) for n in rows] == list(range(1, 26))
+    section = text.split("## レビュー観点カタログ")[1].split("\n## ")[0]
+    rows = [
+        line
+        for line in section.splitlines()
+        if line.startswith("| ") and not line.startswith("| 観点 |") and "---" not in line
+    ]
+    assert len(rows) == 25, len(rows)
+    for name in ("要件充足性", "並行整合性", "ゲートの発振検知"):
+        assert any(name in r for r in rows), name
 
 
 def test_g3_flow_wiring() -> None:
@@ -585,7 +592,7 @@ def test_worker_reports_used_skills_and_subagents() -> None:
     assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
 
 
-_KANTEN_BARE = re.compile(r"観点 #\d+(?![\d(])")
+_KANTEN_BARE = re.compile(r"観点 #\d+")
 _ISSUE_NUM_REF = re.compile(r"(?:PR|親|子|issue) #\d+")
 
 
@@ -593,12 +600,10 @@ _ISSUE_NUM_REF = re.compile(r"(?:PR|親|子|issue) #\d+")
 def test_references_are_readable(path: Path) -> None:
     """番号だけの参照を書かない(ドキュメント規約)。
 
-    「観点 #N」には名前を併記する(カタログを開かないと文意が取れないため)。
+    レビュー観点は番号でなく名前で参照する(「観点 #N」を書かない。カタログにも番号を置かない)。
     PR / issue 番号は本文の根拠にしない(読者がその番号を解決できる保証が無い)。
-    カタログ本体(GATES.md)の表と、ブランチ名 loop/parent-N は対象外。
+    ブランチ名 loop/parent-N は対象外。
     """
-    if path.name == "GATES.md":
-        return
     offenders = []
     for i, line in _prose_lines(path):
         if "番号だけの参照" in line:  # 規約文そのものが悪い例を引用する

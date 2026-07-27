@@ -81,7 +81,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 | 成果ゲートの差し戻し状態からの run 境界の再入 | 達成(差し戻し直後のセッション死亡を模擬。次の run が起票者待ちにせず、2a と着手ゲートをやり直さず、再出力 worker を自力起動して 2f から復旧) |
 | 成果ゲートの PASS 後にのみ ready 化 | 達成(gate:outcome-passed → checks-ci → ready の順序を確認) |
 
-副次の実地確認:WIP 制限(観点 #24(スループット管理))が ready PR 3件の滞留で発火し、worker 起動を正しく保留した。親 issue の予算欄(子3件)と実子4件の不一致も orchestrator が人間に指摘した。
+副次の実地確認:WIP 制限(観点「スループット管理」)が ready PR 3件の滞留で発火し、worker 起動を正しく保留した。親 issue の予算欄(子3件)と実子4件の不一致も orchestrator が人間に指摘した。
 成果ゲートのレビュー(3観点、確定16件)後の再実走では、拡充した契約 signals(要件 ID の採番一致、期待値の根拠の仕様由来、secrets 不在)が verdict の reasons にそのまま現れることも確認した。
 実ループ未発火のまま残る経路は、`return_to: implementation`(内容の不足による実装差し戻し)と 2g の CI 失敗分岐の2つ(手順、fixture、テストでの検証のみ)。
 

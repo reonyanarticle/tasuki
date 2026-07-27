@@ -12,9 +12,9 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
-   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点 #18(テストの信頼性))を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
+   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
-   - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点 #17(フィードバック速度))。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
+   - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
 6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
 7. `max_iterations` 等バジェットのデフォルト設定
@@ -23,14 +23,14 @@ HTTPS プロトコルで push する場合、`.github/workflows/` への push �
 前提チェックで Git operations protocol を確認し、https のときのみ scope を要求する(SSH 鍵での push には不要。E2E で実地確認済み)。
 
 providers.yaml が単一ソースであり、CI workflow、orchestrator のローカル実行、worker の self-verify はすべてそこからの射影である。
-形式ゲートは2段で実行する(観点 #17(フィードバック速度))。
+形式ゲートは2段で実行する(観点「フィードバック速度」)。
 反復中は orchestrator が一時 worktree で providers のコマンドを直接実行して即時判定し(checks-local。worker の自己申告は使わない)、CI の往復を待たない。
 **マージ判断の正は CI** であり、verifier の met と成果ゲートの PASS の後に、最終コミットの check-runs 全成功を確認してから PR を ready 化する(checks-ci)。
 工程内検査を手元に置き、出荷検査を CI に置く分担である。
 
 security-review Action の制約は4つある(採用時に README とドキュメントで確認した)。
 
-- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点 #15(実行環境の隔離と権限最小化))
+- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離と権限最小化」)
 - この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。このため **security job はオプトイン**とし、既定では生成しない。`/tasuki:loop-init` で選択した場合のみ job を生成し `enabled_gates` に `checks-security` を追加する(条件スキップによる見かけの成功は作らない)
 - 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。形式ゲートの判定には action outputs の findings 件数を使う
 - Action の参照はコミット SHA に固定する(ブランチやタグの参照は差し替え可能で supply-chain リスクになる)
@@ -45,7 +45,7 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 | issue 予算 | 子 issue の予算欄(max_iterations)を内側ループの有効上限に採用(契約値と issue 値の小さい方)。超過で停止して報告 |
 | triage inbox | エスカレーションと axis-question 承認待ちを人間向けに一覧化(`/tasuki:loop-status`) |
 | watchdog | 反復回数と直交する第二の停止装置。wall-clock の上限超過で停止して報告(反復1回が異常に長い事故を検出)。token 上限は計測手段の導入とあわせて v2 |
-| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点 #14(停滞検知))。実験ジョブの「待ち」はハートビートで除外 |
+| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。実験ジョブの「待ち」はハートビートで除外 |
 
 **verifier の成功基準と打ち切り条件がブレーキ、`max_iterations` と watchdog はシートベルト** である。
 上限はループが既に浪費した後に発火するバックストップであり、停止条件の本体は着手ゲートで事前定義された基準の側にある。
