@@ -38,10 +38,17 @@ def test_no_stale_references() -> None:
 
 
 def test_gates_catalog_has_25_perspectives() -> None:
-    """レビュー観点カタログは #1〜#25 が揃っていること。"""
+    """レビュー観点カタログは25観点が名前で揃っていること(番号は持たない)。"""
     text = (ROOT / "docs/GATES.md").read_text()
-    rows = re.findall(r"^\| (\d+) \|", text, re.M)
-    assert [int(n) for n in rows] == list(range(1, 26))
+    section = text.split("## レビュー観点カタログ")[1].split("\n## ")[0]
+    rows = [
+        line
+        for line in section.splitlines()
+        if line.startswith("| ") and not line.startswith("| 観点 |") and "---" not in line
+    ]
+    assert len(rows) == 25, len(rows)
+    for name in ("要件充足性", "並行整合性", "ゲートの発振検知"):
+        assert any(name in r for r in rows), name
 
 
 def test_g3_flow_wiring() -> None:
@@ -168,6 +175,7 @@ def _prose_lines(path: Path) -> list[tuple[int, str]]:
 _WRITING_TARGETS = [
     ROOT / "README.md",
     ROOT / "CLAUDE.md",
+    *sorted((ROOT / ".claude" / "rules").glob("*.md")),
     *sorted((ROOT / "docs").glob("*.md")),
     *sorted((ROOT / "commands").glob("*.md")),
     *sorted((ROOT / "agents").glob("*.md")),
@@ -219,7 +227,7 @@ def test_preship_review_phase_defined() -> None:
     assert "### 3c. 出荷前レビュー(親 PR、最終コード評価)" in loop
     assert "/code-review" in loop
     assert "/claude-security:claude-security" in loop
-    assert "1観点ずつ指定して5回に分ける" in loop  # 一度に回さない
+    assert "下表の5観点を1観点ずつ回す" in loop  # 一度に回さない(subagent で自動実行)
     for kanten in (
         "設計と統合",
         "正しさと境界条件",
@@ -313,7 +321,8 @@ def test_operations_documents_preship_review_and_output_rules() -> None:
     """運用文書に出荷前レビューと、issue 出力の原則があること。"""
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
     assert "## 出荷前レビュー" in ops
-    assert "/code-review" in ops and "/claude-security:claude-security" in ops
+    assert "`preship_review`" in ops  # 自動実行の規模制御(人間起動は manual のみ)
+    assert "/claude-security:claude-security" in ops
     assert "## issue に残す出力の原則" in ops
     assert "<details>" in ops
 
@@ -406,7 +415,7 @@ def test_integration_branch_model() -> None:
     assert "loop/parent-<親番号>" in loop  # 統合ブランチ
     assert "人間が最終的に見るのはこの親 PR だけ" in loop
     assert "人間は子 PR をマージしない" in loop
-    assert "orchestrator が子 PR を統合ブランチへマージする" in loop
+    assert "orchestrator が子 PR を ready 化してから統合ブランチへマージする" in loop
     # 子 PR は Closes を使わない(統合ブランチ向けでは機能しない)
     worker = (ROOT / "agents/worker.md").read_text()
     assert "`Closes` は使わない" in worker
@@ -496,6 +505,193 @@ def test_draft_command_is_designed() -> None:
     assert "/tasuki:draft" in (ROOT / "README.md").read_text()
 
 
+def test_field_review_fixes_are_designed() -> None:
+    """実運用レビューで確定した修正が手順と agent 定義に反映されていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "インラインで渡す" in loop  # 被判定物の直前取得(揮発ファイル禁止)
+    assert "ready 化してから統合ブランチへマージする" in loop  # 2g の draft 対応
+    assert "空コミットを1つ置いてから" in loop  # 親 PR 作成の前提
+    assert "長時間ジョブの公式プロトコル" in loop
+    assert "shell のワンライナーで行わない" in loop  # 起票の1ズレ事故
+    assert "defaultBranchRef" in loop  # main を仮定しない
+    assert "assignee を手で外すと" in loop  # 停止時の即時再入
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "PID、ログパス、完了の判定条件" in worker
+    assert "成果物の置き場" in worker
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "既存ゲートと外部レビューツールの棚卸し" in init
+    assert "判定例(fixture)の下書きを自動生成してよい" in init
+    # 契約の但し書き(統制条件は要件側)
+    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+        assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
+    # 併用の制約(状態機械が重ならないこと)
+    assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
+    # 直列親の依存(先行親の未マージ成果を worker が複製した実地事故の再発防止)
+    assert "先行親の親 PR がマージされてから起動する" in loop
+    # 長時間ジョブと stale 回収の干渉(ログ更新時刻を生存確認に含める。二重起動の防止)
+    assert "ログの最終更新時刻と PID の生存も基準時刻の候補に含める" in loop
+    # 長時間ジョブの打ち切りは wall-clock 上限を必須とする(ハングと低速の区別)
+    dec2 = (ROOT / "agents/decomposer.md").read_text()
+    assert "wall-clock の上限" in dec2
+
+
+def test_trace_review_findings_are_fixed() -> None:
+    """第6観点「手順のトレース」の試走が検出した8欠陥の修正が残っていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "子 issue 本文と統合ブランチ名" in loop  # worker への受け渡し
+    assert "`loop:triage` が付いた子には着手しない" in loop  # 裁定前の再実行防止
+    assert "レビュー結果は親 PR のコメントに残す" in loop  # 3c の run またぎ
+    assert "マージが conflict で拒否された場合" in loop  # 子 PR の conflict 分岐
+    assert "着手も回収もしない" in loop  # 人間の手動 assign との判別
+    assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
+    assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
+    assert "解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR" in loop  # 取り込み後の赤
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "--base <統合ブランチ>" in worker
+    assert "統合ブランチとは限らない" in worker  # worktree base の明示
+    # 観点自体が関門に定義されていること
+    claude_md = (ROOT / "CLAUDE.md").read_text()
+    assert "手順のトレース" in claude_md
+
+
+def test_conventions_live_in_rules() -> None:
+    """コード規約とドキュメント規約は .claude/rules/ が正であること(CLAUDE.md に写しを残さない)。"""
+    assert (ROOT / ".claude/rules/code.md").exists()
+    docs_rule = (ROOT / ".claude/rules/docs.md").read_text()
+    assert "paths:" in docs_rule  # markdown 編集時に読み込まれる条件付きルール
+    assert "日付を書かない" in docs_rule
+    claude_md = (ROOT / "CLAUDE.md").read_text()
+    assert ".claude/rules/" in claude_md  # 置き場所の案内はある
+    assert "日付を書かない" not in claude_md  # 中身の写しは無い
+    assert "tasuki-` 接頭辞" not in claude_md
+
+
+def test_preship_review_runs_in_subagents() -> None:
+    """3c の5観点レビューは orchestrator が subagent で自動実行すること(人間の起動を待たない)。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "レビューは orchestrator が subagent で自動実行する" in loop
+    assert "これは人間が起動するコマンドである" not in loop
+    # セキュリティスキャンだけは人間案内のまま(別建て課金)
+    assert "実行を人間に案内する" in loop
+    # コスト制御: 固定5体ではなく契約の preship_review で規模を選ぶ
+    assert "`preship_review` で制御する" in loop
+    for mode in ("mode: full", "mode: scaled", "mode: manual"):
+        assert mode in loop, mode
+    import yaml
+
+    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+        c = yaml.safe_load((ROOT / prof).read_text())
+        assert c["preship_review"]["mode"] == "scaled", prof
+        assert c["preship_review"]["fanout_threshold_lines"] > 0, prof
+
+
+def test_worker_reports_used_skills_and_subagents() -> None:
+    """レポートに参照 skill と委譲 subagent の欄があること(成果の前提を辿れるようにする)。"""
+    report_skill = (ROOT / "skills/loop-report/SKILL.md").read_text()
+    assert "参照した skill と委譲した subagent" in report_skill
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
+
+
+_KANTEN_BARE = re.compile(r"(?<![/\w])#\d+")
+_ISSUE_NUM_REF = re.compile(r"(?:PR|親|子|issue) #\d+")
+
+
+@pytest.mark.parametrize("path", _WRITING_TARGETS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_references_are_readable(path: Path) -> None:
+    """番号だけの参照を書かない(ドキュメント規約)。
+
+    レビュー観点は番号でなく名前で参照する(「観点 #N」を書かない。カタログにも番号を置かない)。
+    PR / issue 番号は本文の根拠にしない(読者がその番号を解決できる保証が無い)。
+    ブランチ名 loop/parent-N は対象外。
+    """
+    offenders = []
+    for i, line in _prose_lines(path):
+        if "番号だけの参照" in line or "#123 で修正" in line:  # 規約文そのものが悪い例を引用する
+            continue
+        if _KANTEN_BARE.search(line):
+            offenders.append((i, "観点番号に名前が無い", line.strip()[:60]))
+        if _ISSUE_NUM_REF.search(line) and "loop/parent" not in line:
+            offenders.append((i, "PR / issue 番号の参照", line.strip()[:60]))
+    assert not offenders, offenders
+
+
+def test_commands_declare_data_boundary_and_least_privilege() -> None:
+    """未検証データを読むコマンドが、境界の宣言と最小権限を持つこと。
+
+    セキュリティスキャンの指摘: 読み取り専用は文章の宣言では担保されない(権限で表現する)。
+    引数が gh の呼び出しに入るコマンドは、値の検証を手順に持つ。
+    """
+    for name in ("loop-status", "draft"):
+        text = (ROOT / f"commands/{name}.md").read_text()
+        assert "data-boundary" in text, name  # 入力を未検証データとして扱う
+        assert "Bash(gh *)" not in text, name  # 書き込み系まで前承認する粗い許可を持たない
+    # 引数が gh の呼び出しに入る(番号を取る)コマンドは値を検証する。
+    # draft の引数は自由文で、本文ファイル経由でしか使われないため対象外。
+    assert "正の整数であることを確認" in (ROOT / "commands/loop-status.md").read_text()
+    # 手順が使う操作は許可に含まれていること(絞り込みで機能を壊さない)
+    loop = (ROOT / "commands/loop.md").read_text()
+    for grant in (
+        "Bash(gh issue:*)",
+        "Bash(gh pr:*)",
+        "Bash(gh label:*)",
+        "Bash(git worktree:*)",
+        "Bash(git merge:*)",
+        "Bash(git push:*)",
+        "Write",
+    ):
+        assert grant in loop.split("---")[1], grant  # frontmatter に存在する
+    assert "許可されていない操作が必要になったら、実行せずに中断して報告する" in loop
+    for grant in ("Bash(gh issue create:*)", "Write"):
+        assert grant in (ROOT / "commands/draft.md").read_text().split("---")[1], grant
+
+    draft = (ROOT / "commands/draft.md").read_text()
+    assert "Bash(git *)" not in draft  # 事実上の任意実行を持たない
+    assert "default branch(信頼された版)から** 読む" in draft  # 物差しは検めた版から
+    assert "author_association" in draft  # 代理起票が opt-in を素通りする件の明示
+
+
+def test_contracts_sample_matches_profiles() -> None:
+    """CONTRACTS.md の契約サンプルが実プロファイルの判定シグナルからずれないこと。
+
+    サンプルは正典を名乗るため、profiles/ の変更(承認サイズ、但し書き)を写し損ねると
+    導入先が古いスキーマを正として上書きしてしまう。
+    """
+    sample = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "完了の定義が1回のレビューで判断できる範囲を超えている" in sample
+    assert "要件でありここに含めない" in sample
+
+
+def test_loop_init_ships_via_bootstrap_pr() -> None:
+    """loop-init の生成物は PR で入る(機械は PR 作成まで、default branch への反映は人間のマージ)。
+
+    手動コミットを人間に求める形は、関与を承認1回に純化する思想に反する(実際に一度誤設計した)。
+    """
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "ブートストラップ用ブランチ(`tasuki/init`)にコミットして push し" in init
+    assert "default branch へ直接 push しない" in init
+    assert "反映は人間のマージだけ" in init
+    frontmatter = init.split("---")[1]
+    for grant in ("Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr create:*)"):
+        assert grant in frontmatter, grant
+
+
+def test_code_review_round2_fixes() -> None:
+    """2周目のレビュー所見(クラッシュ孤児、生存確認の権限、フォールバック等)の修正が残っていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "先に「⏳ 着手(run 識別つき)」コメントを1件残し、その直後に assign する" in loop
+    for grant in ("Bash(ps:*)", "Bash(tail:*)"):
+        assert grant in loop.split("---")[1], grant  # 長時間ジョブの生存確認に必要
+    assert "head ブランチが `loop/parent-` で始まる" in loop  # 親 PR の判定基準
+    assert "このキーが無い旧契約では `mode: scaled`" in loop  # preship_review のフォールバック
+    assert "Bash(gh --version)" in (ROOT / "commands/loop-init.md").read_text().split("---")[1]
+    draft = (ROOT / "commands/draft.md").read_text()
+    assert "Bash(git fetch:*)" in draft.split("---")[1]
+    assert "origin/<default branch>" in draft  # 追跡ブランチの古さを踏まない
+    status_md = (ROOT / "commands/loop-status.md").read_text()
+    assert "head ブランチが `loop/parent-` で始まる" in status_md
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()
@@ -545,7 +741,8 @@ def test_parent_pr_is_designed_for_approval() -> None:
     assert "「選択と理由」から" in loop
     # ready 化は 3c 入場時(人間に draft を渡さない)
     assert "親 PR を ready 化する" in loop
-    assert loop.index("親 PR を ready 化する") < loop.index("これは人間が起動するコマンドである")
+    auto_review = "レビューは orchestrator が subagent で自動実行する"
+    assert loop.index("親 PR を ready 化する") < loop.index(auto_review)
 
 
 def test_parent_pr_body_is_staged_and_traceable() -> None:

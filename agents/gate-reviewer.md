@@ -1,6 +1,6 @@
 ---
 name: tasuki-gate-reviewer
-description: tasuki の抽象度ゲート判定(受理から統合までの全ゲート)。前工程出力と契約を受け取り、PASS / TOO_ABSTRACT / TOO_CONCRETE の verdict JSON を返す。読み取り専用。判定に使うモデルは呼び出し側が指定する。
+description: tasuki の抽象度ゲート判定(受理から統合までの全ゲート)。前工程出力と契約を受け取り、PASS / TOO_ABSTRACT / TOO_CONCRETE の verdict JSON を返す。読み取り専用。判定に使うモデルは呼び出し側が指定する。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 tools: Read, Grep, Glob, Skill
 ---

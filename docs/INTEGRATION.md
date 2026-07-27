@@ -9,7 +9,7 @@ plugin の成立条件は、外部の subagent、skill、検査ツールを接�
 | 接続点 | インターフェース | 例 |
 |---|---|---|
 | gate reviewer 差し替え | 契約 YAML の `reviewer:` に subagent 名を指定。入力は前工程出力+契約、出力は verdict JSON([GATES.md](GATES.md)) | 外部コレクションのレビュアー系 agent を着手ゲートに割り当て |
-| worker 差し替え | 入力は子 issue 本文のみ、義務は worktree 作成→実装→ self-verify → PR →報告→掃除、出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
+| worker 差し替え | 入力は子 issue 本文と統合ブランチ名。義務は実装方針コメント→統合ブランチ base の実装→ self-verify →統合ブランチ向け draft PR(loop:pr)→レポート(参照した skill と委譲した subagent の欄を含む)→掃除。長時間ジョブは PID とログを報告して終了する。出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
 | mechanical provider 追加 | コマンド+ SARIF または JUnit XML 出力(非対応ツールは pack の normalizer を挟む) | 任意の linter やスキャナ |
 | skill 参照 | ゲート判定基準は skill として外出し可能。worker は対象リポジトリの skill / CLAUDE.md を通常通り参照 | プロジェクト固有規約の注入 |
 
@@ -42,5 +42,6 @@ gate-reviewer が継承するのは CLAUDE.md(共有知識)までで、maker の
 ### 4. 非互換の明記
 
 Stop hook でセッションを回すループ系 plugin(ralph-wiggum 等)との併用は二重ループになるため禁止する。
+issue のラベルや assignee を状態機械として使う他のオーケストレーションとの併用は、対象 issue 集合が重ならない場合に限る(WIP 上限と assignee の CAS が tasuki 単独の書き込みを前提とするため)。
 `/tasuki:loop-init` の棚卸しで検出したら警告する。
 編集時 lint 等の一般 hooks は worker セッション内で通常どおり発火してよい(干渉しない)。

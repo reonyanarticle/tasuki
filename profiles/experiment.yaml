@@ -29,7 +29,7 @@ phases:
       from: experiment-design
       waiting_level: "評価指標・データセット(dev/test 分離)・seed つきで単独実行可能な単位。実装方式は未指定"
       too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "評価指標の欠落", "打ち切り条件の欠落", "dev/test 分離の記載なし", "『常に分ける』組み合わせの同居(実験と基盤変更等)", "前提(データ入手性、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない"]
-      too_concrete_signals: ["特定ライブラリ・実装方式の指定"]
+      too_concrete_signals: ["特定ライブラリ・実装方式の指定(測定対象や比較の統制条件(モデル固定、データ版数、コマンドのフラグ等)は要件でありここに含めない)"]
     hands_off:
       to: analysis
       exit_criteria_required: true
@@ -80,6 +80,7 @@ templates:
     - 数字の由来セット(dev/test)
     - 再現手順
     - 生データへのリンク
+    - 参照した skill と委譲した subagent   # 成果の前提を辿る(無ければ「なし」と書く)
   parent_pr_required_fields:      # 親 PR(人間が承認する唯一の PR)の必須欄
     - 何が変わるか              # 利用者に見える変化と内部の変化を分けて書く
     - 承認してほしい判断        # ループが裁量で決めたことの列挙(要件に無い決定)
@@ -153,6 +154,10 @@ gates:
 enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 # checks-security はオプトイン。/tasuki:loop-init で security job を選択した場合に追加される
 # (anthropics/claude-code-security-review Action。CLAUDE_API_KEY による API 課金が別途発生)
+
+preship_review:                   # 3c 出荷前レビューのコスト制御
+  mode: scaled                    # full = 常に観点別5セッション / scaled = 規模で自動選択 / manual = 人間が起動
+  fanout_threshold_lines: 200     # scaled のとき、親 PR の diff がこの行数以上なら観点別に分ける
 
 model_selection: static
 

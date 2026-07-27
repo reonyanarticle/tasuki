@@ -1,6 +1,6 @@
 ---
 name: tasuki-decomposer
-description: tasuki の decomposer。親 issue を、単独マージ可能な子 issue 群への分割案にする。分割ゲートの被検査者。フェーズ3で有効化。
+description: tasuki の decomposer。親 issue を、単独マージ可能な子 issue 群への分割案にする。分割ゲートの被検査者。フェーズ3で有効化。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 tools: Read, Grep, Glob
 ---
@@ -65,6 +65,10 @@ tools: Read, Grep, Glob
 - 相互に依存しない機能同士
 
 未完成の機能でレイヤー実行を止めないため、deploy と release は feature flag で分離する。
+
+長時間ジョブ(学習、大規模評価等)を含むタスクは、「ジョブを起動して記録する」と「結果を評価して報告する」を1子の中の別工程として明記するか、別の子に分ける(1セッションで完結する前提の子にしない)。
+長時間ジョブを含む子の打ち切り条件には、**wall-clock の上限**を必ず含める(ハングと低速を区別する装置は時間しかない。上限が無いと orchestrator は完了条件を待ち続ける)。
+子から子へ gitignore された成果物を受け渡す場合は、受け渡し場所を双方の子 issue 本文の前提に書く。
 
 ## 子 issue 本文の要件
 

@@ -8,13 +8,13 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 1. 言語検出 → language pack 選択(各 pack の `detect` に挙がったファイルの有無で判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
 3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
-4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認、形式ゲート + 成果ゲート通過で ready 化する
+4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
 5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
-   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点 #18)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
+   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
-   - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点 #17)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
+   - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
 6. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
 7. `max_iterations` 等バジェットのデフォルト設定
@@ -23,14 +23,14 @@ HTTPS プロトコルで push する場合、`.github/workflows/` への push �
 前提チェックで Git operations protocol を確認し、https のときのみ scope を要求する(SSH 鍵での push には不要。E2E で実地確認済み)。
 
 providers.yaml が単一ソースであり、CI workflow、orchestrator のローカル実行、worker の self-verify はすべてそこからの射影である。
-形式ゲートは2段で実行する(観点 #17)。
+形式ゲートは2段で実行する(観点「フィードバック速度」)。
 反復中は orchestrator が一時 worktree で providers のコマンドを直接実行して即時判定し(checks-local。worker の自己申告は使わない)、CI の往復を待たない。
 **マージ判断の正は CI** であり、verifier の met と成果ゲートの PASS の後に、最終コミットの check-runs 全成功を確認してから PR を ready 化する(checks-ci)。
 工程内検査を手元に置き、出荷検査を CI に置く分担である。
 
 security-review Action の制約は4つある(採用時に README とドキュメントで確認した)。
 
-- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点 #15)
+- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離と権限最小化」)
 - この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。このため **security job はオプトイン**とし、既定では生成しない。`/tasuki:loop-init` で選択した場合のみ job を生成し `enabled_gates` に `checks-security` を追加する(条件スキップによる見かけの成功は作らない)
 - 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。形式ゲートの判定には action outputs の findings 件数を使う
 - Action の参照はコミット SHA に固定する(ブランチやタグの参照は差し替え可能で supply-chain リスクになる)
@@ -45,7 +45,7 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 | issue 予算 | 子 issue の予算欄(max_iterations)を内側ループの有効上限に採用(契約値と issue 値の小さい方)。超過で停止して報告 |
 | triage inbox | エスカレーションと axis-question 承認待ちを人間向けに一覧化(`/tasuki:loop-status`) |
 | watchdog | 反復回数と直交する第二の停止装置。wall-clock の上限超過で停止して報告(反復1回が異常に長い事故を検出)。token 上限は計測手段の導入とあわせて v2 |
-| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点 #14)。実験ジョブの「待ち」はハートビートで除外 |
+| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。実験ジョブの「待ち」はハートビートで除外 |
 
 **verifier の成功基準と打ち切り条件がブレーキ、`max_iterations` と watchdog はシートベルト** である。
 上限はループが既に浪費した後に発火するバックストップであり、停止条件の本体は着手ゲートで事前定義された基準の側にある。
@@ -71,12 +71,12 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 
 形式ゲートと成果ゲートを通っても、**コードの設計と正しさは誰も見ていない**。
 形式ゲートは機械判定、成果ゲートはレポートの形式照合であり、どちらも実装の良否を扱わない。
-そこで ready 化の直前に、人間が起動するレビューを1回挟む(`/tasuki:loop` の `2g`)。
+そこで親 PR に対して、orchestrator が subagent でレビューを自動実行する(loop.md の 3c「出荷前レビュー」)。
 
-- 実行条件は「成果ゲート PASS かつ checks-ci が全 job 成功」。反復のたびには行わず、実装が固まってから1回だけ行う
-- `/code-review` を5観点(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)で回す。**1観点ずつ5回に分ける**(一度に渡すと観点が薄まる)
-- 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` も回す
-- 所見はそのまま採用しない。どのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを直す
+- 実行条件は「統合ゲート PASS、親 PR の check-runs 全緑、統合ブランチの merge-base が default branch の先端と一致」。反復のたびには行わず、フィーチャーの完成形(親 PR の全差分)に対して1回行う
+- 5観点(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)を、契約の `preship_review` の規模で回す(既定 scaled: 小さい diff は1セッションに5観点、大きい diff は観点別5セッション。manual にすると従来どおり人間が起動する)
+- 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
+- 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
 観点の出典は Google のコードレビュー指針と Findy Library の「What review verifies」で、両者はほぼ同じ範囲を指している。
 

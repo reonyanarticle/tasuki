@@ -10,8 +10,8 @@ profile: development
 budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
-  wip_limit_prs: 3                # 未レビュー PR の上限(#24)。超過で新規 worker 起動を停止
-  stale_assignment_minutes: 60    # 停止した実行が残した assignee の回収までの経過時間(#20)
+  wip_limit_prs: 3                # 人間のマージ待ちの ready 親 PR の上限(観点「スループット管理」)。超過で新規 worker 起動を停止
+  stale_assignment_minutes: 60    # 停止した実行が残した assignee の回収までの経過時間(観点「並行整合性」)
 
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
@@ -24,7 +24,7 @@ phases:
     receives:
       from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
-      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない"]
+      too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な価値の同居)"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
     hands_off:
       to: implementation
@@ -33,7 +33,7 @@ phases:
       from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
       too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない"]
-      too_concrete_signals: ["特定ライブラリ・実装方式の指定"]
+      too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
     hands_off:
       to: report
       exit_criteria_required: true
@@ -55,7 +55,7 @@ phases:
 templates:                        # issue テンプレの必須欄(着手ゲートの門前払いの機械チェック対象)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
-  report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク]
+  report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク, 参照した skill と委譲した subagent]
   pr_required_fields: [概要, 対応する親要件, 受け入れ条件の充足, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
 
 gates:
@@ -117,6 +117,10 @@ gates:
 # checks-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
 enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 
+preship_review:                   # 出荷前レビュー(loop.md 3c)のコスト制御
+  mode: scaled                    # full = 常に観点別5セッション / scaled = diff 規模で自動選択 / manual = 人間が起動
+  fanout_threshold_lines: 200     # scaled のとき、観点別に分ける diff 行数の閾値
+
 model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
 
 question_routing:
@@ -176,7 +180,7 @@ providers:
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
 | 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) |
-| レポート | 要件 ID ⇔結果の対応表 / 結論 / 再現手順(コマンドと環境) / 生データへのリンク |
+| レポート | 要件 ID ⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 
 必須欄の空チェックが着手ゲートの門前払いに直結する。

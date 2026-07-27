@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh *), Bash(git *), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh auth refresh:*), Bash(gh label:*), Bash(gh secret set:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -136,7 +136,7 @@ jobs:
         with: <pack.ci.setup.with>
       - run: <pack.ci.setup.install>
       - run: <providers.test.command>
-      - name: test-tampering check   # 観点 #18。機械検知できる範囲: 削除・skip/xfail・設定による除外
+      - name: test-tampering check   # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
@@ -191,7 +191,7 @@ jobs:
             echo "::error::閾値以上の findings が ${FINDINGS} 件ある"
             exit 1
           fi
-  notify-success:                  # 沈黙と故障を区別するため成功も通知する(観点 #17)
+  notify-success:                  # 沈黙と故障を区別するため成功も通知する(観点「フィードバック速度」)
     needs: [lint, format, typecheck, test, security]
     runs-on: ubuntu-latest
     permissions: { pull-requests: write }
@@ -210,14 +210,19 @@ jobs:
 - **`<...>` は生成時に展開するプレースホルダである。** `<providers.*>` は pack の `providers`、`<pack.ci.*>` は pack の `ci` から読む。テンプレートに言語固有のコマンドを直接書かない(core を言語非依存に保ち、2言語目を pack の追加だけで通すため)
 
 - **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
-- **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の形式ゲート判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点 #17)
+- **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の形式ゲート判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点「フィードバック速度」)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフックや、import 時に実行されるテスト設定)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
 - **security job を生成するなら、契約の `gates.checks-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
-- `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点 #15)
+- `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点「実行環境の隔離と権限最小化」)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
+
+### 5b. 既存ゲートと外部レビューツールの棚卸し
+
+- **導入先の hooks と branch protection を検出する**(pre-push、PR 作成を検査する hook 等)。ループの PR 作成とマージがそれらに塞がれないかを確かめ、通し方(必要な事前コマンドや marker の更新)を契約の近くに記録する(親 PR 作成が導入先の PR ゲートに塞がれる事故が実地で起きた。hook はコマンド実行前に検査するため、「marker 更新+ PR 作成」を1コマンドに書くと通らない)
+- **出荷前レビューに使う外部 plugin(/code-review、claude-security 等)の導入状況を検出する**。未導入なら導入コマンド(marketplace add)を案内する(未導入でもループは動くが、3c の出荷前レビューの網羅が下がることを伝える)
 
 ### 6. ラベル作成
 
@@ -238,6 +243,9 @@ jobs:
 
 ### 7. バジェット確認と fixture の案内
 
+**判定例(fixture)の下書きを自動生成してよい。**
+導入先に設計文書(docs/、DESIGN.md、ADR 等)があれば、そこから「この親 issue は PASS のはず」「これは差し戻しのはず」の判定例の下書きを生成し、人間のレビューに出す(手書きより網羅が安定する。採用の判断は人間。手順の正は `tasuki:baton-contract` skill)。
+
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
@@ -245,8 +253,11 @@ jobs:
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 
-最後に、運用開始前の必須手順として初期 fixture 5件の手書きを案内する(`tasuki:baton-contract` skill が手順。置き場所は `.tasuki/fixtures/`)。
+最後に、運用開始前の必須手順として初期 fixture 5件の用意を案内する(上の自動下書きを使ってよいが、採用の判断は人間。手順は `tasuki:baton-contract` skill。置き場所は `.tasuki/fixtures/`)。
 
 ## 完了報告
 
-生成、変更したファイルの一覧と、未完了の手動作業(secret 設定、branch protection、fixture 手書き、spawn depth 設定)を分けて報告する。
+**生成物はブートストラップ用ブランチ(`tasuki/init`)にコミットして push し、default branch への PR を1件開く。**
+default branch へ直接 push しない。
+生成物(契約、CI workflow、テンプレート)はガバナンスの制定であり、人間承認を経て default branch に入る。承認の形はループ本体と同型である(機械はコミットと push と PR 作成まで、反映は人間のマージだけ)。
+最後に、PR の URL と、未完了の手動作業(**ブートストラップ PR のレビューとマージ**、secret 設定、branch protection、fixture の採用、spawn depth 設定)を分けて報告する。
