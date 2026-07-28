@@ -9,7 +9,7 @@ budgets:
   wip_limit_prs: 3
   stale_assignment_minutes: 60   # 停止した実行が残した assignee を回収するまでの経過時間
 
-# モデルは agent 定義に固定されている(worker と verifier = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
+# モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 phases:
@@ -34,7 +34,7 @@ phases:
       to: analysis
       exit_criteria_required: true
       exit_criteria_fields: ["評価指標", "データセット(dev/test)", "seed"]
-  - name: analysis                # 分析(v1 では独立ロールを持たず、worker のレポート作成に畳む。独立化はフェーズ3で再検討)
+  - name: analysis                # 分析(v1 では独立ロールを持たず、worker のレポート作成に畳む。独立化は v2 の検討項目)
     receives:
       from: execution
       waiting_level: "全実験条件の実行結果と再現情報(seed・環境・データ版数)が揃い、解釈は未付与"

@@ -64,7 +64,7 @@ check-run ゼロ件の fail-closed が YAML 不正を設計どおり捕捉した
 
 **フェーズ2の受け入れ条件(完了の定義)**：
 
-- `enabled_gates` に `g3` を含む契約で、verifier の met 後に worker のレポートが成果ゲート(sonnet)で照合される
+- `enabled_gates` に `outcome` を含む契約で、verifier の met 後に worker のレポートが成果ゲート(sonnet)で照合される
 - 成果ゲートの判定例 fixture 3件(PASS / TOO_ABSTRACT / TOO_CONCRETE)で、sonnet で呼んだ gate-reviewer の判定が人間の正解ラベルと3件中3件一致する(目盛り合わせ)
 - 対応表または結論を欠くレポートが TOO_ABSTRACT、生ログ貼り付けが TOO_CONCRETE で差し戻される
 - 書き方の不足の差し戻しでは、worker が実装に触れずレポートのみを新規セッションで再出力する

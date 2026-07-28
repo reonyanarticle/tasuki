@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh auth refresh:*), Bash(gh label:*), Bash(gh secret set:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -233,8 +233,8 @@ jobs:
 
 ラベル名は契約の `gates[].id` から作る。**範囲表記で省略せず、使うものをすべて作る**(作り漏れると `gh issue edit --add-label` が「ラベルが無い」で失敗し、ゲートの通過状態が保存されないまま毎回やり直しになる)。
 - `loop:in-progress`(worker 割り当て済み)
-- `loop:pr`(ループ由来 PR の識別。WIP 制限の集計対象)
-- `loop:review`(出荷前レビュー待ち。親 issue に付く。人間が親 PR に `/code-review` を回す番)
+- `loop:pr`(ループ由来 PR の識別。子 PR に付く)
+- `loop:review`(出荷前レビューの実行中または結果反映中。親 issue に付く。契約が `preship_review.mode: manual` のときだけ人間がレビューを起動する)
 - `loop:pause`(人間による一時停止。親 issue に付けると新しい委譲を止める)
 - `loop:replan`(要件変更の再計画要求。親本文を編集してから付けると、合流点で計画を作り直す)
 - `tasuki:accepted`(外部起票の親 issue をループ対象にする opt-in。maintainer が本文を読んでから付ける)

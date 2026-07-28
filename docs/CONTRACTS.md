@@ -57,6 +57,7 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
   report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク, 参照した skill と委譲した subagent]
   pr_required_fields: [概要, 対応する親要件, 受け入れ条件の充足, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
+  parent_pr_required_fields: [何が変わるか, 承認してほしい判断, やらなかったこと, リスクと戻し方, 対応 issue]
 
 gates:
   - id: intake
@@ -113,7 +114,7 @@ gates:
     reviewer: gate-reviewer
     model: opus
 
-# 段階導入(ROADMAP.md)。フェーズ3では全 abstraction ゲートと gm-* を有効化する
+# 有効にするゲート。ここに無いゲートは判定しない(段階導入の履歴は ROADMAP.md)
 # checks-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
 enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 
@@ -130,22 +131,26 @@ question_routing:
 
 ### experiment プロファイルとの差分
 
-experiment.yaml と development.yaml の差分は次の3点のみで、ゲート機構、verdict、ルーティングは共通である。
+experiment.yaml と development.yaml の差分は次の4点で、ゲート機構、verdict、ルーティングは共通である。
 
 - phases の名称(課題定義→実験計画→実行→分析→報告)
 - `exit_criteria_required` の中身(評価指標、データセット、seed)
-- 着手ゲートの必須欄(実験条件、データ版数)
+- 着手ゲートの必須欄(実験条件、評価データの分離(dev/test))
+- レポート必須欄への追加(数字の由来セット(dev/test))
 
 experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
-analysis 単独の受け渡し照合はフェーズ3のロール分割とあわせて再検討する。
+analysis 単独の受け渡し照合は v2 の検討項目として残す(v1 では分割しない)。
 
 ### language pack の providers.yaml
 
 デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
 対象リポジトリは repo override でコマンドを変更できる。
 
+pack は `providers` のほかに、生成物の一覧(`artifacts`)と CI 生成に使う定義(`ci`: セットアップ手順、normalizer の実行系、lockfile、改変検知の対象パス)を持つ。
+以下は `providers` 部分の抜粋である(全体は packs/python/providers.yaml が正)。
+
 ```yaml
-# packs/python/providers.yaml
+# packs/python/providers.yaml(抜粋)
 detect: ["pyproject.toml"]
 providers:
   lint:
@@ -169,7 +174,7 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:` の6キーは実装時の追加である。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:` は実装時の追加である。
 `templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
 
 ## issue テンプレート仕様
@@ -179,9 +184,10 @@ providers:
 | テンプレ | 必須欄 |
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
-| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) |
+| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) / 評価データの分離(experiment のみ) |
 | レポート | 要件 ID ⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
-| PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
+| 子 PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
+| 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue(loop.md の 3c-2 が投稿する) |
 
 必須欄の空チェックが着手ゲートの門前払いに直結する。
 
