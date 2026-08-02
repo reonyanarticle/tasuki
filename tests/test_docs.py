@@ -498,6 +498,8 @@ def test_draft_command_is_designed() -> None:
     assert "`gates.intake.phase`" in d  # 契約から引く(フェーズ名を書かない)
     assert "このコマンド独自の基準を持たない" in d
     assert "実装方式は本文に書かない" in d
+    assert "`too_concrete_signals`" in d  # 何が「解き方」かも契約から引く(research では調査手段)
+    assert "使い道" in d  # research の親 issue の質問(答えが判断をどう変えるか)
     assert "参考メモ" in d
     assert "ラベルは付けず、verdict も issue に残さない" in d  # 事前審査は正式判定でない
     assert "確認を得てから" in d  # 勝手に起票しない
