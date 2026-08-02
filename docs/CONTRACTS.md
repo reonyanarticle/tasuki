@@ -141,6 +141,19 @@ experiment.yaml と development.yaml の差分は次の4点で、ゲート機構
 experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
 analysis 単独の受け渡し照合は v2 の検討項目として残す(v1 では分割しない)。
 
+### research プロファイルとの差分
+
+research.yaml は第3のプロファイルで、ゲート機構、verdict、ルーティングは共通である。
+development との差分は次の5点。
+
+- phases の中身(課題定義→調査計画→調査実行→統合→報告)。統合(synthesis)は v1 では独立ロールを持たず、まとめ子の作業に畳む(experiment の analysis と同じ扱い)
+- `worker_agent: tasuki-researcher`(maker の差し替え。researcher は Web 読み取り中心でコードを実行しない)
+- pack は言語 pack でなく **docs pack**(検査対象がコードでなく調査文書。providers は schema = 必須節の存在、links = 出典 URL の到達性の2つで、どちらも決定的)
+- 必須欄が調査用になる(親: 問い、使い道、timebox。子: 部分問い、採用と除外の基準、打ち切り(timebox)。レポート: 離散値の結論+確信度、反証と対立仮説、除外と不採用の記録、検索戦略の実行記録、出典一覧)
+- 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う(出典を実際に開いて主張の支持を確かめる)
+
+`worker_agent:` は maker の差し替えキーであり、全プロファイルで有効(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
+
 ### language pack の providers.yaml
 
 デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
@@ -174,7 +187,7 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:` は実装時の追加である。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:` は実装時の追加である。
 `templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
 
 ## issue テンプレート仕様

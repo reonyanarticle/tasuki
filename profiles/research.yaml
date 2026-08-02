@@ -1,0 +1,154 @@
+# tasuki 契約プロファイル: research(調査ループ)
+# development / experiment との差分は phases の中身、必須欄、maker(worker_agent)と pack のみ(docs/CONTRACTS.md)。
+# ゲート機構・verdict・ルーティングは共通。
+profile: research
+
+budgets:
+  max_iterations_per_gate: 3
+  max_inner_loop: 5
+  wip_limit_prs: 3
+  stale_assignment_minutes: 60   # 停止した実行が残した assignee を回収するまでの経過時間
+
+# maker は researcher(Web 読み取り中心、コードを実行しない)。verifier は共通 agent の調査モードで動く。
+worker_agent: tasuki-researcher
+
+phases:
+  - name: inquiry                 # 課題定義(親 issue)
+    hands_off:
+      to: survey-design
+  - name: survey-design           # 調査計画(親→部分問いへの分割)
+    receives:
+      from: inquiry
+      waiting_level: "問い・使い道(答えが判断をどう変えるか)・価値・予算(timebox)が記載され、調べ方は未指定"
+      too_abstract_signals: ["使い道の記載なし(答えが出ても行動が変わらない)", "予算(timebox)欄が空", "問いが検証不能(何が分かれば答えたことになるかが無い)", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な問いの同居)"]
+      too_concrete_signals: ["結論の先取り(調べる前に答えが書いてある)", "調査手段・情報源まで指定"]
+    hands_off:
+      to: investigation
+  - name: investigation           # 調査実行(子 issue = 部分問い)
+    receives:
+      from: survey-design
+      waiting_level: "単独で答えが閉じる部分問い。採用と除外の基準・情報源の種類・打ち切り(timebox)つき。調べる手段は未指定"
+      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "採用と除外の基準の欠落", "打ち切り条件(timebox)の欠落", "部分問いが検証不能", "『常に分ける』組み合わせの同居(調査と実装等)", "前提(情報へのアクセス手段)の記載なし"]
+      too_concrete_signals: ["特定の情報源・検索手段の指定(情報源の種類の指定は統制条件でありここに含めない)", "結論の先取り"]
+    hands_off:
+      to: synthesis
+      exit_criteria_required: true
+      exit_criteria_fields: ["採用と除外の基準", "打ち切り(timebox)"]
+  - name: synthesis               # 統合(v1 では独立ロールを持たず、まとめ子の作業に畳む)
+    receives:
+      from: investigation
+      waiting_level: "全部分問いの発見が突き合わされ、矛盾が解消または明示され、結論は未確定でもよい"
+      too_abstract_signals: ["発見の突き合わせなし", "矛盾の放置(言及なし)"]
+      too_concrete_signals: ["結論の先取り(証拠の提示前の解釈)"]
+    hands_off:
+      to: report
+  - name: report                  # 報告
+    receives:
+      from: synthesis
+      waiting_level: "問い⇔発見の対応表と、離散値の結論+確信度。全主張に出典。生の長文引用は貼らない"
+      too_abstract_signals: ["対応表なし", "結論なし", "結論が離散値でない", "確信度の記載なし", "反証と対立仮説の節なし", "除外と不採用の記録なし", "出典の無い主張"]
+      too_concrete_signals: ["出典の長文転載", "secrets・個人情報の掲載"]
+    hands_off:
+      to: integration
+  - name: integration
+    receives:
+      from: report
+      waiting_level: "全親の問い⇔部分問いの結論の対応が明示され、孤児の問いが無い"
+      too_abstract_signals: ["親の問いの孤児(対応する結論なし)", "対応の明示なし"]
+      too_concrete_signals: ["子レポートの生転載"]
+
+templates:
+  parent_issue_required_fields:
+    - 問い
+    - 使い道(答えが判断をどう変えるか)
+    - 価値
+    - 予算(timebox)
+    - 完了の定義
+  child_issue_required_fields:
+    - 対応する親の問い
+    - 部分問い
+    - 採用と除外の基準           # 何を証拠として数え、何を捨てるか
+    - 成功基準
+    - 打ち切り条件(timebox)      # 検索の反復回数または時間の上限。到達したら現時点の結論+残課題で終了
+    - 予算(max_iterations)
+    - 情報源の種類               # 一次情報 / 公式ドキュメント / 論文 / 事例など(具体的な URL は指定しない)
+  report_required_fields:
+    - 問い⇔発見の対応表
+    - 結論(離散値+確信度)       # 採用 / 試行 / 保留 / 不採用、または支持 / 棄却 / 判定不能
+    - 反証と対立仮説
+    - 除外と不採用の記録         # 何を捨て、なぜ捨てたか(監査可能にする)
+    - 検索戦略の実行記録         # 宣言した戦略をどう実行したか(網羅の代理指標)
+    - 出典一覧
+    - 参照した skill と委譲した subagent
+  parent_pr_required_fields:
+    - 何が変わるか
+    - 承認してほしい判断
+    - やらなかったこと
+    - リスクと戻し方
+    - 対応 issue
+  pr_required_fields:
+    - 概要
+    - 対応する親の問い
+    - 受け入れ条件の充足
+    - 変更点
+    - 影響範囲と revert 可否
+    - 対応 issue
+    - 検証方法
+
+gates:
+  - id: intake
+    kind: abstraction
+    phase: survey-design
+    reviewer: gate-reviewer
+    model: opus
+  - id: split
+    kind: abstraction
+    phase: investigation
+    reviewer: gate-reviewer
+    model: opus
+    set_signals:
+      - 依存の循環
+      - 親の問いの孤児(どの子にも対応しない)
+      - 部分問いの重複(同じ答えを別の子が二度調べる)
+      - 親予算(timebox)との不整合(子件数・timebox の合計超過)
+  - id: start
+    kind: abstraction
+    phase: investigation
+    reviewer: gate-reviewer
+    model: haiku
+    escalate_to: sonnet
+    preflight: template-fields
+    criteria_skills: []
+  - id: checks-schema
+    kind: mechanical
+    provider: schema              # docs pack: 調査文書の必須節の存在検査(決定的)
+  - id: checks-links
+    kind: mechanical
+    provider: links               # docs pack: 出典 URL の到達性検査(決定的)
+  - id: outcome
+    kind: abstraction
+    phase: report
+    reviewer: gate-reviewer
+    model: sonnet
+    escalate_to: opus
+    preflight: report-fields
+    criteria_skills: []
+  - id: integration
+    kind: abstraction
+    phase: integration
+    reviewer: gate-reviewer
+    model: opus
+
+# 有効にするゲート。ここに無いゲートは判定しない。
+# 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う。
+enabled_gates: [intake, split, start, outcome, integration, checks-schema, checks-links]
+
+preship_review:
+  mode: scaled
+  fanout_threshold_lines: 200
+
+model_selection: static
+
+question_routing:
+  task-question: issue-comment
+  axis-question: contract-pr

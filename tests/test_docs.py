@@ -711,6 +711,53 @@ def test_code_review_round2_fixes() -> None:
     assert "head ブランチが `loop/parent-` で始まる" in status_md
 
 
+def test_research_profile_is_designed() -> None:
+    """research プロファイルが思想と同型で定義されていること。
+
+    分割単位=部分問い、CI は決定的検査のみ、引用検証は verifier、timebox 一級、
+    バイアス対策(結論の先取り禁止、反証節、除外の記録)を契約に持つ。
+    """
+    import yaml
+
+    prof = yaml.safe_load((ROOT / "profiles/research.yaml").read_text())
+    assert prof["worker_agent"] == "tasuki-researcher"  # maker の差し替えキー
+    phases = {p["name"]: p for p in prof["phases"]}
+    inv = phases["investigation"]["receives"]
+    assert any("timebox" in s for s in inv["too_abstract_signals"])  # 打ち切りの一級化
+    assert any("結論の先取り" in s for s in inv["too_concrete_signals"])  # バイアス対策
+    report = phases["report"]["receives"]
+    assert any("反証と対立仮説" in s for s in report["too_abstract_signals"])
+    assert any("出典の無い主張" in s for s in report["too_abstract_signals"])
+    gate_ids = [g["id"] for g in prof["gates"]]
+    assert "checks-schema" in gate_ids and "checks-links" in gate_ids  # 決定的検査のみ
+    assert "checks-test" not in gate_ids  # コードの検査は持ち込まない
+    split = next(g for g in prof["gates"] if g["id"] == "split")
+    assert any("部分問いの重複" in s for s in split["set_signals"])  # 分割単位=問い
+    # 必須欄
+    fields = prof["templates"]["report_required_fields"]
+    for f in ("反証と対立仮説", "除外と不採用の記録", "検索戦略の実行記録", "出典一覧"):
+        assert f in fields, f
+
+
+def test_researcher_and_citation_verification_exist() -> None:
+    """researcher agent と verifier の引用検証(調査モード)が定義されていること。"""
+    res = (ROOT / "agents/researcher.md").read_text()
+    assert "name: tasuki-researcher" in res
+    assert "WebSearch" in res and "WebFetch" in res
+    assert "コードを実行しない" in res
+    assert "検索クエリと取得 URL に、リポジトリの内部情報や秘密を含めない" in res
+    assert "反証の探索(必須)" in res
+    ver = (ROOT / "agents/verifier.md").read_text()
+    assert "## 調査の照合(research プロファイル)" in ver
+    assert "出典を WebFetch で実際に開き" in ver  # リンク生存≠支持
+    # loop.md が maker を契約から解決すること
+    assert "契約の `worker_agent`" in (ROOT / "commands/loop.md").read_text()
+    # docs pack の実在
+    assert (ROOT / "packs/docs/providers.yaml").exists()
+    assert (ROOT / "packs/docs/checks/research_schema_check.py").exists()
+    assert (ROOT / "packs/docs/checks/research_link_check.py").exists()
+
+
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
     loop = (ROOT / "commands/loop.md").read_text()

@@ -179,7 +179,17 @@ E2E で発見して修正した設計欠陥: 先行親の未マージ成果に�
 - 契約の too_concrete_signals に「検証の統制条件は要件側」の但し書き
 - worker 停止時の即時再入手順(assignee を外す)と、予算執行の機械記録
 
-## v1.3 候補(未着手)
+## v1.3: 調査プロファイル(research)
+
+開発と実験に続く第3のプロファイル。思想(ゲート、契約、統合ブランチ、親 PR 集約)は共通で、契約の中身と maker、pack だけが変わる。
+
+- 分割の単位は「独立に答えが閉じる部分問い」(体系的レビューと orchestrator-worker 型 deep research の先行例に依る)
+- CI 相当は決定的検査のみ(必須節の存在= schema、出典 URL の到達性= links。docs pack)。主張⇔出典の整合は決定的に検査できないため、verifier の調査モード(出典を開いて支持を確認する引用検証)が担う
+- timebox を打ち切り条件の一級市民にする(調査には完了の自然な下限が無い。到達時は現時点の結論+残課題で設計された終了)
+- バイアス対策を構造で入れる: 結論の先取りを too_concrete シグナルに、反証と対立仮説の節と除外の記録を必須欄に
+- 出典: PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン、agile spike、ADR、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)
+
+## v1.4 候補(未着手)
 
 1. 分割案 YAML から冪等に起票と依存設定まで行う同梱スクリプト(shell 手作業の廃止。導入先に Python が無い場合の代替が論点)
 2. 子 PR の自動マージを CI に移す(`gh pr merge` が組織の permission ポリシーで ask になる環境向け。loop:pr ラベル+ checks 緑+ base が `loop/*` の PR だけを対象にした automerge job を loop-init が生成する)

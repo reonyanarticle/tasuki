@@ -1,6 +1,6 @@
 ---
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
-argument-hint: "[development | experiment]"
+argument-hint: "[development | experiment | research]"
 disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
@@ -21,7 +21,8 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ### 1. 言語検出と依存の整備
 
-各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 は python pack のみ同梱)。
+プロファイルが research の場合は言語検出を行わず、**docs pack**(`packs/docs/`)を選択する(検査対象はコードでなく調査文書)。
+それ以外は、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
 pack の `ci.lockfile` が無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須)。
@@ -40,9 +41,9 @@ pack の `ci.lockfile` が無ければ生成してコミット対象に含める
 
 ### 3. 契約プロファイルの配置
 
-引数(`$ARGUMENTS`)または対話で development / experiment を選び、plugin の `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
+引数(`$ARGUMENTS`)または対話で development / experiment / research を選び、plugin の `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
-あわせて pack の normalizer を `.tasuki/normalizers/` にコピーする(CI から実行するため)。
+あわせて pack の normalizer を `.tasuki/normalizers/` に、docs pack の検査スクリプト(`checks/`)を `.tasuki/checks/` にコピーする(CI とローカル判定から実行するため)。
 
 ### 4. issue / PR テンプレートの生成
 
@@ -66,6 +67,9 @@ security job(`anthropics/claude-code-security-review` Action)は Anthropic API �
 job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
 providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生成する。
+**pack の providers に存在する provider の job だけを生成する**(docs pack なら schema と links の2 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
+`notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
+`output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
 
 ```yaml

@@ -78,7 +78,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 
 sub-issues で子 issue 一覧を得る。
 
-- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文と、親コメントに分割ゲートの差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。返る分割案 YAML が分割ゲートの被検査物になる
+- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文、契約の `child_issue_required_fields` と子が受ける `receives` 定義、親コメントに分割ゲートの差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。返る分割案 YAML が分割ゲートの被検査物になる
 - **子 issue が既にある場合**:まず親コメントの最新分割ゲートの PASS verdict に添付された分割案と突き合わせる。**未起票の子が残っていれば(部分起票のクラッシュ復旧)、再判定せずに §1b の PASS 経路の残りを完了させる**:不足分の起票、依存(blocked_by)の設定、`gate:split-passed` の付与の3つをすべて行ってから 1c へ進む(依存を設定せずに進むと、前提が入っていない default branch から worker が実装する)。分割案の添付が無い(人間起票の)場合は、既存の子 issue 群の本文が被検査物になる
   - **例外**:親に `loop:triage` が付いている場合はこの補完を行わない。分割ゲートが分割案の欠陥(依存の循環等)を理由に停止させた状態であり、補完すると欠陥のある分割をそのまま完成させてしまう。分割案自体を decomposer に作り直させる
 
@@ -96,7 +96,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 
 - **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict のみ)。反復は `max_iterations_per_gate`。分割ゲートは opus 判定のため昇格先は無く、超過で `loop:triage`
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、`gate:split-returned` と `loop:triage` を付けて修正待ちにする
-- **PASS** → 分割案の場合、**分割案の機械処理(件数照合、起票)を shell のワンライナーで行わない**。分割案を1子1ファイルに保存してから1件ずつ処理する(YAML を zsh 配列で回してタイトルと本文が1つズレて起票される事故が実地で起きた)。起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。**使うラベルがリポジトリに無ければ、その場で作ってから付ける**(冪等。loop-init より後に増えたラベルを、既存の導入先でも使えるようにする)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
+- **PASS** → 分割案の場合、**分割案の機械処理(件数照合、起票)を shell のワンライナーで行わない**。分割案を1子1ファイルに保存してから1件ずつ処理する(YAML を zsh 配列で回してタイトルと本文が1つズレて起票される事故が実地で起きた)。起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準の欄が契約にある場合は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。**使うラベルがリポジトリに無ければ、その場で作ってから付ける**(冪等。loop-init より後に増えたラベルを、既存の導入先でも使えるようにする)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
 
 `gate:split-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加、削除、blocked-by の変更を毎 run 検知)は分割ゲートを再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
 
@@ -160,7 +160,8 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、**基準時刻**から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
 基準時刻は「最後のループ由来コメント(着手、verdict、レポート、質問、回収コメント)の時刻」とする(assign と着手コメントは同時に行うため、ループの割り当てには必ず基準点がある)。
 **誤回収を避けるため、回収前に必ず生存を確認する**。子 issue に対応するブランチまたは PR があれば、その最終コミット時刻も基準時刻の候補に含め、いずれか新しいほうで判定する(直近のコミットがあれば稼働中とみなして回収しない)。
-**長時間ジョブのプロトコル中の子(最後のループ由来コメントが PID とログパスの報告)は、そのログの最終更新時刻と PID の生存も基準時刻の候補に含める**。ジョブはコメントもコミットも増やさずに走り続けるため、経過時間だけで判定すると生きているジョブを残骸と誤認し、再入した worker が同じジョブを二重起動する。orchestrator は委譲中の Agent 呼び出しでブロックされ進捗コメントを残せないため、コミット時刻がこの確認の主たる根拠になる。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
+**長時間ジョブのプロトコル中の子(最後のループ由来コメントが PID とログパスの報告)は、そのログの最終更新時刻と PID の生存も基準時刻の候補に含める**。
+**ループ由来コメントは最終更新時刻(編集を含む)で数える**(researcher は調査中、戦略コメントの timebox 残量を編集で更新する。作成時刻だけを見ると、調査中の子を残骸と誤認する)。ジョブはコメントもコミットも増やさずに走り続けるため、経過時間だけで判定すると生きているジョブを残骸と誤認し、再入した worker が同じジョブを二重起動する。orchestrator は委譲中の Agent 呼び出しでブロックされ進捗コメントを残せないため、コミット時刻がこの確認の主たる根拠になる。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
 この回収が無いと、クラッシュした実行が担当した子 issue は以後すべての run から永久にスキップされ、`loop:triage` にも上がらないまま停止する。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
@@ -219,7 +220,7 @@ PASS したら `gate:start-passed` を付け、ラベルを片付ける(共通�
 
 ### 2c. 実装(worker)
 
-`tasuki-worker`(sonnet、worktree 分離)へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。**worker のブランチは統合ブランチ(`loop/parent-<親番号>`)から切り、PR も統合ブランチに向ける**(default branch に向けない)。
+**契約の `worker_agent`(既定 `tasuki-worker`。research プロファイルは `tasuki-researcher`)**へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。maker の差し替えはこのキーで行う(導入先での差し替えも同じキー)。**worker のブランチは統合ブランチ(`loop/parent-<親番号>`)から切り、PR も統合ブランチに向ける**(default branch に向けない)。
 `loop:in-progress` は worker 委譲中だけの状態であり、met / abort に加え、`loop:triage` を付けるとき(上限超過、check-run なし等)と 2b への差し戻し時にも必ず外す。
 渡すのは**子 issue 本文と統合ブランチ名(`loop/parent-<親番号>`)**のみ。
 統合ブランチ名を渡し忘れると、worker は default branch から実装して default branch 向けの PR を作る(子 issue 本文に親番号が入る保証は無い)。
@@ -234,7 +235,7 @@ worker の義務は、**実装前の方針コメント**、worktree 上での実
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点「フィードバック速度」)。
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
-2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)を実行し、exit code で合否を読む。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義は default branch(信頼された版)から読む**。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+2. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test、docs pack なら schema / links)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義、pack 由来の検査スクリプト(`.tasuki/checks/`、`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(スクリプトは default branch 版を一時パスへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 3. テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
@@ -247,6 +248,7 @@ worker の義務は、**実装前の方針コメント**、worktree 上での実
 `tasuki-verifier` へ委譲する。
 渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準と打ち切り条件のみ。
 **PR のブランチ名を必ず渡す**(verifier は再実行を default branch ではなくそのブランチの一時 worktree で行う)。
+research プロファイルでは、**調査文書のパスと、子 issue の調査戦略コメントの URL も渡す**(引用検証と、宣言した戦略の実行痕跡の照合に要る)。
 verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。
 
 まず verifier の `drift_check` を確認する。
@@ -266,7 +268,7 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 
 ### 2f. 成果ゲート
 
-**判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
+**判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(research プロファイルでは、門前払いと成果ゲートの判定対象に**調査文書本体**も含める。必須欄の実体は文書側にあり、コメントは要約と対応表を担う)(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
 
 まず **成果ゲートの門前払い**(機械チェック、LLM なし)を行う。
 契約の `report_required_fields` の各見出しについて、レポートコメントの該当セクションが空でないかを確認する。

@@ -1,0 +1,34 @@
+# tasuki pack: docs(調査文書用)
+# research プロファイルが使う。言語 pack と同じ枠組みで、検査対象がコードでなく調査文書になる。
+# providers.yaml が単一ソースであり、CI workflow(loop-gates.yml)はここからの射影(docs/OPERATIONS.md)。
+# 検査は決定的なものだけを置く(必須節の存在と出典 URL の到達性)。
+# 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う。
+# 前提: 調査文書は docs_dir 配下の markdown としてコミットされること。
+detect: []                        # ファイルでは検出しない。/tasuki:loop-init が research プロファイル選択時にこの pack を選ぶ
+
+# 調査文書の置き場(repo override で変更できる)
+docs_dir: "docs/research"
+
+providers:
+  schema:
+    command: "python3 .tasuki/checks/research_schema_check.py docs/research"
+    output: exit-code             # 必須節の欠落があれば非0(欠落一覧を stderr へ)
+  links:
+    command: "python3 .tasuki/checks/research_link_check.py docs/research"
+    output: exit-code             # 到達できない出典 URL があれば非0(URL 一覧を stderr へ)
+
+artifacts: ["__pycache__/", "*.pyc"]   # 検査スクリプトの実行が生む(コミットしない)
+
+ci:
+  # ランタイムは ubuntu-latest 同梱の python3 のみ(依存の追加インストールなし)
+  setup:
+    uses: "actions/setup-python@v5"
+    with: { python-version: "3.12" }
+    install: "true"               # 依存解決は不要(標準ライブラリのみで動く)
+  normalizer_runtime: python
+  lockfile: null                  # 依存を持たないため lockfile 検知は無し
+  # 文書の改変検知: 検査スクリプトと契約を worker が書き換えていないか(コード pack の設定改変検知に相当)
+  config_tampering:
+    paths: [".tasuki/checks/", ".tasuki/profile.yaml"]
+    added_line_pattern: "required_sections|sys\\.exit\\(0\\)"
+  new_config_files: []
