@@ -106,8 +106,12 @@ def test_is_reachable_falls_back_to_get_on_head_rejection(monkeypatch) -> None:
         calls.append(req.get_method())
         if req.get_method() == "HEAD":
             raise urllib.error.HTTPError(
-                req.full_url, 405, "method not allowed", None, None
-            )  # pyright: ignore[reportArgumentType]
+                req.full_url,
+                405,
+                "method not allowed",
+                None,  # pyright: ignore[reportArgumentType]
+                None,
+            )
         return _Res()
 
     monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
@@ -120,8 +124,8 @@ def test_is_reachable_false_when_get_also_fails(monkeypatch) -> None:
 
     def fake_urlopen(req, timeout=0):
         raise urllib.error.HTTPError(
-            req.full_url, 403, "forbidden", None, None
-        )  # pyright: ignore[reportArgumentType]
+            req.full_url, 403, "forbidden", None, None  # pyright: ignore[reportArgumentType]
+        )
 
     monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
     assert linkcheck.is_reachable("https://example.com/x") is False

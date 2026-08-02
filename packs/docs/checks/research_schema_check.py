@@ -5,7 +5,9 @@
 LLM を使わない(形式ゲートは機械判定のみ)。
 
 使い方: python3 research_schema_check.py <docs_dir> [必須節名 ...]
-必須節名を省略した場合は既定(research プロファイルの report_required_fields と同じ)を使う。
+必須節名を省略した場合は既定を使う。
+既定は research プロファイルの report_required_fields から、報告コメント専用の欄
+(「参照した skill と委譲した subagent」)を除いたものと一致する(一致はテストが固定する)。
 """
 
 from __future__ import annotations

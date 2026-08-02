@@ -739,6 +739,27 @@ def test_research_profile_is_designed() -> None:
         assert f in fields, f
 
 
+def test_schema_check_sections_match_contract_report_fields() -> None:
+    """schema 検査の既定節が、契約の必須欄(報告コメント専用欄を除く)と一致すること。
+
+    E2E の出荷前レビューが検出した乖離の再発防止:
+    契約に必須欄を足したのに検査の既定を追随させないと、その欄の欠落が機械検証をすり抜ける。
+    """
+    import sys
+
+    import yaml
+
+    sys.path.insert(0, str(ROOT / "packs" / "docs" / "checks"))
+    import research_schema_check as sc  # pyright: ignore[reportMissingImports]
+
+    prof = yaml.safe_load((ROOT / "profiles/research.yaml").read_text())
+    fields = prof["templates"]["report_required_fields"]
+    report_only = "参照した skill と委譲した subagent"
+    assert report_only in fields  # 報告コメント専用欄は契約に残る
+    expected = [f for f in fields if f != report_only]
+    assert expected == sc.DEFAULT_REQUIRED_SECTIONS
+
+
 def test_researcher_and_citation_verification_exist() -> None:
     """researcher agent と verifier の引用検証(調査モード)が定義されていること。"""
     res = (ROOT / "agents/researcher.md").read_text()
