@@ -36,5 +36,15 @@ def exp_profile() -> dict:
 
 
 @pytest.fixture(scope="session")
+def res_profile() -> dict:
+    return load_yaml("profiles/research.yaml")
+
+
+@pytest.fixture(scope="session")
 def providers() -> dict:
     return load_yaml("packs/python/providers.yaml")
+
+
+@pytest.fixture(scope="session")
+def docs_providers() -> dict:
+    return load_yaml("packs/docs/providers.yaml")

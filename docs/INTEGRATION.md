@@ -9,7 +9,7 @@ plugin の成立条件は、外部の subagent、skill、検査ツールを接�
 | 接続点 | インターフェース | 例 |
 |---|---|---|
 | gate reviewer 差し替え | 契約 YAML の `reviewer:` に subagent 名を指定。入力は前工程出力+契約、出力は verdict JSON([GATES.md](GATES.md)) | 外部コレクションのレビュアー系 agent を着手ゲートに割り当て |
-| worker 差し替え | 入力は子 issue 本文と統合ブランチ名。義務は実装方針コメント→統合ブランチ base の実装→ self-verify →統合ブランチ向け draft PR(loop:pr)→レポート(参照した skill と委譲した subagent の欄を含む)→掃除。長時間ジョブは PID とログを報告して終了する。出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
+| worker 差し替え | 契約 YAML の `worker_agent:` に subagent 名を指定(既定 tasuki-worker、research は tasuki-researcher)。入力は子 issue 本文と統合ブランチ名。義務は実装方針コメント→統合ブランチ base の実装→ self-verify →統合ブランチ向け draft PR(loop:pr)→レポート(参照した skill と委譲した subagent の欄を含む)→掃除。長時間ジョブは PID とログを報告して終了する。出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
 | mechanical provider 追加 | コマンド+ SARIF または JUnit XML 出力(非対応ツールは pack の normalizer を挟む) | 任意の linter やスキャナ |
 | skill 参照 | ゲート判定基準は skill として外出し可能。worker は対象リポジトリの skill / CLAUDE.md を通常通り参照 | プロジェクト固有規約の注入 |
 

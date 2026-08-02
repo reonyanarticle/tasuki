@@ -26,9 +26,24 @@ DEFAULT_REQUIRED_SECTIONS = [
 ]
 
 
+def _strip_fenced_code(text: str) -> str:
+    # コードブロック内の「## 見出し」(テンプレート例等)を節として数えないため
+    out: list[str] = []
+    in_fence = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            out.append(line)
+    return "\n".join(out)
+
+
 def missing_sections(text: str, required: list[str]) -> list[str]:
-    headings = {m.strip() for m in re.findall(r"^#{2,3}\s+(.+)$", text, re.M)}
-    return [r for r in required if not any(r in h for h in headings)]
+    # 完全一致で判定する。部分一致だと「出典一覧を今回は作らなかった理由」のような
+    # 打ち消しの見出しが必須節として数えられ、検査が空洞化する
+    headings = {m.strip() for m in re.findall(r"^#{2,3}\s+(.+)$", _strip_fenced_code(text), re.M)}
+    return [r for r in required if r not in headings]
 
 
 def main(argv: list[str]) -> int:
@@ -37,13 +52,15 @@ def main(argv: list[str]) -> int:
         return 2
     docs_dir = Path(argv[1])
     required = argv[2:] or DEFAULT_REQUIRED_SECTIONS
+    # 文書が0件の状態は緑にする。統合ブランチは空の状態から始まり、最初の子が
+    # 取り込まれるまで docs_dir が存在しない(文書の存在自体は成果ゲートと PR の diff が保証する)
     if not docs_dir.is_dir():
-        print(f"docs_dir が無い: {docs_dir}(調査文書が未コミット)", file=sys.stderr)
-        return 1
+        print(f"docs_dir が無い(初期状態として緑): {docs_dir}", file=sys.stderr)
+        return 0
     files = sorted(docs_dir.rglob("*.md"))
     if not files:
-        print(f"調査文書が1件も無い: {docs_dir}", file=sys.stderr)
-        return 1
+        print(f"調査文書が0件(初期状態として緑): {docs_dir}", file=sys.stderr)
+        return 0
     failed = False
     for f in files:
         try:

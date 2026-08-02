@@ -14,14 +14,15 @@ def test_plugin_manifest() -> None:
     assert manifest["description"]
 
 
-@pytest.mark.parametrize("profile_name", ["dev_profile", "exp_profile"])
+@pytest.mark.parametrize("profile_name", ["dev_profile", "exp_profile", "res_profile"])
 class TestProfiles:
     def test_mechanical_providers_exist(
-        self, profile_name: str, providers: dict, request: pytest.FixtureRequest
+        self, profile_name: str, request: pytest.FixtureRequest
     ) -> None:
-        """mechanical ゲートの provider は pack に定義されていること。"""
+        """mechanical ゲートの provider は、そのプロファイルが使う pack に定義されていること。"""
         profile = request.getfixturevalue(profile_name)
-        pack_providers = providers["providers"]
+        pack = "docs_providers" if profile_name == "res_profile" else "providers"
+        pack_providers = request.getfixturevalue(pack)["providers"]
         for gate in profile["gates"]:
             if gate["kind"] == "mechanical":
                 assert gate["provider"] in pack_providers, gate["id"]
@@ -43,7 +44,10 @@ class TestProfiles:
         assert any("循環" in s for s in g1["set_signals"])
         assert any("親予算" in s for s in g1["set_signals"])
         second = profile["phases"][1]["receives"]["too_abstract_signals"]
-        assert any("実現可能性" in s for s in second)
+        if profile_name == "res_profile":
+            assert any("検証不能" in s for s in second)  # research は問いの検証可能性を検める
+        else:
+            assert any("実現可能性" in s for s in second)
 
     def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
@@ -59,17 +63,27 @@ class TestProfiles:
         assert g3["preflight"] == "report-fields"
         report = next(p for p in profile["phases"] if p["name"] == "report")
         signals = report["receives"]["too_abstract_signals"]
-        assert "再現手順の欠落" in signals
-        assert any("期待値の根拠" in s for s in signals)
         concrete = report["receives"]["too_concrete_signals"]
-        assert any("secrets" in s for s in concrete)
-        assert "期待値の根拠" in profile["templates"]["report_required_fields"]
+        if profile_name == "res_profile":
+            # research の報告は再現手順ではなく反証と出典で検める
+            assert any("反証と対立仮説" in s for s in signals)
+            assert any("出典の無い主張" in s for s in signals)
+            assert any("secrets" in s for s in concrete)
+            assert "検索戦略の実行記録" in profile["templates"]["report_required_fields"]
+        else:
+            assert "再現手順の欠落" in signals
+            assert any("期待値の根拠" in s for s in signals)
+            assert any("secrets" in s for s in concrete)
+            assert "期待値の根拠" in profile["templates"]["report_required_fields"]
 
     def test_security_is_opt_in(self, profile_name: str, request: pytest.FixtureRequest) -> None:
         """checks-security は定義されつつ、既定の enabled_gates には入らないこと。"""
         profile = request.getfixturevalue(profile_name)
         gate_ids = {gate["id"] for gate in profile["gates"]}
-        assert "checks-security" in gate_ids
+        if (
+            profile_name != "res_profile"
+        ):  # docs pack に security provider が無いため research は定義しない
+            assert "checks-security" in gate_ids
         assert "checks-security" not in profile["enabled_gates"]
 
     def test_no_dead_models_block(self, profile_name: str, request: pytest.FixtureRequest) -> None:
@@ -136,7 +150,7 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         )
     )
     assert referenced, "契約キーの参照が見つからない"
-    for name in ("development", "experiment"):
+    for name in ("development", "experiment", "research"):
         budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
         missing = sorted(referenced - set(budgets))
         assert not missing, (name, missing)
@@ -151,7 +165,7 @@ def test_gate_phase_resolves_in_every_profile() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development", "experiment", "research"):
         profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
         phases = {p["name"] for p in profile["phases"]}
         for gate in profile["gates"]:
@@ -181,12 +195,16 @@ def test_pr_template_carries_traceability() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development", "experiment", "research"):
         fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
             "pr_required_fields"
         ]
-        assert "対応する親要件" in fields, name
-        assert "受け入れ条件の充足" in fields, name
+        if name == "research":  # 調査の子は親の問いと成功基準で追跡する(受け入れ条件の欄を持たない)
+            assert "対応する親の問い" in fields, name
+            assert "成功基準の充足" in fields, name
+        else:
+            assert "対応する親要件" in fields, name
+            assert "受け入れ条件の充足" in fields, name
     worker = (ROOT / "agents/worker.md").read_text()
     assert "PR 単体で判断できるようにする" in worker
 

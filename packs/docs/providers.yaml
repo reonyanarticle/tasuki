@@ -6,15 +6,17 @@
 # 前提: 調査文書は docs_dir 配下の markdown としてコミットされること。
 detect: []                        # ファイルでは検出しない。/tasuki:loop-init が research プロファイル選択時にこの pack を選ぶ
 
-# 調査文書の置き場(repo override で変更できる)
+# 調査文書の置き場(repo override で変更できる)。
+# コマンド内の <docs_dir> はこの値へ展開する(loop-init の CI 生成時と、loop の checks-local 実行時)。
+# パスを二重に書かない(override したのに検査対象が変わらない事故を防ぐ)。
 docs_dir: "docs/research"
 
 providers:
   schema:
-    command: "python3 .tasuki/checks/research_schema_check.py docs/research"
+    command: "python3 .tasuki/checks/research_schema_check.py <docs_dir>"
     output: exit-code             # 必須節の欠落があれば非0(欠落一覧を stderr へ)
   links:
-    command: "python3 .tasuki/checks/research_link_check.py docs/research"
+    command: "python3 .tasuki/checks/research_link_check.py <docs_dir>"
     output: exit-code             # 到達できない出典 URL があれば非0(URL 一覧を stderr へ)
 
 artifacts: ["__pycache__/", "*.pyc"]   # 検査スクリプトの実行が生む(コミットしない)

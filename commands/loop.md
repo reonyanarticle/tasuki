@@ -235,7 +235,7 @@ worker の義務は、**実装前の方針コメント**、worktree 上での実
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点「フィードバック速度」)。
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
-2. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test、docs pack なら schema / links)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義、pack 由来の検査スクリプト(`.tasuki/checks/`、`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(スクリプトは default branch 版を一時パスへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+2. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test、docs pack なら schema / links)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義、pack 由来の検査スクリプト(`.tasuki/checks/`、`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(スクリプトは default branch 版を固定の一時パス `/tmp/tasuki-checks/<リポジトリ名>/` へ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る。パスを固定するのは、実行コマンドの文字列を許可設定と一致させるため)。コマンド内の `<docs_dir>` プレースホルダは pack の `docs_dir`(repo override があればその値)で展開する。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 3. テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
@@ -268,10 +268,12 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 
 ### 2f. 成果ゲート
 
-**判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(research プロファイルでは、門前払いと成果ゲートの判定対象に**調査文書本体**も含める。必須欄の実体は文書側にあり、コメントは要約と対応表を担う)(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
+**判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
+research プロファイルでは、門前払いと成果ゲートの判定対象に**調査文書本体**も含める。
+欄の置き場所は次で確定する: `report_required_fields` のうち「問い⇔発見の対応表」「結論(離散値+確信度)」「参照した skill と委譲した subagent」はコメント側で検め、残り(反証と対立仮説、除外と不採用の記録、検索戦略の実行記録、出典一覧)は調査文書側で検める(schema 検査と同じ完全一致の見出し。コメントには文書パスが必要)。
 
 まず **成果ゲートの門前払い**(機械チェック、LLM なし)を行う。
-契約の `report_required_fields` の各見出しについて、レポートコメントの該当セクションが空でないかを確認する。
+契約の `report_required_fields` の各見出しについて、上記の置き場所の該当セクションが空でないかを確認する(research 以外はすべてコメント側)。
 不足があれば LLM を呼ばずに `gate:outcome-returned` を付け、不足欄を列挙したコメントを残して、レポート再出力の worker を起動する。
 
 門前払いを通過したら reviewer へ委譲する。

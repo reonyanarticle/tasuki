@@ -89,7 +89,7 @@ templates:
   pr_required_fields:
     - 概要
     - 対応する親の問い
-    - 受け入れ条件の充足
+    - 成功基準の充足             # research の子 issue は受け入れ条件を持たない(成功基準 SC のみ)
     - 変更点
     - 影響範囲と revert 可否
     - 対応 issue
@@ -98,15 +98,15 @@ templates:
 gates:
   - id: intake
     kind: abstraction
-    phase: survey-design
-    reviewer: gate-reviewer
-    model: opus
+    phase: survey-design           # 親の問いをどのフェーズへ渡すかを検める
+    reviewer: gate-reviewer       # 外部 subagent 名に差し替え可能(docs/INTEGRATION.md)
+    model: opus                   # 低頻度・高レバレッジ
   - id: split
     kind: abstraction
-    phase: investigation
+    phase: investigation           # 分割した部分問いをどのフェーズへ渡すかを検める
     reviewer: gate-reviewer
     model: opus
-    set_signals:
+    set_signals:                  # 分割案の集合レベルの欠陥(too_* では書けないもの)
       - 依存の循環
       - 親の問いの孤児(どの子にも対応しない)
       - 部分問いの重複(同じ答えを別の子が二度調べる)
@@ -115,10 +115,10 @@ gates:
     kind: abstraction
     phase: investigation
     reviewer: gate-reviewer
-    model: haiku
+    model: haiku                  # 高頻度・定型(判断が割れたら escalate)
     escalate_to: sonnet
-    preflight: template-fields
-    criteria_skills: []
+    preflight: template-fields    # 必須欄の空チェック(機械、LLM なし)を先に行う
+    criteria_skills: []           # 判定基準 skill の追加割り当て(repo override 用)
   - id: checks-schema
     kind: mechanical
     provider: schema              # docs pack: 調査文書の必須節の存在検査(決定的)
@@ -129,23 +129,23 @@ gates:
     kind: abstraction
     phase: report
     reviewer: gate-reviewer
-    model: sonnet
+    model: sonnet                 # レポート照合は中頻度・中難度
     escalate_to: opus
-    preflight: report-fields
+    preflight: report-fields      # report_required_fields の空チェックを先に行う
     criteria_skills: []
   - id: integration
     kind: abstraction
-    phase: integration
+    phase: integration             # 親の問い⇔結論の対応(孤児の問いの検出)を検める
     reviewer: gate-reviewer
-    model: opus
+    model: opus                   # 低頻度・高レバレッジ
 
 # 有効にするゲート。ここに無いゲートは判定しない。
 # 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う。
 enabled_gates: [intake, split, start, outcome, integration, checks-schema, checks-links]
 
-preship_review:
-  mode: scaled
-  fanout_threshold_lines: 200
+preship_review:                   # 3c 出荷前レビューのコスト制御
+  mode: scaled                    # full = 常に観点別5セッション / scaled = 規模で自動選択 / manual = 人間が起動
+  fanout_threshold_lines: 200     # scaled のとき、親 PR の diff がこの行数以上なら観点別に分ける
 
 model_selection: static
 

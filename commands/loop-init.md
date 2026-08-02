@@ -19,13 +19,14 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 手順
 
-### 1. 言語検出と依存の整備
+### 1. プロファイルの確定と言語検出、依存の整備
 
+まず契約プロファイル(development / experiment / research)を引数(`$ARGUMENTS`)または対話で確定する(配置は手順3で行う。pack の選択がプロファイルに依存するため、選択だけを先に確定する)。
 プロファイルが research の場合は言語検出を行わず、**docs pack**(`packs/docs/`)を選択する(検査対象はコードでなく調査文書)。
 それ以外は、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
-pack の `ci.lockfile` が無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須)。
+pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須。docs pack のように `lockfile: null` の pack では何もしない)。
 
 ### 2. プロジェクト資産の棚卸し
 
@@ -41,16 +42,17 @@ pack の `ci.lockfile` が無ければ生成してコミット対象に含める
 
 ### 3. 契約プロファイルの配置
 
-引数(`$ARGUMENTS`)または対話で development / experiment / research を選び、plugin の `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
+手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
-あわせて pack の normalizer を `.tasuki/normalizers/` に、docs pack の検査スクリプト(`checks/`)を `.tasuki/checks/` にコピーする(CI とローカル判定から実行するため)。
+あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` に、`checks/` があれば `.tasuki/checks/` にコピーする(CI とローカル判定から実行するため。docs pack は checks のみ、python pack は normalizers のみを持つ)。
+pack のコマンドに `<docs_dir>` プレースホルダがあれば、pack の `docs_dir`(repo override があればその値)で展開してから `.tasuki/` と CI に書き込む(パスの単一ソースは `docs_dir`)。
 
 ### 4. issue / PR テンプレートの生成
 
 `.tasuki/profile.yaml` の `templates:` セクションから生成する(プロファイルの必須欄と一字一句対応させる)。
 
 - `.github/ISSUE_TEMPLATE/loop-parent.md`：`parent_issue_required_fields` の各項目を `## 見出し` にする
-- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の見出し下には AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため)
+- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の欄が契約にある場合、その見出し下に AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため。research のように受け入れ条件の欄が無い契約では、ある欄だけに適用する)
 - `.github/pull_request_template.md`：`pr_required_fields` の各項目を `## 見出し` にする
 
 見出し直下が空のままの issue は門前払いで差し戻される(親 issue はループ起動時、子 issue は着手ゲートの前。この空チェックが機能するよう、見出し文字列を profile と一致させること)。
@@ -70,6 +72,7 @@ providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生�
 **pack の providers に存在する provider の job だけを生成する**(docs pack なら schema と links の2 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
 `notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
 `output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
+**pack が `ci.config_tampering` を宣言しているのに test provider が無い場合(docs pack)、設定改変検知を独立した `config-tampering` job として生成し、`notify-success` の `needs` に含める**(テンプレートでは test job のステップとして埋め込まれているが、job が生成されないと改変検知ごと消える。検知の中身はテンプレートの該当ステップと同じ: `<pack.ci.config_tampering.paths>` の diff と `added_line_pattern` の検査)。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
 
 ```yaml
@@ -253,7 +256,7 @@ jobs:
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る。`<docs_dir>` は展開後の値で書く)。pack 由来の検査スクリプトは default branch 版を固定パス `/tmp/tasuki-checks/<リポジトリ名>/` から実行するため(loop の checks-local)、その形の実行許可(例: `Bash(python3 /tmp/tasuki-checks/*)`)も併せて提案する(固定パスでないと許可文字列が一致せず、実行のたびに確認が出て自走が止まる)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 

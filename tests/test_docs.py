@@ -818,7 +818,7 @@ def test_parent_pr_is_designed_for_approval() -> None:
     """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development", "experiment", "research"):
         fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
             "parent_pr_required_fields"
         ]
@@ -865,3 +865,20 @@ def test_toc_adaptation_is_reflected() -> None:
     # C: レイヤー報告は覗いてよい任意のチェックポイント
     loop = (ROOT / "commands/loop.md").read_text()
     assert "覗いてよい任意のチェックポイント" in loop
+
+
+def test_loop_report_skill_covers_research() -> None:
+    """レポート skill が research の読み替えを持つこと。
+
+    E2E 後のレビューで検出した欠陥の再発防止:
+    調査の子には受け入れ条件もテストも実行コマンドも無いため、
+    共通の必須構成に忠実な報告は成果ゲートの門前払いを必ず落ちる。
+    """
+    sk = (ROOT / "skills/loop-report/SKILL.md").read_text()
+    assert "## research プロファイルの読み替え" in sk
+    assert "問い⇔発見の対応表" in sk
+    assert "結論(離散値+確信度)" in sk
+    # 門前払い(loop.md)と欄の置き場所の取り決めが一致していること
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "コメント側で検め" in loop
+    assert "調査文書側で検める" in loop

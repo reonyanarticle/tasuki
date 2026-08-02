@@ -50,16 +50,33 @@ def test_schema_reports_missing_sections() -> None:
     assert miss == ["反証と対立仮説"]
 
 
-def test_schema_accepts_heading_with_suffix() -> None:
-    # 「## 結論(離散値+確信度)と補足」のような拡張見出しも節として数える
-    doc = FULL_DOC.replace("## 結論(離散値+確信度)", "### 結論(離散値+確信度)の詳細")
+def test_schema_requires_exact_heading() -> None:
+    # 部分一致は「出典一覧を今回は作らなかった理由」のような打ち消し見出しを
+    # 必須節として数えてしまうため、完全一致だけを認める
+    doc = FULL_DOC.replace("## 出典一覧", "## 出典一覧を今回は作らなかった理由")
+    assert schemacheck.missing_sections(doc, schemacheck.DEFAULT_REQUIRED_SECTIONS) == ["出典一覧"]
+
+
+def test_schema_accepts_level3_heading() -> None:
+    doc = FULL_DOC.replace("## 結論(離散値+確信度)", "### 結論(離散値+確信度)")
     assert "結論(離散値+確信度)" not in schemacheck.missing_sections(
         doc, schemacheck.DEFAULT_REQUIRED_SECTIONS
     )
 
 
-def test_schema_main_fails_on_empty_dir(tmp_path: Path) -> None:
-    assert schemacheck.main(["prog", str(tmp_path)]) == 1
+def test_schema_ignores_headings_inside_code_blocks() -> None:
+    # テンプレート例としてコードブロックに書いた見出しを実在の節と数えない
+    doc = FULL_DOC.replace(
+        "## 出典一覧\n\n- [S1] https://example.com/a\n",
+        "```\n## 出典一覧\n```\n",
+    )
+    assert schemacheck.missing_sections(doc, schemacheck.DEFAULT_REQUIRED_SECTIONS) == ["出典一覧"]
+
+
+def test_schema_main_green_on_missing_or_empty_dir(tmp_path: Path) -> None:
+    # 統合ブランチの初期状態(文書がまだ無い)を赤にしない
+    assert schemacheck.main(["prog", str(tmp_path)]) == 0
+    assert schemacheck.main(["prog", str(tmp_path / "nai")]) == 0
 
 
 def test_schema_main_green_on_valid_doc(tmp_path: Path) -> None:
@@ -72,8 +89,34 @@ def test_link_extraction_dedupes_and_strips_punctuation() -> None:
     assert linkcheck.extract_urls(text) == ["https://example.com/a", "https://example.com/b"]
 
 
-def test_link_main_fails_when_dir_missing(tmp_path: Path) -> None:
-    assert linkcheck.main(["prog", str(tmp_path / "nai")]) == 1
+def test_link_extraction_keeps_balanced_parens_in_url() -> None:
+    # 百科事典系の URL を途中で切ると、生きている出典を到達不能と誤検出する
+    text = "- [Diff (Unix)](https://en.wikipedia.org/wiki/Diff_(Unix))"
+    assert linkcheck.extract_urls(text) == ["https://en.wikipedia.org/wiki/Diff_(Unix)"]
+
+
+def test_link_main_green_when_dir_missing(tmp_path: Path) -> None:
+    # 統合ブランチの初期状態(文書がまだ無い)を赤にしない
+    assert linkcheck.main(["prog", str(tmp_path / "nai")]) == 0
+
+
+def test_link_main_fails_on_unreachable_url(tmp_path: Path, monkeypatch) -> None:
+    # main() の走査と失敗集約の経路(単体関数だけでなく main を通す)
+    (tmp_path / "a.md").write_text("出典 https://example.com/dead", encoding="utf-8")
+    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: False)
+    assert linkcheck.main(["prog", str(tmp_path)]) == 1
+
+
+def test_link_main_green_when_all_urls_reachable(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "a.md").write_text("出典 https://example.com/alive", encoding="utf-8")
+    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
+    assert linkcheck.main(["prog", str(tmp_path)]) == 0
+
+
+def test_link_main_fails_on_non_utf8(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "a.md").write_bytes("出典".encode("shift_jis"))
+    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
+    assert linkcheck.main(["prog", str(tmp_path)]) == 1
 
 
 def test_schema_main_fails_on_partially_missing_doc(tmp_path: Path) -> None:
@@ -129,3 +172,17 @@ def test_is_reachable_false_when_get_also_fails(monkeypatch) -> None:
 
     monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
     assert linkcheck.is_reachable("https://example.com/x") is False
+
+
+def test_docs_pack_commands_use_docs_dir_placeholder() -> None:
+    """provider コマンドは <docs_dir> プレースホルダを使い、パスを二重に書かないこと。
+
+    リテラルで書くと、repo override で docs_dir を変えても検査対象が変わらない。
+    """
+    import yaml
+
+    pack = yaml.safe_load((ROOT / "packs/docs/providers.yaml").read_text())
+    assert pack["docs_dir"]
+    for name, provider in pack["providers"].items():
+        assert "<docs_dir>" in provider["command"], name
+        assert pack["docs_dir"] not in provider["command"], name
