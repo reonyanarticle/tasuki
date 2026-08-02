@@ -9,8 +9,8 @@ from conftest import ROOT
 
 sys.path.insert(0, str(ROOT / "packs" / "docs" / "checks"))
 
-import research_link_check as linkcheck
-import research_schema_check as schemacheck
+import research_link_check as linkcheck  # pyright: ignore[reportMissingImports]
+import research_schema_check as schemacheck  # pyright: ignore[reportMissingImports]
 
 FULL_DOC = """# 調査: 例
 
@@ -89,24 +89,25 @@ def test_schema_main_fails_on_non_utf8(tmp_path: Path) -> None:
 
 def test_is_reachable_falls_back_to_get_on_head_rejection(monkeypatch) -> None:
     """HEAD が 405 を返すサイトでは GET で再確認する(実ネットワークは使わない)。"""
-    import io
     import urllib.error
 
     calls: list[str] = []
 
-    class _Res(io.BytesIO):
+    class _Res:
         status = 200
 
         def __enter__(self):
             return self
 
-        def __exit__(self, *a):
-            return False
+        def __exit__(self, *args: object) -> None:
+            return None
 
     def fake_urlopen(req, timeout=0):
         calls.append(req.get_method())
         if req.get_method() == "HEAD":
-            raise urllib.error.HTTPError(req.full_url, 405, "method not allowed", {}, None)
+            raise urllib.error.HTTPError(
+                req.full_url, 405, "method not allowed", None, None
+            )  # pyright: ignore[reportArgumentType]
         return _Res()
 
     monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
@@ -118,7 +119,9 @@ def test_is_reachable_false_when_get_also_fails(monkeypatch) -> None:
     import urllib.error
 
     def fake_urlopen(req, timeout=0):
-        raise urllib.error.HTTPError(req.full_url, 403, "forbidden", {}, None)
+        raise urllib.error.HTTPError(
+            req.full_url, 403, "forbidden", None, None
+        )  # pyright: ignore[reportArgumentType]
 
     monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
     assert linkcheck.is_reachable("https://example.com/x") is False
