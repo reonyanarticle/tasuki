@@ -186,3 +186,20 @@ def test_docs_pack_commands_use_docs_dir_placeholder() -> None:
     for name, provider in pack["providers"].items():
         assert "<docs_dir>" in provider["command"], name
         assert pack["docs_dir"] not in provider["command"], name
+
+
+def test_is_reachable_treats_redirect_as_reachable(monkeypatch) -> None:
+    """3xx は到達とみなす(urllib の 308 追従は Python 3.11 からで、環境差の赤を防ぐ)。"""
+    import urllib.error
+
+    def fake_urlopen(req, timeout=0):
+        raise urllib.error.HTTPError(
+            req.full_url,
+            308,
+            "permanent redirect",
+            None,  # pyright: ignore[reportArgumentType]
+            None,
+        )
+
+    monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
+    assert linkcheck.is_reachable("https://example.com/x") is True

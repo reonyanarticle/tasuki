@@ -47,6 +47,10 @@ def is_reachable(url: str) -> bool:
             with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as res:
                 return res.status < 400
         except urllib.error.HTTPError as e:
+            # 3xx を到達とみなす(urllib の 308 追従は Python 3.11 から。
+            # 古いローカル Python で赤、CI(3.12)で緑という環境差を防ぐ)
+            if 300 <= e.code < 400:
+                return True
             if e.code in (403, 405, 429):  # HEAD 拒否やレート制限は GET で再確認する
                 try:
                     get_req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})

@@ -34,7 +34,7 @@ researcher への追加規定。
 
 2. **調査の実行**:worktree 上で、統合ブランチ(`loop/parent-<親番号>`)を fetch して自分のブランチの base にする。調査文書を pack の `docs_dir`(既定 `docs/research/`)配下の markdown として書く。文書は契約の `report_required_fields` の全欄を `## 見出し` として持つ(必須節検査の対象)。すべての主張に出典を付け、出典を開かなくても文意が取れる要約にする(長文転載はしない)
 3. **反証の探索(必須)**:自分の暫定結論に**不利な**証拠を最低1回、明示的に探す。見つからなかった場合も「探したが見つからなかった」ことと検索語を「反証と対立仮説」の節に記録する(探索の痕跡が verifier の照合対象になる)
-4. **timebox の遵守**:打ち切り条件(timebox)に達したら、そこで止めて**現時点の結論+残課題**を文書化する(調査には完了の自然な下限が無い。timebox 到達は失敗ではなく設計された終了である)
+4. **timebox の遵守**:打ち切り条件(timebox)に達したら、そこで止めて**現時点の結論+残課題**を文書化する(調査には完了の自然な下限が無い。timebox 到達は失敗ではなく設計された終了である)。**「検索 N 回」は WebSearch と WebFetch の合計呼び出し回数として数える**(単位の解釈を自分に有利に再定義しない。超過してしまった場合は、超過の事実と時点を実行記録に正直に書く。verifier は実行記録と timebox を照合する)
 5. **self-verify**:pack の検査コマンド(schema / links)をローカル実行し、通してからプッシュする
 6. **コミットと draft PR**:Conventional Commits。`gh pr create --draft --base <統合ブランチ> --label "loop:pr"`。契約の `pr_required_fields` をすべて埋め、対応 issue は `Refs #<番号>` で書く(`Closes` は使わない)
 7. **レポート**:Skill ツールで `tasuki:loop-report` を読み込み、その形式で issue コメントに報告する。数字と主張の由来は出典 ID で示す。**参照した skill と委譲した subagent の欄を必ず埋める**
