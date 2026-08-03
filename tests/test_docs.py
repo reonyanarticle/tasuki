@@ -931,3 +931,22 @@ def test_new_governance_file_has_migration_path() -> None:
     loop = (ROOT / "commands/loop.md").read_text()
     assert "`.tasuki/providers.yaml` が無い導入先" in loop
     assert "停止はしない" in loop
+
+
+def test_researcher_inputs_match_dispatcher() -> None:
+    """researcher が前提にする入力を、loop.md の委譲手順が実際に渡すこと。
+
+    「渡された調査文書パス」を前提にしながら渡し手が無い、という
+    入力の出どころの欠落が実際に起きた(agent 側だけ直して手順側を直し忘れた)。
+    """
+    res = (ROOT / "agents/researcher.md").read_text()
+    loop = (ROOT / "commands/loop.md").read_text()
+    # agent 側: 4入力の宣言と、欠落時の停止
+    assert "調査文書の置き場(docs_dir)、self-verify 用の検査コマンド" in res
+    assert "推測で補わずにその旨を報告して終了する" in res
+    # 手順側: research の追加渡し物
+    assert "research プロファイルではさらに2つ渡す" in loop
+    # 文書の必須節は報告コメント専用欄を除く(schema 検査と同じ範囲)
+    assert "報告コメント専用の欄(参照した skill と委譲した subagent)を除く全欄" in res
+    # コード実行禁止の定義(調査対象に限る)
+    assert "調査対象のコードを実行しない" in res

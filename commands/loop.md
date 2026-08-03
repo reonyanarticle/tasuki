@@ -222,10 +222,11 @@ PASS したら `gate:start-passed` を付け、ラベルを片付ける(共通�
 
 **契約の `worker_agent`(既定 `tasuki-worker`。research プロファイルは `tasuki-researcher`)**へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。maker の差し替えはこのキーで行う(導入先での差し替えも同じキー)。**worker のブランチは統合ブランチ(`loop/parent-<親番号>`)から切り、PR も統合ブランチに向ける**(default branch に向けない)。
 `loop:in-progress` は worker 委譲中だけの状態であり、met / abort に加え、`loop:triage` を付けるとき(上限超過、check-run なし等)と 2b への差し戻し時にも必ず外す。
-渡すのは**子 issue 本文と統合ブランチ名(`loop/parent-<親番号>`)**のみ。
+渡すのは**子 issue 本文と統合ブランチ名(`loop/parent-<親番号>`)**。
+**research プロファイルではさらに2つ渡す**: 調査文書の置き場(`.tasuki/providers.yaml` の `docs_dir`)と、self-verify 用の検査コマンド(同ファイルの展開済み `providers.*.command`)。maker は自分ではこれらを解決しない(agent 定義がそう定める)ため、渡し忘れは置き場の推測と検査の素通りになる。
 統合ブランチ名を渡し忘れると、worker は default branch から実装して default branch 向けの PR を作る(子 issue 本文に親番号が入る保証は無い)。
-worker の義務は、**実装前の方針コメント**、worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成(ラベルは PR に付ける)、loop-report 形式の報告、掃除。
-実装方針のコメントは、人間が実装前に方向性を止めるための出口である。差し戻しでは新規に投稿せず、同じコメントを編集して更新する(冪等)。
+maker の義務の正は agent 定義(worker.md / researcher.md)である。worker なら**実装前の方針コメント**、worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成(ラベルは PR に付ける)、loop-report 形式の報告、掃除。researcher では第1手が**調査戦略コメント**になる(以降この手順で「方針コメント」と書く箇所は、research では調査戦略コメントと読み替える)。
+方針コメントは、人間が実行前に方向性を止めるための出口である。差し戻しでは新規に投稿せず、同じコメントを編集して更新する(冪等)。
 
 差し戻し再実行は **必ず新規の worker セッション** で行う(観点「コンテキスト衛生」)。
 前セッションを継続せず、渡すのは子 issue 本文+差し戻し verdict(または CI findings、verifier の未達項目)のみ。
