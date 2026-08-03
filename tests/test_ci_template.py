@@ -27,7 +27,11 @@ def template() -> dict:
 
 
 def test_template_parses_and_has_all_jobs(template: dict) -> None:
-    assert set(template["jobs"]) == CODE_EXECUTING_JOBS | {"security", "notify-success"}
+    assert set(template["jobs"]) == CODE_EXECUTING_JOBS | {
+        "tampering",
+        "security",
+        "notify-success",
+    }
 
 
 def test_workflow_default_permissions_empty(template: dict) -> None:
@@ -113,7 +117,35 @@ def test_security_action_not_on_mutable_ref(template: dict) -> None:
 
 def test_notify_needs_all_gates(template: dict) -> None:
     needs = set(template["jobs"]["notify-success"]["needs"])
-    assert CODE_EXECUTING_JOBS | {"security"} == needs
+    assert CODE_EXECUTING_JOBS | {"tampering", "security"} == needs
+
+
+def test_tampering_job_does_not_execute_pr_code(template: dict) -> None:
+    """改変検知は PR のコードを実行しない独立 job であること。
+
+    同じ job でコードを実行してから検知すると、実行されたコード(pytest が収集で
+    import する conftest.py 等)が base ref を書き換えて検知自体を無効化できる。
+    """
+    steps = template["jobs"]["tampering"]["steps"]
+    runs = " ".join(s.get("run", "") for s in steps)
+    uses = [s.get("uses", "") for s in steps]
+    assert any(u.startswith("actions/checkout") for u in uses)
+    # setup と install と provider の実行を持たない(checkout と diff だけ)
+    assert not any("setup" in u for u in uses), uses
+    assert "echo dummy" not in runs  # provider コマンドの置換痕跡が無いこと
+    # base はこの job で取得し直す(ローカルの remote-tracking ref を信用しない)
+    assert "git fetch" in runs
+    # 検知の中身が test job から失われていないこと
+    assert "def test_" in runs
+    assert "config_tampering" in runs or "conf.diff" in runs
+
+
+def test_code_executing_jobs_have_no_tampering_check(template: dict) -> None:
+    """provider を実行する job に改変検知を埋め込まない(順序の逆転を防ぐ)。"""
+    for name in CODE_EXECUTING_JOBS:
+        runs = " ".join(s.get("run", "") for s in template["jobs"][name]["steps"])
+        assert "def test_" not in runs, name
+        assert "conf.diff" not in runs, name
 
 
 def test_conftest_pathspec_matches_repo_root() -> None:

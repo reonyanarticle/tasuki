@@ -72,7 +72,7 @@ providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生�
 **pack の providers に存在する provider の job だけを生成する**(docs pack なら schema と links の2 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
 `notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
 `output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
-**pack が `ci.config_tampering` を宣言しているのに test provider が無い場合(docs pack)、設定改変検知を独立した `config-tampering` job として生成し、`notify-success` の `needs` に含める**(テンプレートでは test job のステップとして埋め込まれているが、job が生成されないと改変検知ごと消える。検知の中身はテンプレートの該当ステップと同じ: `<pack.ci.config_tampering.paths>` の diff と `added_line_pattern` の検査)。
+**改変検知(`tampering` job)は provider の有無にかかわらず必ず生成し、`notify-success` の `needs` に含める。** pack が持つキーだけを埋める(`test_tampering` が無い docs pack では設定改変検知の部分だけを残す)。この job は PR のコードを実行しない(checkout と diff のみ)。**検知を provider の job のステップとして埋め込まない**(コードを実行してから検知すると、実行されたコードが base ref や PATH を書き換えて検知を無効化できる)。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
 
 ```yaml
@@ -133,20 +133,20 @@ jobs:
         run: |
           errors="$(<pack.ci.blocking_count.typecheck> <providers.typecheck.output_file>)"
           test "$errors" -eq 0
-  test:
+  tampering:                         # 改変検知は PR のコードを一切実行しない独立 job で行う
+    # 同じ job でリポジトリのコードを実行してから検知すると、実行されたコード(テストランナーが
+    # 収集時に読み込む設定ファイル等)が base ref や PATH を書き換えて検知自体を無効化できる。
+    # checkout と diff だけの job にし、base はここで取得し直す(ローカルの remote-tracking ref を信用しない)。
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: <pack.ci.setup.uses>
-        with: <pack.ci.setup.with>
-      - run: <pack.ci.setup.install>
-      - run: <providers.test.command>
-      - name: test-tampering check   # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
+      - name: tampering check        # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
           base="origin/$BASE_REF"
           git diff "$base"...HEAD -- <pack.ci.test_tampering.paths> > /tmp/test.diff
           if grep -E '^\-.*def test_' /tmp/test.diff; then
@@ -164,6 +164,16 @@ jobs:
           if grep -E "^\+.*(<pack.ci.config_tampering.added_line_pattern>)" /tmp/conf.diff; then
             echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
+  test:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
+      - run: <providers.test.command>
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -199,7 +209,7 @@ jobs:
             exit 1
           fi
   notify-success:                  # 沈黙と故障を区別するため成功も通知する(観点「フィードバック速度」)
-    needs: [lint, format, typecheck, test, security]
+    needs: [lint, format, typecheck, test, tampering, security]
     runs-on: ubuntu-latest
     permissions: { pull-requests: write }
     steps:
@@ -256,7 +266,7 @@ jobs:
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る。`<docs_dir>` は展開後の値で書く)。pack 由来の検査スクリプトは default branch 版を固定パス `/tmp/tasuki-checks/<リポジトリ名>/` から実行するため(loop の checks-local)、その形の実行許可(例: `Bash(python3 /tmp/tasuki-checks/*)`)も併せて提案する(固定パスでないと許可文字列が一致せず、実行のたびに確認が出て自走が止まる)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る。`<docs_dir>` は展開後の値で書く)。pack 由来の検査スクリプトは default branch 版を `mktemp -d` の一時ディレクトリから実行するため(loop の checks-local)、その形の実行許可も併せて提案する(実行時に `mktemp -d` が返すルートを確認し、`Bash(python3 /var/folders/*)` のように導入先の実際の一時ディレクトリに合わせる。許可文字列が一致しないと実行のたびに確認が出て自走が止まる)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 

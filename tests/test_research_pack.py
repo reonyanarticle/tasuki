@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 from conftest import ROOT
 
 sys.path.insert(0, str(ROOT / "packs" / "docs" / "checks"))
@@ -132,45 +133,19 @@ def test_schema_main_fails_on_non_utf8(tmp_path: Path) -> None:
 
 def test_is_reachable_falls_back_to_get_on_head_rejection(monkeypatch) -> None:
     """HEAD が 405 を返すサイトでは GET で再確認する(実ネットワークは使わない)。"""
-    import urllib.error
-
     calls: list[str] = []
 
-    class _Res:
-        status = 200
+    def fake_open(url: str, method: str) -> int:
+        calls.append(method)
+        return 405 if method == "HEAD" else 200
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-    def fake_urlopen(req, timeout=0):
-        calls.append(req.get_method())
-        if req.get_method() == "HEAD":
-            raise urllib.error.HTTPError(
-                req.full_url,
-                405,
-                "method not allowed",
-                None,  # pyright: ignore[reportArgumentType]
-                None,
-            )
-        return _Res()
-
-    monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(linkcheck, "_open", fake_open)
     assert linkcheck.is_reachable("https://example.com/x") is True
     assert calls == ["HEAD", "GET"]
 
 
 def test_is_reachable_false_when_get_also_fails(monkeypatch) -> None:
-    import urllib.error
-
-    def fake_urlopen(req, timeout=0):
-        raise urllib.error.HTTPError(
-            req.full_url, 403, "forbidden", None, None  # pyright: ignore[reportArgumentType]
-        )
-
-    monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(linkcheck, "_open", lambda url, method: 403)
     assert linkcheck.is_reachable("https://example.com/x") is False
 
 
@@ -188,18 +163,63 @@ def test_docs_pack_commands_use_docs_dir_placeholder() -> None:
         assert pack["docs_dir"] not in provider["command"], name
 
 
-def test_is_reachable_treats_redirect_as_reachable(monkeypatch) -> None:
-    """3xx は到達とみなす(urllib の 308 追従は Python 3.11 からで、環境差の赤を防ぐ)。"""
+def test_is_reachable_follows_redirect_and_rechecks_target(monkeypatch) -> None:
+    """リダイレクトは自分で辿り、追従先も同じ基準で検める(私有アドレスへの誘導を防ぐ)。"""
     import urllib.error
 
-    def fake_urlopen(req, timeout=0):
+    seen: list[str] = []
+
+    def fake_opener_open(req, timeout=0):
+        seen.append(req.full_url)
         raise urllib.error.HTTPError(
             req.full_url,
             308,
             "permanent redirect",
-            None,  # pyright: ignore[reportArgumentType]
+            {"Location": "http://127.0.0.1/internal"},  # pyright: ignore[reportArgumentType]
             None,
         )
 
-    monkeypatch.setattr(linkcheck.urllib.request, "urlopen", fake_urlopen)
-    assert linkcheck.is_reachable("https://example.com/x") is True
+    class _Opener:
+        open = staticmethod(fake_opener_open)
+
+    monkeypatch.setattr(linkcheck.urllib.request, "build_opener", lambda *a: _Opener())
+    with pytest.raises(linkcheck.BlockedTarget):
+        linkcheck.is_reachable("https://example.com/x")
+    assert seen == ["https://example.com/x"]
+
+
+def test_link_check_blocks_private_targets() -> None:
+    """私有アドレスと非 http スキームは取得前に拒否する(SSRF 対策)。
+
+    出典 URL は外部ページ由来の未検証データであり、検査は開発端末と CI ランナーから走る。
+    """
+    for url in (
+        "http://127.0.0.1:8080/admin",
+        "http://10.0.0.7/x",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://localhost/x",
+        "file:///etc/passwd",
+    ):
+        with pytest.raises(linkcheck.BlockedTarget):
+            linkcheck.is_reachable(url)
+
+
+def test_link_check_allows_public_host(monkeypatch) -> None:
+    """公開アドレスは従来どおり検査する(遮断が過剰でないこと)。"""
+    monkeypatch.setattr(linkcheck, "_open", lambda url, method: 200)
+    assert linkcheck.is_reachable("https://example.com/a") is True
+
+
+def test_link_main_reports_blocked_target_as_failure(tmp_path: Path) -> None:
+    """遮断は黙って握りつぶさず、検査の失敗として報告する。"""
+    (tmp_path / "a.md").write_text("出典 http://127.0.0.1/admin", encoding="utf-8")
+    assert linkcheck.main(["prog", str(tmp_path)]) == 1
+
+
+def test_link_main_fails_when_url_count_exceeds_cap(tmp_path: Path, monkeypatch) -> None:
+    """上限超過は未検査を成功と誤読させないため赤にする。"""
+    monkeypatch.setattr(linkcheck, "MAX_URLS", 2)
+    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
+    urls = "\n".join(f"https://example.com/{i}" for i in range(5))
+    (tmp_path / "a.md").write_text(urls, encoding="utf-8")
+    assert linkcheck.main(["prog", str(tmp_path)]) == 1
