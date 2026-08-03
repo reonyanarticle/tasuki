@@ -159,3 +159,15 @@ def test_conftest_pathspec_matches_repo_root() -> None:
     assert "conftest.py" in paths, paths  # 直下
     assert any(p.startswith(":(glob)") and p.endswith("conftest.py") for p in paths), paths
     assert "conftest.py" in pack["ci"]["new_config_files"]
+
+
+def test_generation_forbids_empty_pathspec_expansion() -> None:
+    """空リストのキーをそのまま展開しない規則が生成手順にあること。
+
+    `git diff -- ` は pathspec が空だと全ファイルを対象にする。
+    docs pack の `new_config_files: []` をそのまま埋めると、ファイルを追加した
+    PR がすべて改変検知に該当し、research プロファイルが1件も取り込めなくなる。
+    """
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "値が空リストのキーは、そのキーを使うブロックごと出力しない" in init
+    assert "pathspec が空だと全ファイルを対象にする" in init

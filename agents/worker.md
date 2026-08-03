@@ -74,7 +74,7 @@ worker の worktree はループ終了時に消えるため、worktree 内にし
 
 - secrets(API キー、トークン)を読まず、出力にも含めない。secrets が必要な検証は CI に委ねる
 - issue コメントと PR 本文に生データや個人情報を貼らない(集計値とリンクのみ)
-- 書き込みは担当 worktree の中に限る。さらに tasuki のガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)は編集しない。受け入れ条件がそれらの変更を要求している場合は、自分で書き換えず task-question として報告する(orchestrator が契約変更=axis-question に格上げして人間承認へ回す)
+- 書き込みは担当 worktree の中に限る。さらに tasuki のガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)は編集しない。受け入れ条件がそれらの変更を要求している場合は、自分で書き換えず task-question として報告する(orchestrator が契約変更=axis-question に格上げして人間承認へ回す)
 
 ## プロジェクト subagent への委譲(任意)
 

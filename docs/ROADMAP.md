@@ -187,7 +187,7 @@ E2E で発見して修正した設計欠陥: 先行親の未マージ成果に�
 - CI 相当は決定的検査のみ(必須節の存在= schema、出典 URL の到達性= links。docs pack)。主張⇔出典の整合は決定的に検査できないため、verifier の調査モード(出典を開いて支持を確認する引用検証)が担う
 - timebox を打ち切り条件の一級市民にする(調査には完了の自然な下限が無い。到達時は現時点の結論+残課題で設計された終了)
 - バイアス対策を構造で入れる: 結論の先取りを too_concrete シグナルに、反証と対立仮説の節と除外の記録を必須欄に
-- 出典: PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン、agile spike、ADR、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)
+- 出典: PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン(https://www.elsevier.com/books/T/A/9780128042182)、agile spike と ADR(https://adr.github.io/)、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)
 
 ### v1.3 の E2E 実施結果(tasuki-e2e-research リポジトリ)
 
@@ -254,7 +254,7 @@ E2E 後の出荷前レビューが検出した主な欠陥と恒久対策: 「�
 1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
-4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools: Bash(gh *)` で絞る
+4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools:` で絞る。**絞り方はサブコマンド単位とする**(`Bash(gh issue:*)` のような形。`Bash(gh *)` のようなツール全体の前承認は使わない。理由と規則は [SECURITY.md](SECURITY.md) が正)
 5. **差異あり**：組み込みスラッシュコマンドは `claude -p` から呼べない。対応として形式ゲートの security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
 6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
 7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する

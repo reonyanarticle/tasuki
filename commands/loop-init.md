@@ -45,7 +45,8 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
 あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` に、`checks/` があれば `.tasuki/checks/` にコピーする(CI とローカル判定から実行するため。docs pack は checks のみ、python pack は normalizers のみを持つ)。
-pack のコマンドに `<docs_dir>` プレースホルダがあれば、pack の `docs_dir`(repo override があればその値)で展開してから `.tasuki/` と CI に書き込む(パスの単一ソースは `docs_dir`)。
+**選んだ pack の providers 定義を `.tasuki/providers.yaml` へ書き出す**(plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る)。
+書き出すときに `<docs_dir>` プレースホルダを展開する。値は pack の `docs_dir` を既定とし、**導入先で変えたい場合は書き出し時にユーザーへ確認して `.tasuki/providers.yaml` の `docs_dir` を書き換える**(展開後のコマンド文字列と `docs_dir` は同じファイルにあり、以後の単一ソースはこのファイルである。plugin 側の pack は雛形であって導入先の正ではない)。
 
 ### 4. issue / PR テンプレートの生成
 
@@ -72,7 +73,7 @@ providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生�
 **pack の providers に存在する provider の job だけを生成する**(docs pack なら schema と links の2 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
 `notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
 `output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
-**改変検知(`tampering` job)は provider の有無にかかわらず必ず生成し、`notify-success` の `needs` に含める。** pack が持つキーだけを埋める(`test_tampering` が無い docs pack では設定改変検知の部分だけを残す)。この job は PR のコードを実行しない(checkout と diff のみ)。**検知を provider の job のステップとして埋め込まない**(コードを実行してから検知すると、実行されたコードが base ref や PATH を書き換えて検知を無効化できる)。
+**改変検知(`tampering` job)は provider の有無にかかわらず必ず生成し、`notify-success` の `needs` に含める。** pack が持つキーだけを埋める(`test_tampering` が無い docs pack では設定改変検知の部分だけを残す)。**値が空リストのキーは、そのキーを使うブロックごと出力しない**(`git diff -- ` は pathspec が空だと全ファイルを対象にするため、空リストをそのまま展開すると新規ファイルを追加した PR がすべて検知に該当して恒久的に赤になる。docs pack の `new_config_files: []` が該当する)。この job は PR のコードを実行しない(checkout と diff のみ)。**検知を provider の job のステップとして埋め込まない**(コードを実行してから検知すると、実行されたコードが base ref や PATH を書き換えて検知を無効化できる)。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
 
 ```yaml
@@ -142,6 +143,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, persist-credentials: false }
+      # 生成時: pack が値を持たないキー(空リストや欠落)のブロックは**出力しない**。
+      # `git diff -- ` は pathspec が空だと全ファイルを対象にするため、空リストのまま
+      # 出力すると「ファイルを1つでも追加した PR」がすべて検知に該当して恒久的に赤になる。
       - name: tampering check        # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
@@ -266,7 +270,7 @@ jobs:
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る。`<docs_dir>` は展開後の値で書く)。pack 由来の検査スクリプトは default branch 版を `mktemp -d` の一時ディレクトリから実行するため(loop の checks-local)、その形の実行許可も併せて提案する(実行時に `mktemp -d` が返すルートを確認し、`Bash(python3 /var/folders/*)` のように導入先の実際の一時ディレクトリに合わせる。許可文字列が一致しないと実行のたびに確認が出て自走が止まる)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る。`<docs_dir>` は展開後の値で書く)。pack 由来の検査スクリプトは default branch 版を `mktemp -d` の一時ディレクトリから実行するため(loop の checks-local)、その形の実行許可も併せて提案する。**ここで `mktemp -d` を1度実行して親ディレクトリを確かめ、親のプレフィックスで許可を作る**(macOS なら `Bash(python3 /var/folders/*)`、Linux なら `Bash(python3 /tmp/*)`。`mktemp -d` が返す末尾は run ごとに変わるが親は変わらないため、プレフィックスなら毎回一致する。完全パスで固定すると次の run で一致せず、実行のたびに確認が出て自走が止まる)。あわせて `Bash(mktemp:*)` も提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 

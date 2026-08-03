@@ -13,7 +13,8 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 6. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
-   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
+   - test job は JUnit XML を出力する
+   - **改変検知は独立した `tampering` job で行う**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)。この job は checkout と diff だけを行い、PR のコードを実行しない(実行してから検知すると、実行されたコードが base ref を書き換えて検知を無効化できる)。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)

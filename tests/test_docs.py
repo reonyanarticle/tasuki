@@ -882,3 +882,35 @@ def test_loop_report_skill_covers_research() -> None:
     loop = (ROOT / "commands/loop.md").read_text()
     assert "コメント側で検め" in loop
     assert "調査文書側で検める" in loop
+
+
+def test_preship_review_recovers_from_crashed_review() -> None:
+    """レビュー結果コメントが無い状態からの再入が、モードで分岐すること。
+
+    自動実行の設定で「待ちを維持」を選ぶと、ラベルだけが残って親 PR が
+    draft のまま無期限に止まり、triage inbox にも上がらない。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる" in loop
+    assert "レビューを起動し直す" in loop
+
+
+def test_providers_definition_has_a_home_in_the_target_repo() -> None:
+    """checks-local が読む providers 定義を loop-init が導入先に書き出すこと。
+
+    plugin の packs/ は導入先リポジトリに存在しないため、書き出しが無いと
+    「default branch から providers を読む」の参照先が無い。
+    """
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "`.tasuki/providers.yaml` へ書き出す" in init
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`.tasuki/providers.yaml`" in loop
+    # 導入先に存在しないパスを改変検知の対象にしない
+    assert "packs/**/providers.yaml" not in loop
+
+
+def test_gate_review_skill_has_research_readthrough() -> None:
+    """判定側の skill にも research の読み替えがあること(存在しない欄で差し戻さない)。"""
+    sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "## research プロファイルでの読み替え" in sk
+    assert "契約に存在しない欄を根拠に差し戻さない" in sk
