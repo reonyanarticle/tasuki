@@ -148,7 +148,7 @@ development との差分は次の5点。
 
 - phases の中身(課題定義→調査計画→調査実行→統合→報告)。統合(synthesis)は v1 では独立ロールを持たず、まとめ子の作業に畳む(experiment の analysis と同じ扱い)
 - `worker_agent: tasuki-researcher`(maker の差し替え。researcher は Web 読み取り中心でコードを実行しない)
-- pack は言語 pack でなく **docs pack**(検査対象がコードでなく調査文書。providers は schema = 必須節の存在、links = 出典 URL の到達性の2つで、どちらも決定的)
+- pack は言語 pack でなく **docs pack**(検査対象がコードでなく調査文書。providers は schema(必須節の存在と出典 URL の形式)のみで、hermetic に判定できる(リポジトリの内容だけで結果が決まる。到達性は外部状態に依存するため置かず、verifier の引用検証が担う)
 - 必須欄が調査用になる(親: 問い、使い道、timebox。子: 部分問い、採用と除外の基準、打ち切り(timebox)。レポート: 離散値の結論+確信度、反証と対立仮説、除外と不採用の記録、検索戦略の実行記録、出典一覧)
 - 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う(出典を実際に開いて主張の支持を確かめる)
 

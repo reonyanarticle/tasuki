@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(mktemp:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh --version), Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(mktemp:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
 ---
 
 # /tasuki:loop
@@ -62,7 +62,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 前提を共有しない独立な親は、停止状態を待つだけで起動してよい。
 
 1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)
-2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る(`gh issue view --json subIssues` は gh 2.95.0 以上。それ未満は `gh api` の GraphQL フォールバック)
+2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る。**先に `gh --version` を見て分岐する**(`--json subIssues` は 2.95.0 以上。それ未満は `gh api` の GraphQL フォールバックを使う)。失敗してからのフォールバックにしないのは、後段の「gh の失敗で run を止める」規則に先に当たってしまうためである
 3. **起票者の信頼チェック(機械チェック、LLM なし)**:親 issue の `author_association` を見る。`OWNER` / `MEMBER` / `COLLABORATOR` のいずれでもない(外部からの起票である)場合、**`tasuki:accepted` ラベルが付いていなければループ対象外**として扱う。その旨を1度だけコメントし(冪等)、ゲートやラベルには触れずに中断する。maintainer が本文を読んで問題ないと判断したら `tasuki:accepted` を付ける(外部テキストを agent に読ませる判断を、人間が1回挟む opt-in)。このチェックは public リポジトリで意味を持ち、ループは `/tasuki:loop <親>` の明示起動でしか動かないため、外部 issue が乱立してもチェック以前に実行対象にならない
 4. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.10 の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:intake-returned` と `loop:triage` を付けて中断する(受理ゲートの LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
 5. **gh の呼び出しが失敗したら、その場で retry を1回だけ試み、それでも失敗したら run を止めて失敗箇所を報告する**(失敗を握りつぶして先に進むと、状態の欠けた issue が生まれる)。部分完了の復旧は次の run の状態復元と突合(§1a)が引き受ける
@@ -236,7 +236,7 @@ worker の義務は、**実装前の方針コメント**、worktree 上での実
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
 2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキーはそのブロックごと使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(pytest 等)を実行すると、その過程で読み込まれる PR 側のコード(conftest.py 等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
-3. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test、docs pack なら schema / links)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもので、`<docs_dir>` は展開済み)、pack 由来の検査スクリプト(`.tasuki/checks/`、`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(スクリプトは default branch 版を `mktemp -d` で作った一時ディレクトリへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る。固定パスにしないのは、共有ホストで先に置かれたディレクトリを掴む余地を残さないためである。**許可は展開先の親ディレクトリのプレフィックスで与える**(`mktemp -d` が返すパスは run ごとに変わるが親は変わらないため、`Bash(python3 /tmp/*)` や `Bash(python3 /var/folders/*)` の形なら毎回一致する。どちらになるかは環境で決まるので、`/tasuki:loop-init` が導入時に `mktemp -d` を1度実行して確かめ、その親に対応する許可を提案する))。コマンド内の `<docs_dir>` プレースホルダは pack の `docs_dir`(repo override があればその値)で展開する。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+3. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test、docs pack なら schema)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもので、`<docs_dir>` は展開済み)、pack 由来の検査スクリプト(`.tasuki/checks/`、`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(**`.tasuki/providers.yaml` が無い導入先**は、このファイルを設ける前に loop-init を実行したリポジトリである。plugin 側の pack の providers を既定値として使って続行し、`/tasuki:loop-init` の再実行で `.tasuki/providers.yaml` を作るよう1度だけ案内する。停止はしない)(スクリプトは default branch 版を `mktemp -d` で作った一時ディレクトリへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る。固定パスにしないのは、共有ホストで先に置かれたディレクトリを掴む余地を残さないためである。**許可は展開先の親ディレクトリのプレフィックスで与える**(`mktemp -d` が返すパスは run ごとに変わるが親は変わらないため、`Bash(python3 /tmp/*)` や `Bash(python3 /var/folders/*)` の形なら毎回一致する。どちらになるかは環境で決まるので、`/tasuki:loop-init` が導入時に `mktemp -d` を1度実行して確かめ、その親に対応する許可を提案する))。`.tasuki/providers.yaml` のコマンドは `<docs_dir>` が展開済みであり、ここでの再展開は行わない(パスの単一ソースはこのファイルである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
 6. 全て成功 → verifier(2e)へ
@@ -393,13 +393,15 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
    - **対応 issue**:`Closes` の列挙(取り込み時に close 済みの保険)
 2. **親 PR を ready 化する。** draft は「組み立て中」の印であり、統合ゲートを通った時点で組み立ては終わっている。人間に判断を求める PR が draft のままなのは誤った合図になる(レビューと差し戻しが出た場合は draft に戻して 2d へ)。
 
-**状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付ける。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
+**状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付け、**同時に親 PR へレビュー開始コメントを1件残す**(冪等。ラベルは付与時刻を持たないため、待ち時間の起点はこのコメントの時刻とする)。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
 再入時は、`loop:review` が付いていて統合ブランチの先端が verdict より新しくなければ、レビューをやり直さない。
 **レビュー結果は親 PR のコメントに残す**(所見ゼロの場合も「所見なし」と1件残す)。run をまたぐ場合、次の run はこのコメントの有無で分岐する: 所見コメントがあり修正が要る → 該当する子を特定して worker へ差し戻す(上記3)。「所見なし」→ そのまま人間のマージ待ち。
 **コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる**(結果を推測しない点は共通)。
 
-- `full` / `scaled`(orchestrator が自動実行する設定): レビュー subagent が結果を残す前に落ちたということなので、**レビューを起動し直す**(待ち続けると、ラベルだけが付いた状態で親 PR が draft のまま無期限に止まり、triage にも上がらない)
-- `manual`(人間が起動する設定): レビュー待ちを維持する。ただし待ちが `stale_assignment_minutes` を超えたら `loop:triage` を付けて可視化する(沈黙した待ちを inbox に出す)
+- `full` / `scaled`(orchestrator が自動実行する設定): レビュー subagent が結果を残す前に落ちたということなので、**レビューを起動し直す**(待ち続けると、ラベルだけが付いた状態で親 PR が draft のまま無期限に止まり、triage にも上がらない)。**起動し直しは `max_iterations_per_gate` まで**とし、超えたら `loop:triage` を付けて中断する(結果を残せない構造的な理由があるときに、run のたびに同じ位置へ戻る反復を止める。起動回数はレビュー開始コメントの件数で数える)
+- `manual`(人間が起動する設定): レビュー待ちを維持する。ただしレビュー開始コメントからの経過が `stale_assignment_minutes` を超えたら `loop:triage` を付けて可視化する(沈黙した待ちを inbox に出す)
+
+3c で付けた `loop:triage` は、レビュー結果コメントが現れた時点で外す(共通規則のラベルの整理は verdict を持つゲート向けであり、3c は verdict を持たないため、外す条件をここで定める)。
 
 **レビュー観点(5つ)**
 

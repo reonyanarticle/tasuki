@@ -184,7 +184,8 @@ E2E で発見して修正した設計欠陥: 先行親の未マージ成果に�
 開発と実験に続く第3のプロファイル。思想(ゲート、契約、統合ブランチ、親 PR 集約)は共通で、契約の中身と maker、pack だけが変わる。
 
 - 分割の単位は「独立に答えが閉じる部分問い」(体系的レビューと orchestrator-worker 型 deep research の先行例に依る)
-- CI 相当は決定的検査のみ(必須節の存在= schema、出典 URL の到達性= links。docs pack)。主張⇔出典の整合は決定的に検査できないため、verifier の調査モード(出典を開いて支持を確認する引用検証)が担う
+- CI 相当は hermetic な検査のみ(必須節の存在と出典 URL の形式= schema。docs pack)。到達性を含む主張⇔出典の整合は、verifier の調査モード(出典を開いて支持を確認する引用検証)が担う
+- **設計変更の記録**: 当初は出典 URL の到達性検査(links)も CI に置いたが、廃止した。到達性は外部状態(相手サーバ、DNS、ランナーの IP)に依存して hermetic でなく、E2E 2本で環境差の赤(ボット遮断、リダイレクト追従の版差)を、security スキャンで SSRF の攻撃面を実際に生んだ。リンクはほぼ常に生きているため情報量も無い(下記の引用検証研究)。「決定的= LLM を使わない」と「hermetic =リポジトリの内容だけで結果が決まる」の混同が原因で、mechanical ゲートの要件は後者である(検査スクリプトがネットワーク系モジュールを import しないことをテストで固定)
 - timebox を打ち切り条件の一級市民にする(調査には完了の自然な下限が無い。到達時は現時点の結論+残課題で設計された終了)
 - バイアス対策を構造で入れる: 結論の先取りを too_concrete シグナルに、反証と対立仮説の節と除外の記録を必須欄に
 - 出典: PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン(https://www.elsevier.com/books/T/A/9780128042182)、agile spike と ADR(https://adr.github.io/)、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)

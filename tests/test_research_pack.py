@@ -1,16 +1,14 @@
-"""docs pack の検査スクリプトの単体テスト(ネットワークに出ない範囲)。"""
+"""docs pack の検査スクリプトの単体テスト(hermetic: ネットワークに出ない)。"""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-import pytest
 from conftest import ROOT
 
 sys.path.insert(0, str(ROOT / "packs" / "docs" / "checks"))
 
-import research_link_check as linkcheck  # pyright: ignore[reportMissingImports]
 import research_schema_check as schemacheck  # pyright: ignore[reportMissingImports]
 
 FULL_DOC = """# 調査: 例
@@ -85,41 +83,6 @@ def test_schema_main_green_on_valid_doc(tmp_path: Path) -> None:
     assert schemacheck.main(["prog", str(tmp_path)]) == 0
 
 
-def test_link_extraction_dedupes_and_strips_punctuation() -> None:
-    text = "本文 https://example.com/a、再掲 https://example.com/a と (https://example.com/b)。"
-    assert linkcheck.extract_urls(text) == ["https://example.com/a", "https://example.com/b"]
-
-
-def test_link_extraction_keeps_balanced_parens_in_url() -> None:
-    # 百科事典系の URL を途中で切ると、生きている出典を到達不能と誤検出する
-    text = "- [Diff (Unix)](https://en.wikipedia.org/wiki/Diff_(Unix))"
-    assert linkcheck.extract_urls(text) == ["https://en.wikipedia.org/wiki/Diff_(Unix)"]
-
-
-def test_link_main_green_when_dir_missing(tmp_path: Path) -> None:
-    # 統合ブランチの初期状態(文書がまだ無い)を赤にしない
-    assert linkcheck.main(["prog", str(tmp_path / "nai")]) == 0
-
-
-def test_link_main_fails_on_unreachable_url(tmp_path: Path, monkeypatch) -> None:
-    # main() の走査と失敗集約の経路(単体関数だけでなく main を通す)
-    (tmp_path / "a.md").write_text("出典 https://example.com/dead", encoding="utf-8")
-    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: False)
-    assert linkcheck.main(["prog", str(tmp_path)]) == 1
-
-
-def test_link_main_green_when_all_urls_reachable(tmp_path: Path, monkeypatch) -> None:
-    (tmp_path / "a.md").write_text("出典 https://example.com/alive", encoding="utf-8")
-    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
-    assert linkcheck.main(["prog", str(tmp_path)]) == 0
-
-
-def test_link_main_fails_on_non_utf8(tmp_path: Path, monkeypatch) -> None:
-    (tmp_path / "a.md").write_bytes("出典".encode("shift_jis"))
-    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
-    assert linkcheck.main(["prog", str(tmp_path)]) == 1
-
-
 def test_schema_main_fails_on_partially_missing_doc(tmp_path: Path) -> None:
     doc = FULL_DOC.replace("## 検索戦略の実行記録", "## 何か別の節")
     (tmp_path / "a.md").write_text(doc, encoding="utf-8")
@@ -129,24 +92,6 @@ def test_schema_main_fails_on_partially_missing_doc(tmp_path: Path) -> None:
 def test_schema_main_fails_on_non_utf8(tmp_path: Path) -> None:
     (tmp_path / "a.md").write_bytes("結論".encode("shift_jis"))
     assert schemacheck.main(["prog", str(tmp_path)]) == 1
-
-
-def test_is_reachable_falls_back_to_get_on_head_rejection(monkeypatch) -> None:
-    """HEAD が 405 を返すサイトでは GET で再確認する(実ネットワークは使わない)。"""
-    calls: list[str] = []
-
-    def fake_open(url: str, method: str) -> int:
-        calls.append(method)
-        return 405 if method == "HEAD" else 200
-
-    monkeypatch.setattr(linkcheck, "_open", fake_open)
-    assert linkcheck.is_reachable("https://example.com/x") is True
-    assert calls == ["HEAD", "GET"]
-
-
-def test_is_reachable_false_when_get_also_fails(monkeypatch) -> None:
-    monkeypatch.setattr(linkcheck, "_open", lambda url, method: 403)
-    assert linkcheck.is_reachable("https://example.com/x") is False
 
 
 def test_docs_pack_commands_use_docs_dir_placeholder() -> None:
@@ -163,63 +108,37 @@ def test_docs_pack_commands_use_docs_dir_placeholder() -> None:
         assert pack["docs_dir"] not in provider["command"], name
 
 
-def test_is_reachable_follows_redirect_and_rechecks_target(monkeypatch) -> None:
-    """リダイレクトは自分で辿り、追従先も同じ基準で検める(私有アドレスへの誘導を防ぐ)。"""
-    import urllib.error
-
-    seen: list[str] = []
-
-    def fake_opener_open(req, timeout=0):
-        seen.append(req.full_url)
-        raise urllib.error.HTTPError(
-            req.full_url,
-            308,
-            "permanent redirect",
-            {"Location": "http://127.0.0.1/internal"},  # pyright: ignore[reportArgumentType]
-            None,
-        )
-
-    class _Opener:
-        open = staticmethod(fake_opener_open)
-
-    monkeypatch.setattr(linkcheck.urllib.request, "build_opener", lambda *a: _Opener())
-    with pytest.raises(linkcheck.BlockedTarget):
-        linkcheck.is_reachable("https://example.com/x")
-    assert seen == ["https://example.com/x"]
+def test_schema_url_extraction_dedupes_and_keeps_parens() -> None:
+    text = "本文 https://example.com/a、再掲 https://example.com/a と https://en.wikipedia.org/wiki/Diff_(Unix))"
+    assert schemacheck.extract_urls(text) == [
+        "https://example.com/a",
+        "https://en.wikipedia.org/wiki/Diff_(Unix)",
+    ]
 
 
-def test_link_check_blocks_private_targets() -> None:
-    """私有アドレスと非 http スキームは取得前に拒否する(SSRF 対策)。
+def test_schema_flags_malformed_urls_offline() -> None:
+    """出典 URL の形式検査はオフラインで決定的に行う(取得はしない)。
 
-    出典 URL は外部ページ由来の未検証データであり、検査は開発端末と CI ランナーから走る。
+    範囲外ポートは urlparse の .port が ValueError を上げる形式であり、
+    放置すると URL を扱う後段(verifier 等)で壊れる。
     """
-    for url in (
-        "http://127.0.0.1:8080/admin",
-        "http://10.0.0.7/x",
-        "http://169.254.169.254/latest/meta-data/",
-        "http://localhost/x",
-        "file:///etc/passwd",
-    ):
-        with pytest.raises(linkcheck.BlockedTarget):
-            linkcheck.is_reachable(url)
+    text = "出典 https://example.com:99999/x と https://ok.example/y"
+    assert schemacheck.malformed_urls(text) == ["https://example.com:99999/x"]
 
 
-def test_link_check_allows_public_host(monkeypatch) -> None:
-    """公開アドレスは従来どおり検査する(遮断が過剰でないこと)。"""
-    monkeypatch.setattr(linkcheck, "_open", lambda url, method: 200)
-    assert linkcheck.is_reachable("https://example.com/a") is True
+def test_schema_main_fails_on_malformed_url(tmp_path: Path) -> None:
+    doc = FULL_DOC + "\n追加出典 https://example.com:99999/x\n"
+    (tmp_path / "a.md").write_text(doc, encoding="utf-8")
+    assert schemacheck.main(["prog", str(tmp_path)]) == 1
 
 
-def test_link_main_reports_blocked_target_as_failure(tmp_path: Path) -> None:
-    """遮断は黙って握りつぶさず、検査の失敗として報告する。"""
-    (tmp_path / "a.md").write_text("出典 http://127.0.0.1/admin", encoding="utf-8")
-    assert linkcheck.main(["prog", str(tmp_path)]) == 1
+def test_checks_are_hermetic_no_network_imports() -> None:
+    """packs の検査スクリプトはネットワークに出ない(mechanical ゲートは hermetic)。
 
-
-def test_link_main_fails_when_url_count_exceeds_cap(tmp_path: Path, monkeypatch) -> None:
-    """上限超過は未検査を成功と誤読させないため赤にする。"""
-    monkeypatch.setattr(linkcheck, "MAX_URLS", 2)
-    monkeypatch.setattr(linkcheck, "is_reachable", lambda url: True)
-    urls = "\n".join(f"https://example.com/{i}" for i in range(5))
-    (tmp_path / "a.md").write_text(urls, encoding="utf-8")
-    assert linkcheck.main(["prog", str(tmp_path)]) == 1
+    到達性検査を一度置いて、環境差の赤(ボット遮断、リダイレクト追従の版差)と
+    SSRF の攻撃面を実際に生んだ。検査はリポジトリの内容だけで判定する。
+    """
+    for script in (ROOT / "packs").rglob("checks/*.py"):
+        text = script.read_text()
+        for banned in ("urllib.request", "import socket", "http.client", "import requests"):
+            assert banned not in text, (script.name, banned)

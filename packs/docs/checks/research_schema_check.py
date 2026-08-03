@@ -1,8 +1,11 @@
-"""調査文書の必須節検査(決定的)。
+"""調査文書の形式検査(hermetic: リポジトリの内容だけで結果が決まる)。
 
 対象ディレクトリ配下の markdown が、契約の report_required_fields に対応する
-`## 見出し` をすべて持つかを検める。欠落があれば非0で終了し、欠落一覧を stderr へ出す。
-LLM を使わない(形式ゲートは機械判定のみ)。
+`## 見出し` をすべて持つかと、出典 URL の形式(スキーム、ホスト名、ポート)を検める。
+欠落と不正があれば非0で終了し、一覧を stderr へ出す。
+LLM を使わず、ネットワークにも出ない。
+出典の到達性と主張の支持は verifier の引用検証が担う(出典を実際に開いて内容まで見る。
+到達性だけの検査は外部状態に依存して hermetic でなく、リンクはほぼ常に生きているため情報量も無い)。
 
 使い方: python3 research_schema_check.py <docs_dir> [必須節名 ...]
 必須節名を省略した場合は既定を使う。
@@ -14,6 +17,7 @@ from __future__ import annotations
 
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
 DEFAULT_REQUIRED_SECTIONS = [
@@ -37,6 +41,39 @@ def _strip_fenced_code(text: str) -> str:
         if not in_fence:
             out.append(line)
     return "\n".join(out)
+
+
+# URL は ASCII の URL 文字だけを取る(日本語の句読点で確実に止める)。
+# 丸括弧は許可した上で、閉じ括弧の余りだけを後段で剥がす(百科事典系の
+# `.../Diff_(Unix)` を途中で切ると誤検出になる)。
+_URL = re.compile(r"https?://[A-Za-z0-9\-._~:/?#@!$&*+;=%()]+")
+
+
+def extract_urls(text: str) -> list[str]:
+    """本文から URL を重複なく抽出する(コードブロック内も出典として数える)。"""
+    urls = []
+    for m in _URL.findall(text):
+        u = m.rstrip(".,;:。、")
+        while u.endswith(")") and u.count("(") < u.count(")"):
+            u = u[:-1].rstrip(".,;:。、")
+        if u not in urls:
+            urls.append(u)
+    return urls
+
+
+def malformed_urls(text: str) -> list[str]:
+    """形式が壊れている URL を返す(取得はしない。形式だけを検める)。"""
+    bad = []
+    for u in extract_urls(text):
+        parsed = urllib.parse.urlparse(u)
+        try:
+            _ = parsed.port  # 範囲外や非数値は ValueError
+        except ValueError:
+            bad.append(u)
+            continue
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            bad.append(u)
+    return bad
 
 
 def missing_sections(text: str, required: list[str]) -> list[str]:
@@ -73,6 +110,9 @@ def main(argv: list[str]) -> int:
         if miss:
             failed = True
             print(f"{f}: 必須節の欠落: {', '.join(miss)}", file=sys.stderr)
+        for u in malformed_urls(text):
+            failed = True
+            print(f"{f}: 出典 URL の形式が不正: {u}", file=sys.stderr)
     return 1 if failed else 0
 
 

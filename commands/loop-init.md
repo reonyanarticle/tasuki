@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment | research]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(mktemp:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -45,7 +45,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
 あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` に、`checks/` があれば `.tasuki/checks/` にコピーする(CI とローカル判定から実行するため。docs pack は checks のみ、python pack は normalizers のみを持つ)。
-**選んだ pack の providers 定義を `.tasuki/providers.yaml` へ書き出す**(plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る)。
+**選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` と `docs_dir` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 書き出すときに `<docs_dir>` プレースホルダを展開する。値は pack の `docs_dir` を既定とし、**導入先で変えたい場合は書き出し時にユーザーへ確認して `.tasuki/providers.yaml` の `docs_dir` を書き換える**(展開後のコマンド文字列と `docs_dir` は同じファイルにあり、以後の単一ソースはこのファイルである。plugin 側の pack は雛形であって導入先の正ではない)。
 
 ### 4. issue / PR テンプレートの生成
@@ -70,7 +70,7 @@ security job(`anthropics/claude-code-security-review` Action)は Anthropic API �
 job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
 providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生成する。
-**pack の providers に存在する provider の job だけを生成する**(docs pack なら schema と links の2 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
+**pack の providers に存在する provider の job だけを生成する**(docs pack なら schema の1 job。テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
 `notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
 `output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
 **改変検知(`tampering` job)は provider の有無にかかわらず必ず生成し、`notify-success` の `needs` に含める。** pack が持つキーだけを埋める(`test_tampering` が無い docs pack では設定改変検知の部分だけを残す)。**値が空リストのキーは、そのキーを使うブロックごと出力しない**(`git diff -- ` は pathspec が空だと全ファイルを対象にするため、空リストをそのまま展開すると新規ファイルを追加した PR がすべて検知に該当して恒久的に赤になる。docs pack の `new_config_files: []` が該当する)。この job は PR のコードを実行しない(checkout と diff のみ)。**検知を provider の job のステップとして埋め込まない**(コードを実行してから検知すると、実行されたコードが base ref や PATH を書き換えて検知を無効化できる)。
@@ -163,8 +163,10 @@ jobs:
           if git diff --name-status "$base"...HEAD -- <pack.ci.new_config_files> | grep -qE '^A'; then
             echo '::error::検査設定ファイルの新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
-          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
-          git diff "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
+          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)。
+          # --diff-filter=M で「既存ファイルの改変」に限る。新規追加を含めると、ガバナンス
+          # ファイルを作るブートストラップ PR 自身がこの検知に一致して赤になる。
+          git diff --diff-filter=M "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
           if grep -E "^\+.*(<pack.ci.config_tampering.added_line_pattern>)" /tmp/conf.diff; then
             echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi

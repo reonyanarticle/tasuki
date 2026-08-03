@@ -55,7 +55,7 @@ tasuki/
 │   ├── python/
 │   │   ├── providers.yaml
 │   │   └── normalizers/
-│   └── docs/                     # research プロファイル用(schema / links の決定的検査)
+│   └── docs/                     # research プロファイル用(schema の hermetic 検査)
 │       ├── providers.yaml
 │       └── checks/
 └── profiles/
@@ -102,7 +102,7 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | 分割ゲートの被検査者 |
 | gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | 受理から統合までの全ゲート |
 | worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | 形式ゲートの被検査者 |
-| researcher | research の maker。Web と一次情報の調査→出典つき調査文書→ PR →報告。コードを実行しない | 担当子 issue(部分問い)のみ | 形式ゲート(schema / links)の被検査者 |
+| researcher | research の maker。Web と一次情報の調査→出典つき調査文書→ PR →報告。コードを実行しない | 担当子 issue(部分問い)のみ | 形式ゲート(schema)の被検査者 |
 | verifier | 成功基準と打ち切り条件の判定(maker と別コンテキスト) | 実行結果+基準のみ | 内側ループの出口 |
 | 人間 | 最終マージ、axis-question の承認、エスカレーション受け | — | 最終ゲート |
 

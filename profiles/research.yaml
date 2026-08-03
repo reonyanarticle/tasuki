@@ -121,10 +121,7 @@ gates:
     criteria_skills: []           # 判定基準 skill の追加割り当て(repo override 用)
   - id: checks-schema
     kind: mechanical
-    provider: schema              # docs pack: 調査文書の必須節の存在検査(決定的)
-  - id: checks-links
-    kind: mechanical
-    provider: links               # docs pack: 出典 URL の到達性検査(決定的)
+    provider: schema              # docs pack: 必須節の存在と出典 URL の形式検査(hermetic)
   - id: outcome
     kind: abstraction
     phase: report
@@ -140,8 +137,9 @@ gates:
     model: opus                   # 低頻度・高レバレッジ
 
 # 有効にするゲート。ここに無いゲートは判定しない。
-# 主張⇔出典の整合(引用検証)は決定的に検査できないため CI に置かず、verifier の調査モードが担う。
-enabled_gates: [intake, split, start, outcome, integration, checks-schema, checks-links]
+# 出典の到達性と主張⇔出典の整合は CI に置かず、verifier の調査モード(引用検証)が担う
+# (mechanical ゲートは hermetic であること。到達性は外部状態に依存するため置けない)。
+enabled_gates: [intake, split, start, outcome, integration, checks-schema]
 
 preship_review:                   # 3c 出荷前レビューのコスト制御
   mode: scaled                    # full = 常に観点別5セッション / scaled = 規模で自動選択 / manual = 人間が起動

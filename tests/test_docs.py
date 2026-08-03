@@ -735,7 +735,9 @@ def test_research_profile_is_designed() -> None:
     assert any("反証と対立仮説" in s for s in report["too_abstract_signals"])
     assert any("出典の無い主張" in s for s in report["too_abstract_signals"])
     gate_ids = [g["id"] for g in prof["gates"]]
-    assert "checks-schema" in gate_ids and "checks-links" in gate_ids  # 決定的検査のみ
+    assert "checks-schema" in gate_ids  # hermetic 検査のみ
+    # 到達性検査は外部状態依存のため置かない(verifier の引用検証が担う)
+    assert "checks-links" not in gate_ids
     assert "checks-test" not in gate_ids  # コードの検査は持ち込まない
     split = next(g for g in prof["gates"] if g["id"] == "split")
     assert any("部分問いの重複" in s for s in split["set_signals"])  # 分割単位=問い
@@ -782,7 +784,7 @@ def test_researcher_and_citation_verification_exist() -> None:
     # docs pack の実在
     assert (ROOT / "packs/docs/providers.yaml").exists()
     assert (ROOT / "packs/docs/checks/research_schema_check.py").exists()
-    assert (ROOT / "packs/docs/checks/research_link_check.py").exists()
+    assert not (ROOT / "packs/docs/checks/research_link_check.py").exists()  # 到達性検査は廃止
 
 
 def test_undone_items_have_issue_drafts() -> None:
@@ -918,3 +920,14 @@ def test_gate_review_skill_has_research_readthrough() -> None:
     sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "## research プロファイルでの読み替え" in sk
     assert "契約に存在しない欄を根拠に差し戻さない" in sk
+
+
+def test_new_governance_file_has_migration_path() -> None:
+    """後から必須にしたファイルは、持たない既存導入先での扱いを定めること。
+
+    `.tasuki/providers.yaml` はこの版で新設した。持たないリポジトリで
+    checks-local が止まると、既存の導入先が黙って動かなくなる。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`.tasuki/providers.yaml` が無い導入先" in loop
+    assert "停止はしない" in loop
