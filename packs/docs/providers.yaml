@@ -31,6 +31,9 @@ ci:
   lockfile: null                  # 依存を持たないため lockfile 検知は無し
   # 文書の改変検知: 検査スクリプトと契約を worker が書き換えていないか(コード pack の設定改変検知に相当)
   config_tampering:
-    paths: [".tasuki/checks/", ".tasuki/profile.yaml"]
-    added_line_pattern: "required_sections|sys\\.exit\\(0\\)"
-  new_config_files: []
+    # 検査の実体(スクリプト)、契約、そして検査コマンドの単一ソース(providers)をすべて守る。
+    # providers.yaml は loop-init が pack から書き出したもので、docs_dir と実行コマンドを持つ。
+    # これを書き換えられると、検査対象を空ディレクトリへ向けて素通りさせられる。
+    paths: [".tasuki/checks/", ".tasuki/profile.yaml", ".tasuki/providers.yaml"]
+    added_line_pattern: "required_sections|sys\\.exit\\(0\\)|docs_dir"
+  # new_config_files は持たない(空リストを置くと pathspec ゼロで全ファイルが検知に該当する)

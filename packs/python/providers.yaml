@@ -67,6 +67,9 @@ ci:
         "pyrightconfig.json",
         "conftest.py",
         ":(glob)**/conftest.py",
+        ".tasuki/profile.yaml",
+        ".tasuki/providers.yaml",
+        ".tasuki/normalizers/",
       ]
     added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)"
   # 設定ファイルの「新規追加」検知の対象(既存ファイルの改変検知とは別に見る)

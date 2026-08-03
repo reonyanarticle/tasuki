@@ -224,3 +224,35 @@ def test_pack_declares_artifacts_and_hygiene_is_wired() -> None:
     assert "生成物が .gitignore で除外されているか検査する" in init
     worker = (ROOT / "agents/worker.md").read_text()
     assert "生成物" in worker and "コミットしない" in worker
+
+
+def test_packs_protect_governance_files_from_tampering() -> None:
+    """検査コマンドの単一ソース(.tasuki/providers.yaml)と契約が改変検知の対象であること。
+
+    providers.yaml は docs_dir と実行コマンドを持つ。書き換えられると
+    検査対象を空ディレクトリへ向けて素通りさせられるため、検知の対象から外せない。
+    """
+    import yaml
+
+    for pack in ("docs", "python"):
+        cfg = yaml.safe_load((ROOT / f"packs/{pack}/providers.yaml").read_text())
+        paths = cfg["ci"]["config_tampering"]["paths"]
+        assert ".tasuki/providers.yaml" in paths, pack
+        assert ".tasuki/profile.yaml" in paths, pack
+
+
+def test_packs_have_no_empty_pathspec_keys() -> None:
+    """pathspec に使うキーは空リストで持たない(空だと git が全ファイルを対象にする)。
+
+    `git diff -- ` は pathspec が空だと全ファイルにマッチするため、
+    空リストをテンプレートへ展開すると新規ファイルを追加した PR がすべて赤になる。
+    """
+    import yaml
+
+    for pack in ("docs", "python"):
+        ci = yaml.safe_load((ROOT / f"packs/{pack}/providers.yaml").read_text())["ci"]
+        for key in ("new_config_files",):
+            assert ci.get(key) != [], (pack, key)
+        for key in ("config_tampering", "test_tampering"):
+            if key in ci:
+                assert ci[key].get("paths"), (pack, key)
