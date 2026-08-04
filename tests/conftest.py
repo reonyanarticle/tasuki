@@ -31,10 +31,5 @@ def dev_profile() -> dict:
 
 
 @pytest.fixture(scope="session")
-def exp_profile() -> dict:
-    return load_yaml("profiles/experiment.yaml")
-
-
-@pytest.fixture(scope="session")
 def providers() -> dict:
     return load_yaml("packs/python/providers.yaml")

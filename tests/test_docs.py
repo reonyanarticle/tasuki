@@ -527,7 +527,7 @@ def test_field_review_fixes_are_designed() -> None:
     assert "既存ゲートと外部レビューツールの棚卸し" in init
     assert "判定例(fixture)の下書きを自動生成してよい" in init
     # 契約の但し書き(統制条件は要件側)
-    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+    for prof in ("profiles/development.yaml",):
         assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
     # 併用の制約(状態機械が重ならないこと)
     assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
@@ -584,7 +584,7 @@ def test_preship_review_runs_in_subagents() -> None:
         assert mode in loop, mode
     import yaml
 
-    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+    for prof in ("profiles/development.yaml",):
         c = yaml.safe_load((ROOT / prof).read_text())
         assert c["preship_review"]["mode"] == "scaled", prof
         assert c["preship_review"]["fanout_threshold_lines"] > 0, prof
@@ -753,7 +753,7 @@ def test_parent_pr_is_designed_for_approval() -> None:
     """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development",):
         fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
             "parent_pr_required_fields"
         ]
@@ -897,7 +897,7 @@ def test_report_fields_carry_meaning_comments() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development",):
         text = (ROOT / f"profiles/{name}.yaml").read_text()
         fields = yaml.safe_load(text)["templates"]["report_required_fields"]
         for field in fields:

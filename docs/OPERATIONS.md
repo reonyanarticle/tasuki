@@ -7,7 +7,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 
 1. プロファイル確定 → pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
-3. 契約プロファイル雛形の配置(development / experiment から選択)+ repo override(`.tasuki/`)
+3. 契約プロファイル雛形の配置(`development`)+ repo override(`.tasuki/`。必須欄の追加を含む)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
 5. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
 6. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する

@@ -16,6 +16,8 @@ budgets:
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
+worker_agent: tasuki-worker       # maker の差し替えキー
+
 phases:
   - name: requirements            # 親 issue
     hands_off:
@@ -32,7 +34,7 @@ phases:
     receives:
       from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
-      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない"]
+      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない", "評価や測定を伴う子で、評価データの分離(dev/test)と統制条件(seed、データ版数、環境)が該当するのに測定可能な形で書かれていない"]
       too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
     hands_off:
       to: report
@@ -41,7 +43,7 @@ phases:
     receives:
       from: implementation
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
-      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
+      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし", "評価の数字を報告しているのに由来セット(dev/test)が不明"]
       too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
     hands_off:
       to: integration
@@ -64,7 +66,7 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
 # 分割基準(decomposer と分割ゲートが従う。プロファイルごとの基準の違いを契約が持ち、手順書と agent 定義に写さない)
 split_criteria:
   good_task_conditions: [単独でマージして壊れない, テストを同梱できる, 単独で revert できる, 一読で理解できる]
-  always_separate: [リファクタリングと機能追加, ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove), 相互に依存しない機能同士]
+  always_separate: [リファクタリングと機能追加, 測定と測定対象の変更(実験と基盤変更), ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove), 相互に依存しない機能同士]
 
 gates:
   - id: intake
@@ -136,24 +138,17 @@ question_routing:
   axis-question: contract-pr      # 契約ファイル変更 PR として起票。人間が承認
 ```
 
-### experiment プロファイルとの差分
-
-experiment.yaml と development.yaml の差分は次の4点で、ゲート機構、verdict、ルーティングは共通である。
-
-- phases の名称(課題定義→実験計画→実行→分析→報告)
-- `exit_criteria_required` の中身(評価指標、データセット、seed)
-- 着手ゲートの必須欄(実験条件、評価データの分離(dev/test))
-- レポート必須欄への追加(数字の由来セット(dev/test))
-
-experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
-analysis 単独の受け渡し照合は v2 の検討項目として残す(v1 では分割しない)。
-
-`worker_agent:` は maker の差し替えキーであり、全プロファイルで有効(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
+`worker_agent:` は maker の差し替えキーである(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
 
 ### language pack の providers.yaml
 
 デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
 対象リポジトリは repo override でコマンドを変更できる。
+
+repo override(`.tasuki/profile.yaml`)で変えてよいのは、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
+必須欄の追加は、その導入先で毎回問いかけたい欄をテンプレと門前払いに持ち込む手段である(実験を常時行うリポジトリが「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を子の必須欄に足す、など)。
+欄の削除は行わない(ゲートの判定材料が消える)。
+**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の experiment 廃止の記録)。
 
 pack は `providers` のほかに、生成物の一覧(`artifacts`)と CI 生成に使う定義(`ci`: セットアップ手順、normalizer の実行系、lockfile、改変検知の対象パス)を持つ。
 以下は `providers` 部分の抜粋である(全体は packs/python/providers.yaml が正)。
@@ -183,8 +178,8 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
+契約スキーマのうち `templates:`、`enabled_gates:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズ名を手順書に直接書くと、導入先がフェーズを言い換えたときに解決できなくなる)。
 `split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は ROADMAP.md の撤回の記録に残す)。
 
 ## issue テンプレート仕様
@@ -194,7 +189,7 @@ providers:
 | テンプレ | 必須欄 |
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
-| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) / 評価データの分離(experiment のみ) |
+| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations)(導入先が repo override で欄を足してよい) |
 | レポート | 要件 ID ⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | 子 PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 | 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue(loop.md の 3c-2 が投稿する) |

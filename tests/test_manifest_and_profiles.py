@@ -14,7 +14,7 @@ def test_plugin_manifest() -> None:
     assert manifest["description"]
 
 
-@pytest.mark.parametrize("profile_name", ["dev_profile", "exp_profile"])
+@pytest.mark.parametrize("profile_name", ["dev_profile"])
 class TestProfiles:
     def test_mechanical_providers_exist(
         self, profile_name: str, request: pytest.FixtureRequest
@@ -124,6 +124,40 @@ class TestProfiles:
         assert criteria["always_separate"], profile_name
 
 
+def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None:
+    """実験の規律が、専用プロファイルではなく development の契約に載っていること。
+
+    experiment プロファイルを廃止したとき、規律(評価データの分離、統制条件、数字の由来セット)を
+    条件付きシグナルとして development へ畳んだ。これが消えると、実験を回したときに
+    データ漏洩と再現不能を止める装置がどこにも無くなる。
+    """
+    assert not (ROOT / "profiles/experiment.yaml").exists()  # 器は1つに戻した
+    phases = {p["name"]: p for p in dev_profile["phases"]}
+    impl = phases["implementation"]["receives"]["too_abstract_signals"]
+    assert any("評価データの分離" in s and "統制条件" in s for s in impl), impl
+    report = phases["report"]["receives"]["too_abstract_signals"]
+    assert any("由来セット" in s for s in report), report
+    # 欄コメント側にも再現の統制条件が残っていること(raw テキストで見る)
+    raw = (ROOT / "profiles/development.yaml").read_text()
+    assert "seed" in raw and "データ版数" in raw
+    # 測定と測定対象を同じ子に入れない
+    separate = dev_profile["split_criteria"]["always_separate"]
+    assert any("測定と測定対象の変更" in s for s in separate), separate
+
+
+def test_repo_override_may_add_required_fields() -> None:
+    """必須欄の追加を repo override の許容範囲として明示していること。
+
+    仕事の型ごとに plugin 側の雛形を増やさない代わりに、導入先が自分の契約へ
+    欄を足せることが逃げ道になる。これが書かれていないと、型ごとの雛形が復活する。
+    """
+    contracts = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "必須欄(`templates`)の追加" in contracts
+    assert "欄の削除は行わない" in contracts
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "必須欄(`templates`)の追加" in init
+
+
 def test_providers_normalizer_exists(providers: dict) -> None:
     """typecheck の normalizer が実在すること。"""
     normalizer = providers["providers"]["typecheck"]["normalizer"]
@@ -148,7 +182,7 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         )
     )
     assert referenced, "契約キーの参照が見つからない"
-    for name in ("development", "experiment"):
+    for name in ("development",):
         budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
         missing = sorted(referenced - set(budgets))
         assert not missing, (name, missing)
@@ -157,13 +191,12 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
 def test_gate_phase_resolves_in_every_profile() -> None:
     """abstraction ゲートの phase が、どのプロファイルでも実在するフェーズを指すこと。
 
-    loop.md がフェーズ名をハードコードしていた頃、experiment プロファイルは
-    decomposition と implementation を持たないため受理と分割と着手のゲートが
-    参照先を解決できなかった。同じ壊れ方を防ぐ。
+    loop.md がフェーズ名をハードコードしていた頃、フェーズ名を言い換えた契約では
+    受理と分割と着手のゲートが参照先を解決できなかった。同じ壊れ方を防ぐ。
     """
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development",):
         profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
         phases = {p["name"] for p in profile["phases"]}
         for gate in profile["gates"]:
@@ -178,9 +211,7 @@ def test_loop_does_not_hardcode_phase_names() -> None:
     import re
 
     loop = (ROOT / "commands/loop.md").read_text()
-    hardcoded = re.findall(
-        r"(?:decomposition|implementation|experiment-design|execution|analysis) フェーズ", loop
-    )
+    hardcoded = re.findall(r"(?:decomposition|implementation|execution|analysis) フェーズ", loop)
     assert not hardcoded, hardcoded
     assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く
 
@@ -193,7 +224,7 @@ def test_pr_template_carries_traceability() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
+    for name in ("development",):
         fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
             "pr_required_fields"
         ]

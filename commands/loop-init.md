@@ -1,6 +1,5 @@
 ---
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
-argument-hint: "[development | experiment]"
 disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
@@ -21,8 +20,8 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ### 1. プロファイルの確定と言語検出、依存の整備
 
-まず契約プロファイル(development / experiment)を引数(`$ARGUMENTS`)または対話で確定する(配置は手順3で行う)。
-次に、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
+契約プロファイルは `development` の1つである(仕事の型ごとに雛形を分けない。実験や評価を伴う仕事も同じ契約で回し、必要なら手順3で必須欄を足す)。
+まず、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
 pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須。`lockfile: null` の pack では何もしない)。
@@ -49,7 +48,9 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 4. 走行中(open)の親 issue があれば、完走または close まで移行を待つよう案内する(欄名やゲートの版が run の途中で変わると、既存のレポートと文書が新しい必須欄の検査に落ち、差し戻しだけが反復する)
 
 手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
-以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
+以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
+**必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。
+欄を減らすことはしない(ゲートの判定材料が消える)。
 あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
 **選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 
