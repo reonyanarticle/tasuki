@@ -61,7 +61,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 未マージの成果は default branch に無く、後続の統合ブランチにも入らないため、worker が先行親の成果物を複製して持ち込む事故になる(実地で発生した。複製が偶然同一なら衝突しないが、先行親がレビューで修正されると静かに食い違う)。
 前提を共有しない独立な親は、停止状態を待つだけで起動してよい。
 
-1. `.tasuki/profile.yaml` と `.tasuki/providers.yaml` を読む。どちらかが無ければ `/tasuki:loop-init` を案内して中断する(providers の欠落を 2d まで持ち越すと、着手ゲートと実装を消費してから止まる)。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)。
+1. `git fetch origin` してから、**default branch(信頼された版)の** `.tasuki/profile.yaml` と `.tasuki/providers.yaml` を読む(`git show origin/<default branch>:<パス>`)。どちらかが無ければ `/tasuki:loop-init` を案内して中断する(**作業ツリーを見てはならない**。ブートストラップ PR が未マージの間は作業ツリーにだけ存在する状態があり、そこで通過させると着手ゲートと実装を消費してから 2d(checks-local)で止まる)。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)。
 2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る。**先に `gh --version` を見て分岐する**(`--json subIssues` は 2.95.0 以上。それ未満は `gh api` の GraphQL フォールバックを使う)。失敗してからのフォールバックにしないのは、後段の「gh の失敗で run を止める」規則に先に当たってしまうためである
 3. **起票者の信頼チェック(機械チェック、LLM なし)**:親 issue の `author_association` を見る。`OWNER` / `MEMBER` / `COLLABORATOR` のいずれでもない(外部からの起票である)場合、**`tasuki:accepted` ラベルが付いていなければループ対象外**として扱う。その旨を1度だけコメントし(冪等)、ゲートやラベルには触れずに中断する。maintainer が本文を読んで問題ないと判断したら `tasuki:accepted` を付ける(外部テキストを agent に読ませる判断を、人間が1回挟む opt-in)。このチェックは public リポジトリで意味を持ち、ループは `/tasuki:loop <親>` の明示起動でしか動かないため、外部 issue が乱立してもチェック以前に実行対象にならない
 4. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.10(受理ゲート)の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:intake-returned` と `loop:triage` を付けて中断する(受理ゲートの LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
@@ -140,7 +140,7 @@ worker が実行中の間は取り込まない(実装の足元の base を動か
 実行中の子が1件も無い状態(run 開始時にそうであるか、現在レイヤーが §3a(レイヤーの合流)の停止状態に達したとき)になってから、次を実行する。
 
 1. 親の `gate:intake-passed` と `gate:split-passed` を外し、§0.10(受理ゲート)を新本文で再判定する(新しいスコープに対する予算と承認サイズはここで検まる)。差し戻しなら通常どおり `loop:triage` で止まる(`loop:replan` は外さず、人間の修正後に再入する)
-2. PASS したら decomposer へ**差分分割モード**で委譲する。渡すのは、新しい親本文、旧分割案 YAML(最新の分割ゲート PASS verdict の `<details>` から読む)、子 issue の決着状態一覧(統合ブランチへ取り込み済みか、未取り込みか。未取り込みは実行前、差し戻し中、triage 停止中を含む)と、§1a(分割の入手)と同じ契約の抜粋のみ。返る差分分割案は子ごとに「維持 / 改訂 / 追加 / 撤回」を宣言し、取り込み済みの子に波及する変更は**追い子**(取り込み済み成果を前提に適応する新しい子)として表現する(統合ブランチに入った成果は巻き戻さない。revert ではなく前進で適応する)
+2. PASS したら decomposer へ**差分分割モード**で委譲する。渡すのは、新しい親本文、旧分割案 YAML(最新の分割ゲート PASS verdict の `<details>` から読む。**人間起票で分割案の添付が無い場合は、現在の子 issue 群の本文一覧を旧分割案の代わりに渡す**)、子 issue の決着状態一覧(統合ブランチへ取り込み済みか、未取り込みか。未取り込みは実行前、差し戻し中、triage 停止中を含む)と、§1a(分割の入手)と同じ契約の抜粋のみ。返る差分分割案は子ごとに「維持 / 改訂 / 追加 / 撤回」を宣言し、取り込み済みの子に波及する変更は**追い子**(取り込み済み成果を前提に適応する新しい子)として表現する(統合ブランチに入った成果は巻き戻さない。revert ではなく前進で適応する)
 3. 差分分割案の適用後の全子集合を、§1b(分割ゲート)が通常どおり集合として再判定する(依存の循環、孤児、予算整合)
 4. PASS したら orchestrator が適用する。**維持**は何もしない。**改訂**(未取り込みの子)は本文を更新して `gate:start-passed` を外す(着手ゲートを通り直す)。**追加**と**追い子**は §1b(分割ゲート)の PASS 経路どおり起票する(起票の冪等判定は open の子だけと突き合わせる。撤回済みの closed の子と同タイトルでも、replan による追加は正当な新しい子である)。**撤回**(要件縮小で不要になった未取り込みの子)は「replan により撤回」とコメントして close する(完了コメントの無い人間 close =不採用と区別するため、撤回コメントを必ず残す)
 5. `loop:replan` を外し、レイヤー計画(§1c(依存グラフとレイヤー))を作り直して通常の実行に戻る。計画コメントには何が変わったか(改訂 / 追加 / 撤回 / 追い子の一覧)を1行ずつ残す
@@ -173,10 +173,10 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 
 **この機械チェックは、着手ゲートが `preflight: template-fields` を持つ契約で走る。`enabled_gates` に `start` が無くても走らせる**(空欄の検出に LLM は要らず、費用も掛からない。LLM 判定を外した契約でも、必須欄の空だけは必ず検める)。
 契約の `child_issue_required_fields` の各見出しについて、issue 本文の該当セクションが空でないかを確認する。
-空欄があれば、LLM を呼ばずに差し戻す。不足欄を人間可読の markdown(箇条書き)で列挙したコメントを issue に残し、`gate:start-returned` ラベルを付ける。
+空欄があれば、LLM を呼ばずに差し戻す。不足欄を人間可読の markdown(箇条書き)で列挙したコメントを issue に残し、`gate:start-returned` ラベルを付ける。**このコメントも verdict と同型で残す**(`verdict: TOO_ABSTRACT`、`return_to` は子の由来に応じて `decomposer` か起票者、reasons は不足欄。機械可読の JSON を `<details>` に畳む)。再入規則と decomposer への委譲は「最終 verdict」を基準時刻と入力に使うため、verdict を残さないと再入時に比較対象も渡し物も無くなる。
 同じ内容のコメントが既にあれば再投稿しない(冪等)。
 
-あわせて **予算欄の値を読み取る**。子 issue の `予算(max_iterations)` の値を、この issue の内側ループ上限として採用する(有効上限= min(契約の `max_inner_loop`, issue の予算値)。パースできない場合は差し戻し対象)。
+**予算欄の読み取りは、上の空チェックを行うかどうかに関わらず必ず行う**(後段の 2e(内側ループの出口)と 2f(成果ゲート)が「2a で決めた有効上限」を使うため、飛ばすと上限の出どころが消える)。子 issue の `予算(max_iterations)` の値を、この issue の内側ループ上限として採用する(有効上限= min(契約の `max_inner_loop`, issue の予算値)。パースできない場合は差し戻し対象)。
 
 ### 2b. 着手ゲート(契約照合)
 
@@ -243,7 +243,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
 2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(pytest 等)を実行すると、その過程で読み込まれる PR 側のコード(conftest.py 等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
-3. 契約の `enabled_gates` にあるゲートのうち **`kind: mechanical` のもの**が指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。ゲート ID の綴りではなく `kind` で判別する。mechanical ゲートが無い契約では実行する検査は無く、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもの)は default branch(信頼された版)から読む**(どちらかが無ければ `/tasuki:loop-init` を案内して中断する)。checks-local が実行するのは providers の宣言済みコマンドだけであり、リポジトリ内のスクリプトを直接実行する検査は持たない(v1 の pack の normalizer は CI だけが実行する。子ブランチ側の写しのスクリプトを実行すると、改変検知の前に改変済みスクリプトが走るためである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+3. 契約の `enabled_gates` にあるゲートのうち **`kind: mechanical` で、かつその provider が `command` を持つもの**を実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。ゲート ID の綴りではなく `kind` で判別する。`action` だけを持つ provider(外部 Action)は CI 専用でありローカルでは実行しない。実行対象が無ければ、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもの)は default branch(信頼された版)から読む**(どちらかが無ければ `/tasuki:loop-init` を案内して中断する)。checks-local が実行するのは providers の宣言済みコマンドだけであり、リポジトリ内のスクリプトを直接実行する検査は持たない(v1 の pack の normalizer は CI だけが実行する。子ブランチ側の写しのスクリプトを実行すると、改変検知の前に改変済みスクリプトが走るためである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
 6. 全て成功 → verifier(2e)へ
@@ -276,10 +276,10 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 ### 2f. 成果ゲート
 
 **判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
-まず **成果ゲートの門前払い**(機械チェック、LLM なし)を行う(成果ゲートが `preflight: report-fields` を持つ場合)。
+まず **成果ゲートの門前払い**(機械チェック、LLM なし)を行う(成果ゲートが `preflight: report-fields` を持つ場合)。**`enabled_gates` に `outcome` が無くても、この機械チェックだけは走らせる**(2a(門前払い)と同じ方針。空欄の検出に LLM は要らない)。
 契約の `report_required_fields` の各見出しについて、レポートコメントの該当セクションが空でないかを確認する。
 見出しは欄名と完全一致で数え、**コードブロック(フェンス)内の見出しは数えない**(部分一致は打ち消しの見出しを、フェンス内はテンプレ例を、実在の節と誤認して素通りさせる)。
-不足があれば LLM を呼ばずに `gate:outcome-returned` を付け、不足欄を列挙したコメントを残して、レポート再出力の worker を起動する。
+不足があれば LLM を呼ばずに `gate:outcome-returned` を付け、不足欄を列挙したコメントを**verdict と同型で**残して(`verdict: TOO_ABSTRACT`、`return_to: worker`)、レポート再出力の worker を起動する。
 
 門前払いを通過したら reviewer へ委譲する。
 解決規則は 2b と同じ(既定は `tasuki-gate-reviewer` を **sonnet** で呼び、`escalate_to: opus` の昇格時は同じ agent を **opus** で呼ぶ)。

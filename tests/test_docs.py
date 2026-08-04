@@ -916,6 +916,31 @@ def test_scan_artifacts_are_ignored() -> None:
     assert "CLAUDE-SECURITY-*/" in ignored
 
 
+def test_final_trace_audit_findings_are_fixed() -> None:
+    """最終状態の手順トレース監査の所見が反映されていること。
+
+    いずれも新規セッションが文字どおり歩くと詰まる箇所である。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    # ブートストラップ PR 未マージのとき、作業ツリーを見て通過させない
+    assert "作業ツリーを見てはならない" in loop
+    # mechanical でも command を持たない provider はローカル実行しない
+    assert "その provider が `command` を持つもの" in loop
+    # 予算欄の読み取りは門前払いの有無に依らず走らせる(有効上限の出どころ)
+    assert "予算欄の読み取りは、上の空チェックを行うかどうかに関わらず必ず行う" in loop
+    # 門前払いの差し戻しも verdict 同型(再入の基準時刻と委譲の入力になる)
+    assert "このコメントも verdict と同型で残す" in loop
+    # 人間起票の親に replan が付いた場合の代替入力
+    assert "現在の子 issue 群の本文一覧を旧分割案の代わりに渡す" in loop
+    init = (ROOT / "commands/loop-init.md").read_text()
+    # plugin 側のファイルは plugin ルートからの絶対パスで読む(カレントは導入先)
+    assert "${CLAUDE_PLUGIN_ROOT}/profiles/development.yaml" in init
+    assert "カレントは導入先リポジトリであり" in init
+    # 契約ファイルのコメントは導入先へコピーされるため、plugin の docs パスを指さない
+    contract = (ROOT / "profiles/development.yaml").read_text()
+    assert "docs/CONTRACTS.md" not in contract
+
+
 def test_subagent_nesting_claims_match_current_spec() -> None:
     """subagent のネストについて、現行仕様と逆の記述を持たないこと。
 

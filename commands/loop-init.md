@@ -48,12 +48,12 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
 4. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
 
-`profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。
+`${CLAUDE_PLUGIN_ROOT}/profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。**plugin 側のファイルは必ず `${CLAUDE_PLUGIN_ROOT}` からの絶対パスで読む**(カレントは導入先リポジトリであり、`profiles/` も `packs/` もそこには無い)。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` である。**上書きしてよい範囲の正は、契約ファイル冒頭のコメントが定める**(必須欄(`templates`)の追加を含む。規則が契約と一緒に導入先へ運ばれる形にしてある)。
 **必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。**足した欄には意味を1行の欄コメントとして書く**(ゲートと decomposer は欄の意味をそこから引く。コメントが無いと欄名だけが渡り、空チェックにしか効かない)。
 欄を減らすことはしない(ゲートの判定材料が消える)。
-あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
-**選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
+あわせて pack に `normalizers/` があれば `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/normalizers/` から `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
+**選んだ pack の `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/providers.yaml` を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 
 ### 4. issue / PR テンプレートの生成
 
