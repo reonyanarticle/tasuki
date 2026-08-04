@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh --version), Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(mktemp:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh --version), Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
 ---
 
 # /tasuki:loop
@@ -142,7 +142,7 @@ worker が実行中の間は取り込まない(実装の足元の base を動か
 実行中の子が1件も無い状態(run 開始時にそうであるか、現在レイヤーが §3a の停止状態に達したとき)になってから、次を実行する。
 
 1. 親の `gate:intake-passed` と `gate:split-passed` を外し、受理ゲート(§0.10)を新本文で再判定する(新しいスコープに対する予算と承認サイズはここで検まる)。差し戻しなら通常どおり `loop:triage` で止まる(`loop:replan` は外さず、人間の修正後に再入する)
-2. PASS したら decomposer へ**差分分割モード**で委譲する。渡すのは、新しい親本文、旧分割案 YAML(最新の分割ゲート PASS verdict の `<details>` から読む)、子 issue の決着状態一覧(統合ブランチへ取り込み済みか、未取り込みか。未取り込みは実行前、差し戻し中、triage 停止中を含む)のみ。返る差分分割案は子ごとに「維持 / 改訂 / 追加 / 撤回」を宣言し、取り込み済みの子に波及する変更は**追い子**(取り込み済み成果を前提に適応する新しい子)として表現する(統合ブランチに入った成果は巻き戻さない。revert ではなく前進で適応する)
+2. PASS したら decomposer へ**差分分割モード**で委譲する。渡すのは、新しい親本文、旧分割案 YAML(最新の分割ゲート PASS verdict の `<details>` から読む)、子 issue の決着状態一覧(統合ブランチへ取り込み済みか、未取り込みか。未取り込みは実行前、差し戻し中、triage 停止中を含む)と、§1a と同じ契約の抜粋のみ。返る差分分割案は子ごとに「維持 / 改訂 / 追加 / 撤回」を宣言し、取り込み済みの子に波及する変更は**追い子**(取り込み済み成果を前提に適応する新しい子)として表現する(統合ブランチに入った成果は巻き戻さない。revert ではなく前進で適応する)
 3. 差分分割案の適用後の全子集合を、分割ゲート(§1b)が通常どおり集合として再判定する(依存の循環、孤児、予算整合)
 4. PASS したら orchestrator が適用する。**維持**は何もしない。**改訂**(未取り込みの子)は本文を更新して `gate:start-passed` を外す(着手ゲートを通り直す)。**追加**と**追い子**は §1b の PASS 経路どおり起票する(起票の冪等判定は open の子だけと突き合わせる。撤回済みの closed の子と同タイトルでも、replan による追加は正当な新しい子である)。**撤回**(要件縮小で不要になった未取り込みの子)は「replan により撤回」とコメントして close する(完了コメントの無い人間 close =不採用と区別するため、撤回コメントを必ず残す)
 5. `loop:replan` を外し、レイヤー計画(§1c)を作り直して通常の実行に戻る。計画コメントには何が変わったか(改訂 / 追加 / 撤回 / 追い子の一覧)を1行ずつ残す
@@ -237,7 +237,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 差し戻し再実行は **必ず新規の worker セッション** で行う(観点「コンテキスト衛生」)。
 前セッションを継続せず、渡すのは子 issue 本文+差し戻し verdict(または CI findings、verifier の未達項目)のみ。
 ただし maker が入力として前提する渡し物(issue 番号、ブランチ名)は、差し戻しの委譲でも毎回渡す(欠けると maker は推測せず入力不足で終了し、委譲が空回りする)。
-**差し戻しで渡すブランチ名は、その issue の既存 open PR があればその head ブランチ(前セッションの作業の継続)、無ければ統合ブランチとする**(統合ブランチを渡すと、maker は前セッションの PR を特定できず、同じ issue に2本目の PR を開く)。
+差し戻しで渡すブランチ名も統合ブランチのままとする(前セッションの PR とブランチの継続は、maker が「同じ子 issue に対する既存 PR」を確認して行う。worker.md の規定)。
 
 ### 2d. checks-local(形式ゲート、反復判定)
 
@@ -245,7 +245,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
 2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(pytest 等)を実行すると、その過程で読み込まれる PR 側のコード(conftest.py 等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
-3. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。`checks-*` ゲートが無い契約では実行する検査は無く、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもの)、pack 由来のスクリプト(`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(**`.tasuki/providers.yaml` が無い導入先**は、このファイルを設ける前に loop-init を実行したリポジトリである。plugin 側の pack の providers を既定値として使って続行し、`/tasuki:loop-init` の再実行で `.tasuki/providers.yaml` を作るよう1度だけ案内する。停止はしない)(スクリプトは default branch 版を `mktemp -d` で作った一時ディレクトリへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る。固定パスにしないのは、共有ホストで先に置かれたディレクトリを掴む余地を残さないためである。**許可は展開先の親ディレクトリのプレフィックスで与える**(`mktemp -d` が返すパスは run ごとに変わるが親は変わらないため、`Bash(python3 /tmp/*)` や `Bash(python3 /var/folders/*)` の形なら毎回一致する。どちらになるかは環境で決まるので、`/tasuki:loop-init` が導入時に `mktemp -d` を1度実行して確かめ、その親に対応する許可を提案する))。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
+3. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。`checks-*` ゲートが無い契約では実行する検査は無く、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもの)は default branch(信頼された版)から読む**(**`.tasuki/providers.yaml` が無い導入先**は、このファイルを設ける前に loop-init を実行したリポジトリである。plugin 側の pack の providers を既定値として使って続行し、`/tasuki:loop-init` の再実行で `.tasuki/providers.yaml` を作るよう1度だけ案内する。停止はしない)。checks-local が実行するのは providers の宣言済みコマンドだけであり、リポジトリ内のスクリプトを直接実行する検査は持たない(v1 の pack の normalizer は CI だけが実行する。子ブランチ側の写しのスクリプトを実行すると、改変検知の前に改変済みスクリプトが走るためである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
 6. 全て成功 → verifier(2e)へ
@@ -402,11 +402,11 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 2. **親 PR を ready 化する。** draft は「組み立て中」の印であり、統合ゲートを通った時点で組み立ては終わっている。人間に判断を求める PR が draft のままなのは誤った合図になる(レビューと差し戻しが出た場合は draft に戻して 2d へ)。
 
 **状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付け、**同時に親 PR へレビュー開始コメントを1件残す**(冪等。ラベルは付与時刻を持たないため、待ち時間の起点はこのコメントの時刻とする)。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
-再入時は、`loop:review` が付いていて統合ブランチの先端が verdict より新しくなければ、レビューをやり直さない。
+再入時は、レビュー結果コメントがあり、かつ統合ブランチの先端がその結果より新しくなければ、「レビュー待ち」を維持してレビューをやり直さない(結果コメントが無い場合の扱いは下の分岐に依る)。
 **レビュー結果は親 PR のコメントに残す**(所見ゼロの場合も「所見なし」と1件残す)。run をまたぐ場合、次の run はこのコメントの有無で分岐する: 所見コメントがあり修正が要る → 該当する子を特定して worker へ差し戻す(上記3)。「所見なし」→ そのまま人間のマージ待ち。
 **コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる**(結果を推測しない点は共通)。
 
-- `full` / `scaled`(orchestrator が自動実行する設定): レビュー subagent が結果を残す前に落ちたということなので、**レビューを起動し直す**(待ち続けると、ラベルだけが付いた状態で親 PR が draft のまま無期限に止まり、triage にも上がらない)。**起動し直しは `max_iterations_per_gate` まで**とし、超えたら `loop:triage` を付けて中断する(結果を残せない構造的な理由があるときに、run のたびに同じ位置へ戻る反復を止める。起動回数はレビュー開始コメントの件数で数える)
+- `full` / `scaled`(orchestrator が自動実行する設定): レビュー subagent が結果を残す前に落ちたということなので、**レビューを起動し直す**(待ち続けると、ラベルだけが付いた状態で親 PR が draft のまま無期限に止まり、triage にも上がらない)。**起動し直しは `max_iterations_per_gate` まで**とし、超えたら `loop:triage` を付けて中断する(結果を残せない構造的な理由があるときに、run のたびに同じ位置へ戻る反復を止める。起動し直すたびにレビュー開始コメントを編集して試行回数を書き足し、その数で判定する。開始コメントは冪等に1件のままなので、件数では数えられない)
 - `manual`(人間が起動する設定): レビュー待ちを維持する。ただしレビュー開始コメントからの経過が `stale_assignment_minutes` を超えたら `loop:triage` を付けて可視化する(沈黙した待ちを inbox に出す)
 
 3c で付けた `loop:triage` は、レビュー結果コメントが現れた時点で外す(共通規則のラベルの整理は verdict を持つゲート向けであり、3c は verdict を持たないため、外す条件をここで定める)。

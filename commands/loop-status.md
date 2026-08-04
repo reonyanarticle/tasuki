@@ -31,7 +31,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue vie
 ## 2. 進行状況
 
 
-分割経路では子 issue ごとに1行で表示する。**取り込み済みの子は close されている**ため、open だけを拾うと消える。親の sub-issues から closed も含めて列挙する(`gh issue view <親> --json subIssues`。これは gh 2.95.0 以上で引ける)。
+子 issue ごとに1行で表示する。**取り込み済みの子は close されている**ため、open だけを拾うと消える。親の sub-issues から closed も含めて列挙する(`gh issue view <親> --json subIssues`。これは gh 2.95.0 以上で引ける)。
 **古い gh で `subIssues` を引けない場合は、その旨を表示して進行状況の節を省く**(`tasuki:child` ラベルによる代替列挙は、人間が起票した子にラベルが付かず取りこぼす。読み取り専用を保つため `gh api` フォールバックは使わない。正確な一覧が要るなら gh を更新する)。
 
 ```

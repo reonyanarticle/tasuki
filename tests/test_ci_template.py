@@ -133,8 +133,10 @@ def test_tampering_job_does_not_execute_pr_code(template: dict) -> None:
     # setup と install と provider の実行を持たない(checkout と diff だけ)
     assert not any("setup" in u for u in uses), uses
     assert "echo dummy" not in runs  # provider コマンドの置換痕跡が無いこと
-    # base はこの job で取得し直す(ローカルの remote-tracking ref を信用しない)
-    assert "git fetch" in runs
+    # checkout 後に git fetch を書かない(persist-credentials: false のため認証が無く、
+    # private リポジトリで必ず失敗する。base は fetch-depth: 0 の checkout が取得済み)
+    assert "git fetch" not in runs
+    assert 'base="origin/$BASE_REF"' in runs
     # 検知の中身が test job から失われていないこと
     assert "def test_" in runs
     assert "config_tampering" in runs or "conf.diff" in runs

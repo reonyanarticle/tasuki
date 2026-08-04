@@ -167,13 +167,13 @@ def test_loop_pr_label_goes_on_the_pr() -> None:
 # - loop.md: フェーズ名の例示と worker_agent の既定の説明
 # - loop-init.md: プロファイル選択そのものを扱うコマンド
 _PROFILE_NAME_ALLOWED: dict[str, int] = {
-    "commands/loop.md": 3,
+    "commands/loop.md": 2,
     "commands/loop-init.md": 4,
 }
 
 # 日本語の密着表記(「developmentプロファイル」)と大文字も検出する。\b は \w に日本語が
-# 含まれるため密着表記で成立しない。英字の連続(別語の一部)は除外する。
-_PROFILE_NAME = re.compile(r"(?i)(?<![a-z])(development|experiment)(?![a-z])")
+# 含まれるため密着表記で成立しない。英字の連続(別語の一部)と URL のパス断片は除外する。
+_PROFILE_NAME = re.compile(r"(?i)(?<![a-z/.])(development|experiment)(?![a-z])")
 
 
 def test_profile_names_do_not_leak_into_core_layers() -> None:

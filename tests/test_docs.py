@@ -868,9 +868,9 @@ def test_new_governance_file_has_migration_path() -> None:
 def test_contract_consolidation_review_fixes() -> None:
     """契約一本化の変更に対する5観点レビュー所見の修正が残っていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    # 差し戻し委譲の入力(前提入力を毎回渡し、ブランチは既存 PR の head を優先)
+    # 差し戻し委譲の入力(前提入力を毎回渡す。既存 PR の継続は maker 側の確認に依る)
     assert "差し戻しの委譲でも毎回渡す" in loop
-    assert "既存 open PR があればその head ブランチ" in loop
+    assert "既存 PR」を確認して行う" in loop
     # decomposer への契約抜粋(split_criteria 等)は全モードの委譲で毎回渡す
     assert "のたびに毎回渡す" in loop
     assert "`split_criteria`" in loop

@@ -2,7 +2,7 @@
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 argument-hint: "[development | experiment]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(mktemp:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -50,7 +50,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 
 手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
-あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI とローカル判定から実行するため)。
+あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
 **選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 
 ### 4. issue / PR テンプレートの生成
@@ -142,7 +142,10 @@ jobs:
   tampering:                         # 改変検知は PR のコードを一切実行しない独立 job で行う
     # 同じ job でリポジトリのコードを実行してから検知すると、実行されたコード(テストランナーが
     # 収集時に読み込む設定ファイル等)が base ref や PATH を書き換えて検知自体を無効化できる。
-    # checkout と diff だけの job にし、base はここで取得し直す(ローカルの remote-tracking ref を信用しない)。
+    # checkout と diff だけの job にする。base はこの job 自身の checkout(fetch-depth: 0)が
+    # 取得した origin/<base> を使う(runner は使い捨てで、この ref は checkout 由来の新鮮な値である。
+    # 追加の git fetch を書いてはならない: persist-credentials: false のため checkout 後の
+    # 認証は無く、private リポジトリでは fetch が必ず失敗して全 PR がマージ不能になる)。
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
@@ -155,7 +158,6 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
-          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
           base="origin/$BASE_REF"
           git diff "$base"...HEAD -- <pack.ci.test_tampering.paths> > /tmp/test.diff
           if grep -E '^\-.*def test_' /tmp/test.diff; then
@@ -185,6 +187,8 @@ jobs:
         with: <pack.ci.setup.with>
       - run: <pack.ci.setup.install>
       - run: <providers.test.command>
+      # 生成時: pack の ci.lockfile が null の場合、この lockfile-diff check ステップは出力しない
+      # (空の pathspec は git が全ファイルを対象にするため、差分のある全 PR で警告が出続ける)
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -277,7 +281,7 @@ jobs:
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。pack が実行するスクリプト(`normalizers/` 等)を持つ場合、default branch 版を `mktemp -d` の一時ディレクトリから実行するため(loop の checks-local)、その形の実行許可も併せて提案する。**ここで `mktemp -d` を1度実行して親ディレクトリを確かめ、親のプレフィックスで許可を作る**(macOS なら `Bash(python3 /var/folders/*)`、Linux なら `Bash(python3 /tmp/*)`。`mktemp -d` が返す末尾は run ごとに変わるが親は変わらないため、プレフィックスなら毎回一致する。完全パスで固定すると次の run で一致せず、実行のたびに確認が出て自走が止まる)。あわせて `Bash(mktemp:*)` も提案する。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。それ以外の実行許可は提案しない(checks-local は providers の宣言済みコマンドだけを実行し、リポジトリ内のスクリプトを直接実行する検査を持たない)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 

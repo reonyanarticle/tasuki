@@ -12,6 +12,8 @@ budgets:
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
+worker_agent: tasuki-worker       # maker の差し替えキー(導入先の repo override で上書きできる)
+
 phases:
   - name: problem-definition      # 課題定義(親 issue)
     hands_off:

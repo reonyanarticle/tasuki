@@ -71,7 +71,11 @@ ci:
         ".tasuki/providers.yaml",
         ".tasuki/normalizers/",
       ]
-    added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)"
+    # 前半は lint / 型 / テスト設定の無効化語彙、後半は契約と providers の改変語彙
+    # (enabled_gates の縮小、provider コマンドの差し替え、予算の膨張)。
+    # ガバナンス自体を変える正当な PR がこの検知に一致して赤になるのは仕様である
+    # (設定変更は機能開発と分離した PR で人間承認を得る)。
+    added_line_pattern: "addopts|--deselect|--ignore|collect_ignore|force-exclude|extend-exclude|typeCheckingMode|reportGeneralTypeErrors|reportMissing|ignore\\s*=|\\[tool\\.(ruff|black|basedpyright|pytest)|enabled_gates|command:|blocking_threshold|max_iterations_per_gate|max_inner_loop"
   # 設定ファイルの「新規追加」検知の対象(既存ファイルの改変検知とは別に見る)
   new_config_files:
     [
