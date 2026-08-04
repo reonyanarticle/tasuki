@@ -26,7 +26,7 @@ GitHub 上のラベル、コメント、レポートには作者の認証が無�
 - コマンドの allowlist は、手順が実際に使う操作だけを列挙する(`gh issue` のようなコマンド群、または `gh issue create` のようなサブコマンド単位)。`Bash(git *)` や `Bash(gh *)` のような、ツール全体を前承認する形は使わない(前置き一致は `git -c core.pager=…` 等で実質任意実行になり、リポジトリ削除や secret 操作まで前承認してしまう)。これは事故と誤爆の面積を減らす対策であり、`gh api` と `git push` は残るため注入への完全な防御ではない
 - **読み取り専用を宣言するコマンドには `gh api` を許可しない。** 前置き一致は `gh api --method PUT …` にも一致するため、`Bash(gh api:*)` を許すと書き込みが前承認になる(`/tasuki:loop-status` は集計対象の issue コメントが未検証データであり、注入から確認なしの書き込みへ繋がる経路になっていた)。読み取り専用のサブコマンド(`gh issue view` / `gh pr checks` 等)だけを列挙し、宣言と強制を一致させる
 - **改変検知は、リポジトリのコードを実行しない独立した job と手順で行う。** 検査コマンド(テストランナー等)を先に実行すると、その過程で読み込まれる PR 側のファイルが base ref や PATH を書き換えて検知自体を無効化できる。CI では `tampering` job(checkout と diff のみ、base はその job で取得し直す)、ローカル判定では provider の実行前に検知を済ませる
-- **mechanical な検査は hermetic に保ち、外部 URL を取得する検査を持たない。** 到達性検査は外部状態に依存して非決定的なうえ、出典 URL は外部ページ由来の未検証データであり、取得する検査は SSRF の攻撃面になる(実際に一度実装して security スキャンで指摘され、リクエストを送らない設計に戻して攻撃面ごと除去した)。出典を開く行為は verifier の引用検証(agent が文脈込みで判定する)に限定する
+- **mechanical な検査は hermetic に保ち、外部 URL を取得する検査を持たない。** 到達性検査は外部状態に依存して非決定的なうえ、出典 URL は外部ページ由来の未検証データであり、取得する検査は SSRF の攻撃面になる(実際に一度実装して security スキャンで指摘され、リクエストを送らない設計に戻して攻撃面ごと除去した)。外部 URL を開く必要が生じたら agent の判断として行い、mechanical ゲートには入れない
 - 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、リポジトリ直下と全階層の `conftest.py`)を対象にする。git の pathspec は `**/conftest.py` では直下の `conftest.py` にマッチしないため、直下を明示するか `:(glob)` を付ける(この取りこぼしは実際に発生していた)
 - これらの不変条件は `tests/test_ci_template.py` で固定している
 

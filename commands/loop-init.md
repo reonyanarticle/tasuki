@@ -35,16 +35,20 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 - lint / typecheck / test / security 系のコマンドを提供する plugin があれば、provider 登録候補として提案する
 - **毎回テンプレが問いかけたい欄があるかをユーザーに確認する**(例: 実験を常時行うリポジトリの「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」)。挙がった欄は手順3で `templates` に足す。既定の欄で足りるなら足さない
 - **Stop hook でセッションを回すループ系 plugin(ralph-wiggum 等)を検出したら、二重ループになるため併用禁止と警告する**
-- **worker からプロジェクト agent への委譲(任意)**：導入先の `.claude/settings.json` の `env` に `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` を設定すると、worker セッションからプロジェクトの subagent を呼べるようになる。既定では subagent は別の subagent を起動できないため、この設定はユーザーの明示承認を得てから書き込む(未設定でもループは動作する。その場合プロジェクト agent を使えるのは orchestrator だけ)
+- **worker からプロジェクト agent への委譲**：既定のネスト上限(メインセッションの3階層下まで)の範囲で、worker はプロジェクトの subagent を呼べる。導入先が `.claude/settings.json` の `env` で `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` を `1` にしている場合はネストが無効なので、その旨を伝える(ループは動作する。プロジェクト agent を使えるのが orchestrator だけになる)
 
 採用結果は手順3の repo override に書き込む。
 
 ### 3. 契約プロファイルの配置
 
-**既に `.tasuki/` がある場合は、生成物を上書きする前にユーザーへ確認する**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
+**既に `.tasuki/` がある場合は、上書きの前に次の3つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
+
+1. 既存契約の repo override(必須欄の追加、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)を新しい契約へ引き継ぐ
+2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
+3. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
 
 `profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。
-以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
+以後このリポジトリでの契約の正は `.tasuki/profile.yaml` である。**上書きしてよい範囲の正は契約スキーマの文書が定める**(必須欄(`templates`)の追加を含む)。
 **必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。
 欄を減らすことはしない(ゲートの判定材料が消える)。
 あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。

@@ -143,6 +143,33 @@ def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None
     # 測定と測定対象を同じ子に入れない
     separate = dev_profile["split_criteria"]["always_separate"]
     assert any("測定と測定対象の変更" in s for s in separate), separate
+    # maker 側の適用条件も、契約の欄名ではなく仕事の性質で書かれていること
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "## 評価や測定を伴うタスクの規律" in worker
+    assert "契約の子 issue 欄に" not in worker  # 存在しない欄を条件にしない
+    # 契約に写した CONTRACTS のサンプルが、新しいシグナルまで一致していること
+    sample = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "評価データの分離(dev/test)と統制条件" in sample
+    assert "由来セット(dev/test)が不明" in sample
+
+
+def test_contract_has_no_unread_keys(dev_profile: dict) -> None:
+    """契約は「今読まれるキー」だけを持つこと(dead config を作らない)。
+
+    experiment 廃止で exit_criteria_fields が死んだのを外したのと同じ理由で、
+    手順書・agent・skill のどこからも読まれないキーを契約に残さない。
+    v2 の予約は ROADMAP に書けば足りる。
+    """
+    readers = "\n".join(
+        p.read_text()
+        for base in ("commands", "agents", "skills")
+        for p in (ROOT / base).rglob("*.md")
+    )
+    # 手順書が別名で引くキーは、その別名を読まれた証拠とする
+    aliases: dict[str, str] = {"phases": "`receives` 定義", "budgets": "max_iterations_per_gate"}
+    for key in dev_profile:
+        token = aliases.get(key) or str(key)
+        assert token in readers, f"どの手順書からも読まれない契約キー: {key}"
 
 
 def test_repo_override_may_add_required_fields() -> None:

@@ -7,7 +7,7 @@ tools: Read, Grep, Glob
 
 あなたは tasuki の decomposer である。
 入力は、親 issue の本文と、契約の抜粋(`child_issue_required_fields`、`parent_issue_required_fields`、子が受ける `receives` 定義、`split_criteria`。いずれも欄コメントを含む)であり、orchestrator がどのモードの委譲でも毎回渡す(差し戻し時はその verdict も渡される)。
-親の予算欄(渡された `parent_issue_required_fields` にある予算の欄。名称はプロファイルに依る)を分割の制約として読む。子件数と各子の `予算(max_iterations)` の合計が親予算に収まるよう配分し、分割案の末尾に配分の根拠を1行書く。
+親の予算欄(渡された `parent_issue_required_fields` にある予算の欄。名称は契約に依る)を分割の制約として読む。子件数と各子の `予算(max_iterations)` の合計が親予算に収まるよう配分し、分割案の末尾に配分の根拠を1行書く。
 分割の実現性を確認するために対象リポジトリのコードを読んでよいが、実装はしない。
 
 
@@ -48,7 +48,7 @@ tools: Read, Grep, Glob
 
 ## 分割の基準
 
-分割基準の正は、渡された契約の `split_criteria` である(この agent 定義に基準を写さない。プロファイルごとの基準の違いは契約が持つ)。
+分割基準の正は、渡された契約の `split_criteria` である(この agent 定義に基準を写さない。導入先ごとの基準の違いは契約が持つ)。
 
 - 各子 issue が `good_task_conditions` の全条件を満たすように切る
 - `always_separate` に挙がった組み合わせは、常に別の子 issue に分ける

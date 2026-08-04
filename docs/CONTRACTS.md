@@ -6,7 +6,6 @@
 
 ```yaml
 # profiles/development.yaml
-profile: development
 budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
@@ -38,7 +37,6 @@ phases:
       too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
     hands_off:
       to: report
-      exit_criteria_required: true
   - name: report
     receives:
       from: implementation
@@ -97,7 +95,7 @@ gates:
     blocking_threshold: error     # SARIF level
   - id: checks-format
     kind: mechanical
-    provider: format              # exit-code 判定(black --check)
+    provider: format              # exit-code 判定(コマンドは pack の providers が定める)
   - id: checks-typecheck
     kind: mechanical
     provider: typecheck
@@ -130,12 +128,6 @@ enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-
 preship_review:                   # 出荷前レビュー(loop.md 3c)のコスト制御
   mode: scaled                    # full = 常に観点別5セッション / scaled = diff 規模で自動選択 / manual = 人間が起動
   fanout_threshold_lines: 200     # scaled のとき、観点別に分ける diff 行数の閾値
-
-model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
-
-question_routing:
-  task-question: issue-comment    # 起票者へ。回答で issue 本文を更新
-  axis-question: contract-pr      # 契約ファイル変更 PR として起票。人間が承認
 ```
 
 `worker_agent:` は maker の差し替えキーである(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。

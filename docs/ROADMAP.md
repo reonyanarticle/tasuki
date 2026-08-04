@@ -238,7 +238,7 @@ tasuki 自身が掲げる「検査、運搬、停滞は付加価値を生まな�
 - **契約への一本化**:分割基準(`split_criteria`)と欄の意味(契約の欄コメント)を契約側に置き、skill と agent 定義から literal な列挙を消した。非契約レイヤーはプロファイル名でなく契約のキーの有無で分岐する
 - **プロファイル名の漏れを検出するテスト**:非契約レイヤー(agents / skills / commands)へのプロファイル名の混入を許容リストと件数上限で凍結した。次に抽象を足すとき、漏れが増えたことを機械が知らせる
 - **mechanical ゲートは hermetic であること**:検査はリポジトリの内容だけで結果が決まるものに限る(「決定的= LLM を使わない」と「hermetic =外部状態に依存しない」の混同が、到達性検査という誤りを生んだ)。検査スクリプトがネットワーク系モジュールを import しないことをテストで固定してある
-- **抽象は2例目を通してから固定する**:1例しか無い時点で引いた境界には、その1例の形が焼き込まれる
+- **抽象は、性質の異なる2例目を通してから固定する**:1例しか無い時点で引いた境界には、その1例の形が焼き込まれる(この時点では「2例目を通せば足りる」と書いたが、後の experiment 廃止で不十分と分かった。実験は開発の近い双子であり、2例あっても器の欠陥は見えなかった。原理としての最新形は [PHILOSOPHY.md](PHILOSOPHY.md) の「器も仕事の種類で切らない」が正)
 
 出典(試作時に依拠した先行例): PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン(https://www.elsevier.com/books/T/A/9780128042182)、agile spike と ADR(https://adr.github.io/)、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)。
 
@@ -283,7 +283,21 @@ experiment と development の実際の差は、子の必須欄2つ(実験条件
 実験を常時行う導入先は、自分の `.tasuki/profile.yaml` に「実験条件」「評価データの分離」を足せば、テンプレが毎回問いかける形を取り戻せる。
 仕事の型ごとの雛形を plugin 側に増やすのではなく、導入先の override で表現する(三層構造の原則どおり、型は導入先固有の情報である)。
 
-### 残る未検証
+### 残した規律(この廃止が無くても効くもの)
+
+- **器の粒度を、性質の粒度に合わせる**:リポジトリ単位の器(プロファイル)に issue 単位の性質(仕事の型)を入れない
+- **型は導入先の override で表す**:plugin 側の雛形を型ごとに増やさない(型は導入先固有の情報である)
+- **ポカヨケを名乗る前に、実際に何を止めるか確かめる**:必須欄は「欄の有無」しか止めない。内容の欠落を止めるのは条件付きシグナルである
+
+原理としての最新形は [PHILOSOPHY.md](PHILOSOPHY.md) の「器も仕事の種類で切らない」に置いた。
+
+### 後方互換を持たない方針
+
+この時点で配布前であり、導入先が存在しない。
+そのため旧契約への補い、契約と plugin の版ずれ検出、移行手順は持たない(存在しない過去に備える記述は、読み手に「あり得る状態」を誤って教え、手順を太らせる)。
+配布を始めて導入先ができたら、そのときに互換の必要性を判断して再導入する。
+
+### 畳んだ後の検証
 
 E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条件必須欄がある状態で取ったものである。
 条件付きシグナルに畳んだ後も同じ規律が効くかを、次の E2E で実測した。
@@ -309,6 +323,7 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 1. 分割案 YAML から冪等に起票と依存設定まで行う同梱スクリプト(shell 手作業の廃止。導入先に Python が無い場合の代替が論点)
 2. 子 PR の自動マージを CI に移す(`gh pr merge` が組織の permission ポリシーで ask になる環境向け。loop:pr ラベル+ checks 緑+ base が `loop/*` の PR だけを対象にした automerge job を loop-init が生成する)
 3. 起票支援(/tasuki:draft)の事前審査に、蓄積した判定例(fixture)を目盛りとして渡す
+4. 条件付きシグナルの成果ゲートでの実走検証(評価を伴う子を実装から取り込みまで通し、report フェーズのシグナルが効くかを見る)
 
 ## 未決事項
 
@@ -339,9 +354,9 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
 7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
 
-**設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
-このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
+**設計への反映**：orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
+(**訂正**:当初この理由を「subagent は別の subagent を起動できないから」としていたが、これは誤りだった。現行仕様では subagent は既定でメインセッションの3階層下まで subagent を起動でき、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` はその上限を**下げる**設定である(`1` でネスト無効)。出典: https://code.claude.com/docs/en/sub-agents 。orchestrator をメインセッションに置く理由は、人間への報告と裁定の窓口であることに置き直した。)
 ゲート別モデルは、gate-reviewer を1つの agent とし、Agent の起動引数で `model` を指定して実現する。
 エスカレーションは同じ agent を上位モデルで呼び直すことである。
 (**訂正**:当初は「agent frontmatter の `model:` が静的なためモデル固定3変種にする」としていたが、起動ごとの `model` 指定が可能であることを確認したため統合した。起動引数の `model` は agent 定義の `model` より優先される。)
-worker からプロジェクト subagent への委譲は、導入先の `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 設定によるオプトインで可能にする([DESIGN.md](DESIGN.md))。
+worker からプロジェクト subagent への委譲は、既定のネスト上限の範囲でそのまま行える([DESIGN.md](DESIGN.md))。

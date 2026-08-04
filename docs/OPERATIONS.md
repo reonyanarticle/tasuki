@@ -5,7 +5,7 @@
 CI は plugin が **作ることを前提** とする(既存 CI は前提にしない)。
 手順は次のとおり。
 
-1. プロファイル確定 → pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
+1. pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
 3. 契約プロファイル雛形の配置(`development`)+ repo override(`.tasuki/`。必須欄の追加を含む)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
@@ -81,7 +81,7 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 - 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
 - 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
-観点の出典は Google のコードレビュー指針と Findy Library の「What review verifies」で、両者はほぼ同じ範囲を指している。
+観点の出典は [commands/loop.md](../commands/loop.md) の出荷前レビュー節が正で、両者はほぼ同じ範囲を指している。
 
 ## issue に残す出力の原則
 

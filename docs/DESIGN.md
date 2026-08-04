@@ -21,7 +21,7 @@ language pack(v1: python)
 └── normalizer(SARIF 非対応ツールの出力変換)
 
 repo override(プロジェクト固有)
-└── コマンド・閾値・待ち位置定義・reviewer / criteria_skills 割り当ての上書きのみ
+└── 上書き(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)と、必須欄の追加
 ```
 
 core の findings 判定器は SARIF / JUnit XML を正とし、ツール固有の出力形式は pack の normalizer が吸収する。
@@ -59,7 +59,9 @@ tasuki/
 ```
 
 orchestrator は agent としては存在しない。
-Claude Code の subagent は既定で別の subagent を起動できないため([ROADMAP.md](ROADMAP.md) 検証結果)、orchestrator は `/tasuki:loop` を実行するメインセッションが務める。
+orchestrator は `/tasuki:loop` を実行するメインセッションが務める。
+subagent もメインセッションの3階層下まで別の subagent を起動できるが(`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` はその上限を下げる設定である)、orchestrator を subagent に置くと、人間への報告と裁定の要求が要約1回に畳まれてしまう。
+**人間と直接やり取りする実行主体だから**メインセッションに置いている(ネストの可否は理由ではない)。
 ゲート別モデル(後述のレイヤードレート構造)は、**gate-reviewer を1つの agent とし、起動ごとに `model` を指定して**実現する(Agent の起動引数の `model` は agent 定義の `model` より優先される)。
 
 命名規約として、plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切る(衝突判定の対象はファイル名ではなく `name:`)。
@@ -69,8 +71,9 @@ Claude Code の subagent は既定で別の subagent を起動できないため
 
 orchestrator はメインセッションなので、導入先リポジトリの `.claude/agents/` にある subagent をそのまま呼べる。
 契約の `gates[].reviewer` にプロジェクト agent 名を指定すれば、ゲート判定はその agent に委譲される(入出力契約は verdict JSON のまま)。
-worker などの plugin agent からプロジェクト subagent を呼ぶことは、既定ではできない(subagent は子 subagent を起動できない)。
-導入先の `.claude/settings.json` の `env` に `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` を設定した場合のみ有効になり、`/tasuki:loop-init` が棚卸し時にこの設定を提案する。
+worker などの plugin agent からプロジェクト subagent を呼ぶことは、既定のネスト上限(メインセッションの3階層下まで)の範囲でできる。
+tasuki の階層は orchestrator(メイン)→ worker → プロジェクト agent の3層に収まる。
+導入先が `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` を `1` にしている場合はネストが無効になり、worker は委譲せず自分で作業する。
 tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わない。ループの構造は orchestrator だけが管理する。
 
 ## 状態管理

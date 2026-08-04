@@ -30,11 +30,39 @@ def test_no_stale_references() -> None:
 
     ROADMAP.md は E2E の発見記録として旧パス名を歴史的に言及するため除外する。
     """
+    # 撤回した拡張(調査と実験)の実体への参照が復活していないこと。
+    # ROADMAP は撤回の記録としてこれらの名前を歴史的に言及するため除外する。
+    removed = ("tasuki-spec", ".claude/loop", "profiles/experiment.yaml", "profiles/research.yaml")
     for path in MD_FILES:
         text = path.read_text()
         assert "tasuki-spec" not in text, path.name
-        if path.name != "ROADMAP.md":
-            assert ".claude/loop" not in text, path.name
+        if path.name == "ROADMAP.md":
+            continue
+        for token in removed:
+            assert token not in text, (path.name, token)
+    # plugin 側の実体も消えたままであること
+    gone_paths = (
+        "profiles/experiment.yaml",
+        "profiles/research.yaml",
+        "agents/researcher.md",
+        "packs/docs",
+    )
+    for gone in gone_paths:
+        assert not (ROOT / gone).exists(), gone
+
+
+def test_design_tree_lists_existing_profiles() -> None:
+    """DESIGN.md のディレクトリツリーが実在するプロファイルだけを挙げること。
+
+    ツリーは手書きなので、ファイルを消してもツリーだけ古い状態が残る。
+    """
+    import re as _re
+
+    tree = (ROOT / "docs/DESIGN.md").read_text()
+    listed = set(_re.findall(r"([a-z]+)\.yaml", tree.split("## plugin ディレクトリ構成")[1]))
+    actual = {p.stem for p in (ROOT / "profiles").glob("*.yaml")}
+    assert listed >= actual, (listed, actual)
+    assert listed - actual <= {"providers"}, (listed, actual)
 
 
 def test_gates_catalog_has_25_perspectives() -> None:
@@ -592,8 +620,14 @@ def test_preship_review_runs_in_subagents() -> None:
 
 def test_worker_reports_used_skills_and_subagents() -> None:
     """レポートに参照 skill と委譲 subagent の欄があること(成果の前提を辿れるようにする)。"""
+    import yaml
+
+    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+        "report_required_fields"
+    ]
+    assert "参照した skill と委譲した subagent" in fields  # 欄の正は契約
     report_skill = (ROOT / "skills/loop-report/SKILL.md").read_text()
-    assert "参照した skill と委譲した subagent" in report_skill
+    assert "成果の前提を辿る欄がある契約では" in report_skill  # skill は欄名を写さず条件で書く
     worker = (ROOT / "agents/worker.md").read_text()
     assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
 
@@ -853,6 +887,28 @@ def test_gate_review_skill_judges_only_by_contract() -> None:
     assert "プロファイルでの読み替え" not in sk  # 読み替え節を復活させない
 
 
+def test_subagent_nesting_claims_match_current_spec() -> None:
+    """subagent のネストについて、現行仕様と逆の記述を持たないこと。
+
+    「subagent は別の subagent を起動できない」を前提に orchestrator の置き場所を
+    説明していたが、現行仕様では既定でメインセッションの3階層下まで起動でき、
+    CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH は上限を下げる設定である
+    (https://code.claude.com/docs/en/sub-agents)。
+    Claude Code の仕様に依存する記述は、こう固定しないと古いまま生き残る。
+    """
+    wrong = ("subagent は別の subagent を起動できない", "subagent は子 subagent を起動できない")
+    for base in ("docs", "commands", "agents", "skills"):
+        for path in sorted((ROOT / base).rglob("*.md")):
+            text = path.read_text()
+            for phrase in wrong:
+                # ROADMAP は訂正の記録としてこの語を引用するため、訂正の文脈だけ許す
+                if phrase in text and "**訂正**" not in text:
+                    raise AssertionError(f"{path.relative_to(ROOT)}: 現行仕様と逆の記述: {phrase}")
+    design = (ROOT / "docs/DESIGN.md").read_text()
+    assert "3階層下まで" in design
+    assert "上限を下げる設定" in design
+
+
 def test_contract_consolidation_review_fixes() -> None:
     """契約一本化の変更に対する5観点レビュー所見の修正が残っていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
@@ -871,7 +927,7 @@ def test_contract_consolidation_review_fixes() -> None:
     assert "コードブロック(フェンス)内の見出しは数えない" in loop
     # 初期化コマンドは既存の調整を黙って捨てない
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "生成物を上書きする前にユーザーへ確認する" in init
+    assert "上書きの前に次の3つを行う" in init
 
 
 def test_report_fields_carry_meaning_comments() -> None:
