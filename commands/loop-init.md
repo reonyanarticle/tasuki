@@ -18,7 +18,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 手順
 
-### 1. プロファイルの確定と言語検出、依存の整備
+### 1. 言語検出と依存の整備
 
 契約プロファイルは `development` の1つである(仕事の型ごとに雛形を分けない。実験や評価を伴う仕事も同じ契約で回し、必要なら手順3で必須欄を足す)。
 まず、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
@@ -33,6 +33,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 - レビュアー系 agent があれば、契約 YAML の `reviewer:` への割り当て候補として提案する(orchestrator はメインセッションなので、導入先プロジェクトの agent をそのまま呼べる)
 - ゲート判定基準に使えそうな skill があれば、契約 YAML の `criteria_skills:` への登録候補として提案する
 - lint / typecheck / test / security 系のコマンドを提供する plugin があれば、provider 登録候補として提案する
+- **毎回テンプレが問いかけたい欄があるかをユーザーに確認する**(例: 実験を常時行うリポジトリの「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」)。挙がった欄は手順3で `templates` に足す。既定の欄で足りるなら足さない
 - **Stop hook でセッションを回すループ系 plugin(ralph-wiggum 等)を検出したら、二重ループになるため併用禁止と警告する**
 - **worker からプロジェクト agent への委譲(任意)**：導入先の `.claude/settings.json` の `env` に `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` を設定すると、worker セッションからプロジェクトの subagent を呼べるようになる。既定では subagent は別の subagent を起動できないため、この設定はユーザーの明示承認を得てから書き込む(未設定でもループは動作する。その場合プロジェクト agent を使えるのは orchestrator だけ)
 
@@ -42,12 +43,13 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 
 **既存の `.tasuki/` がある(再実行=移行の)場合は、上書きの前に次の4つを行う。**
 
-1. 既存契約の repo override(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)を新しい契約へ引き継ぐ(黙って上書きすると導入先の調整が消える)
+1. 既存契約の repo override(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、**必須欄(`templates`)の追加**)を新しい契約へ引き継ぐ(黙って上書きすると導入先の調整が消える)
 2. 旧 pack が置いたファイル(`.tasuki/checks/` や `.tasuki/normalizers/` 等)のうち、新しい pack に無いものは削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
 3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
 4. 走行中(open)の親 issue があれば、完走または close まで移行を待つよう案内する(欄名やゲートの版が run の途中で変わると、既存のレポートと文書が新しい必須欄の検査に落ち、差し戻しだけが反復する)
+5. **既存契約の `profile:` が `development` でない(廃止したプロファイルを使っている)場合**は、旧プロファイル固有の必須欄を development の必須欄へ**足す**形で引き継ぐ(「欄を減らさない」は据え置き。実験用の欄を持っていた導入先は、それを足したまま development へ移る)。フェーズ名の対応は `gates[].phase` が指す先を辿って解決し、対応先の無いフェーズ(どのゲートも指していないもの)の待ち位置定義は引き継がない
 
-手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
+`profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
 **必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。
 欄を減らすことはしない(ゲートの判定材料が消える)。

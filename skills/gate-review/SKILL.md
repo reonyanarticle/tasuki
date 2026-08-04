@@ -11,7 +11,7 @@ description: tasuki の抽象度ゲート(受理から統合までの全ゲー�
 
 ## 入力(これ以外を求めない)
 
-- 契約: 対象フェーズの `receives` 定義(`waiting_level` / `too_abstract_signals` / `too_concrete_signals`)と、ゲートに応じた契約の抜粋(分割ゲートなら `gates.split.set_signals` と `split_criteria`、成果ゲートなら `report_required_fields`(欄コメントを含む))
+- 契約: 対象フェーズの `receives` 定義(`waiting_level` / `too_abstract_signals` / `too_concrete_signals`)と、ゲートに応じた契約の抜粋(分割ゲートなら `gates.split.set_signals` と `split_criteria`、着手ゲートなら `child_issue_required_fields`、成果ゲートなら `report_required_fields`。いずれも欄コメントを含む)
 - 前工程出力: issue 本文、分割案、レポートのいずれか
 - 差し戻し履歴: 同一対象への過去 verdict(あれば)
 
