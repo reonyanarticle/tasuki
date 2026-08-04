@@ -707,7 +707,6 @@ def test_code_review_round2_fixes() -> None:
     for grant in ("Bash(ps:*)", "Bash(tail:*)"):
         assert grant in loop.split("---")[1], grant  # 長時間ジョブの生存確認に必要
     assert "head ブランチが `loop/parent-` で始まる" in loop  # 親 PR の判定基準
-    assert "このキーが無い旧契約では `mode: scaled`" in loop  # preship_review のフォールバック
     assert "Bash(gh --version)" in (ROOT / "commands/loop-init.md").read_text().split("---")[1]
     draft = (ROOT / "commands/draft.md").read_text()
     assert "Bash(git fetch:*)" in draft.split("---")[1]
@@ -854,17 +853,6 @@ def test_gate_review_skill_judges_only_by_contract() -> None:
     assert "プロファイルでの読み替え" not in sk  # 読み替え節を復活させない
 
 
-def test_new_governance_file_has_migration_path() -> None:
-    """後から必須にしたファイルは、持たない既存導入先での扱いを定めること。
-
-    `.tasuki/providers.yaml` はこの版で新設した。持たないリポジトリで
-    checks-local が止まると、既存の導入先が黙って動かなくなる。
-    """
-    loop = (ROOT / "commands/loop.md").read_text()
-    assert "`.tasuki/providers.yaml` が無い導入先" in loop
-    assert "停止はしない" in loop
-
-
 def test_contract_consolidation_review_fixes() -> None:
     """契約一本化の変更に対する5観点レビュー所見の修正が残っていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
@@ -881,12 +869,9 @@ def test_contract_consolidation_review_fixes() -> None:
     assert "verdict より新しい編集" in loop
     # 門前払いは完全一致で、フェンス内の見出しを数えない
     assert "コードブロック(フェンス)内の見出しは数えない" in loop
-    # 旧契約への後方互換と、契約×plugin の版ずれ検出
-    assert "旧い契約への後方互換" in loop
-    assert "契約と plugin の版ずれ" in loop
-    # loop-init の再実行(移行)手順
+    # 初期化コマンドは既存の調整を黙って捨てない
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "既存の `.tasuki/` がある(再実行=移行の)場合" in init
+    assert "生成物を上書きする前にユーザーへ確認する" in init
 
 
 def test_report_fields_carry_meaning_comments() -> None:

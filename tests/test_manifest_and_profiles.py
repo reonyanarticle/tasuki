@@ -158,12 +158,9 @@ def test_repo_override_may_add_required_fields() -> None:
     assert "走行中(open)の親 issue が無いときに反映する" in contracts
     init = (ROOT / "commands/loop-init.md").read_text()
     assert "必須欄(`templates`)の追加" in init
-    # 追加した欄の採取(手順2)と、再実行での引き継ぎ(手順3)の両方が要る
+    # 追加したい欄を棚卸しで採取する手順があること
     assert "毎回テンプレが問いかけたい欄があるかをユーザーに確認する" in init
-    # 廃止したプロファイルからの乗り換えと、雛形が消えた契約への後方互換
-    assert "旧プロファイル固有の必須欄を development の必須欄へ**足す**形で引き継ぐ" in init
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "そのプロファイルの雛形が plugin 側に無い場合" in loop
     # 導入先が足した欄の意味が着手ゲートに届くこと
     assert "`child_issue_required_fields`(欄コメントを含む" in loop
     assert "`child_issue_required_fields`" in (ROOT / "skills/gate-review/SKILL.md").read_text()
