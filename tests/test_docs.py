@@ -887,6 +887,34 @@ def test_gate_review_skill_judges_only_by_contract() -> None:
     assert "プロファイルでの読み替え" not in sk  # 読み替え節を復活させない
 
 
+def test_section_references_carry_names() -> None:
+    """手順書内部の節参照(§)に節名を併記すること(ドキュメント規約)。
+
+    番号だけの参照は、読み手が該当節を探すまで意味が取れない。
+    規約は .claude/rules/docs.md にあり、書かれているだけでは守られないためここで固定する。
+    """
+    pattern = re.compile(r"§[0-9]+(?:\.[0-9]+)?(?:[a-z](?:-[0-9])?)?")
+    offenders = []
+    for path in sorted((ROOT / "commands").glob("*.md")):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if line.startswith("#") or "§番号" in line:  # 見出しと規約文そのものは除く
+                continue
+            for m in pattern.finditer(line):
+                if not line[m.end() :].startswith("("):
+                    offenders.append(f"{path.name}:{lineno}: {m.group()}")
+    assert not offenders, offenders
+
+
+def test_scan_artifacts_are_ignored() -> None:
+    """セキュリティスキャンの作業ディレクトリが誤ってコミットされないこと。
+
+    撤回前の全文書の写しを含むため、追跡すると検索が二重ヒットし、
+    古い記述が生き返ったように見える。
+    """
+    ignored = (ROOT / ".gitignore").read_text()
+    assert "CLAUDE-SECURITY-*/" in ignored
+
+
 def test_subagent_nesting_claims_match_current_spec() -> None:
     """subagent のネストについて、現行仕様と逆の記述を持たないこと。
 
