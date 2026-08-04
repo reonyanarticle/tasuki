@@ -55,8 +55,8 @@ tasuki/
 │       ├── providers.yaml
 │       └── normalizers/
 └── profiles/
-    ├── experiment.yaml
-    └── development.yaml
+    ├── development.yaml
+    └── experiment.yaml
 ```
 
 orchestrator は agent としては存在しない。
@@ -162,7 +162,7 @@ flowchart TD
 
     subgraph LOOP ["§2 現在レイヤーの各子(並行)"]
         G2{"着手ゲート<br/>haiku → sonnet"}:::gate -->|PASS| W["§2c worker(sonnet、worktree)<br/>方針コメント → 実装 → draft 子 PR"]:::work
-        W --> CL["§2d checks-local<br/>一時 worktree で lint / format / typecheck / test<br/>+ テスト改変とガバナンス検知"]:::work
+        W --> CL["§2d checks-local<br/>一時 worktree で改変検知 → provider 実行<br/>(検知はコード実行より前)"]:::work
         CL -->|緑| V["§2e verifier(sonnet)<br/>再実行で SC 照合 + drift 検査"]:::work
         CL -.->|赤| W
         V -->|met| G3{"成果ゲート<br/>sonnet → opus"}:::gate

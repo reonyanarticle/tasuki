@@ -2,7 +2,7 @@
 description: tasuki ループの起動。親 issue を指定し、子 issue を着手ゲートと形式ゲート(CI)を通して自走させる。このコマンドを実行するメインセッションが orchestrator を務める
 argument-hint: "<親 issue 番号>"
 disable-model-invocation: true
-allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
+allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh --version), Bash(gh issue:*), Bash(gh pr:*), Bash(gh label:*), Bash(gh api:*), Bash(gh repo view:*), Bash(gh run:*), Bash(mktemp:*), Bash(git fetch:*), Bash(git worktree:*), Bash(git checkout:*), Bash(git merge:*), Bash(git merge-base:*), Bash(git commit:*), Bash(git push:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(ps:*), Bash(stat:*), Bash(tail:*), Bash(ls:*)
 ---
 
 # /tasuki:loop
@@ -61,8 +61,10 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 未マージの成果は default branch に無く、後続の統合ブランチにも入らないため、worker が先行親の成果物を複製して持ち込む事故になる(実地で発生した。複製が偶然同一なら衝突しないが、先行親がレビューで修正されると静かに食い違う)。
 前提を共有しない独立な親は、停止状態を待つだけで起動してよい。
 
-1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)
-2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る(gh < 2.94.0 なら `gh api` フォールバック)
+1. `.tasuki/profile.yaml` を読む。なければ `/tasuki:loop-init` を案内して中断する。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)。
+**旧い契約への後方互換**:契約に `split_criteria` や欄コメントが無い(これらを設ける前の loop-init で作られた)場合は、plugin 側 `profiles/<プロファイル名>.yaml` の同名キーと欄コメントを既定として補って委譲し、`/tasuki:loop-init` の再実行を1度だけ案内する(補いはこの run の中だけで、契約ファイルは書き換えない。黙って基準なしで回すと分割と成果の検査が無警告で弱まる)。
+**契約と plugin の版ずれ**:契約の `enabled_gates` にある `checks-*` の provider が、plugin 側の対応 pack の `providers` に存在しない場合は、版ずれとして報告し `/tasuki:loop-init` の再実行を案内して中断する(旧検査を回し続けると、新しい agent 定義が書く成果物と旧検査の要求が食い違い、差し戻しだけが反復して予算を焼く)
+2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る。**先に `gh --version` を見て分岐する**(`--json subIssues` は 2.95.0 以上。それ未満は `gh api` の GraphQL フォールバックを使う)。失敗してからのフォールバックにしないのは、後段の「gh の失敗で run を止める」規則に先に当たってしまうためである
 3. **起票者の信頼チェック(機械チェック、LLM なし)**:親 issue の `author_association` を見る。`OWNER` / `MEMBER` / `COLLABORATOR` のいずれでもない(外部からの起票である)場合、**`tasuki:accepted` ラベルが付いていなければループ対象外**として扱う。その旨を1度だけコメントし(冪等)、ゲートやラベルには触れずに中断する。maintainer が本文を読んで問題ないと判断したら `tasuki:accepted` を付ける(外部テキストを agent に読ませる判断を、人間が1回挟む opt-in)。このチェックは public リポジトリで意味を持ち、ループは `/tasuki:loop <親>` の明示起動でしか動かないため、外部 issue が乱立してもチェック以前に実行対象にならない
 4. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.10 の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に残し、`gate:intake-returned` と `loop:triage` を付けて中断する(受理ゲートの LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
 5. **gh の呼び出しが失敗したら、その場で retry を1回だけ試み、それでも失敗したら run を止めて失敗箇所を報告する**(失敗を握りつぶして先に進むと、状態の欠けた issue が生まれる)。部分完了の復旧は次の run の状態復元と突合(§1a)が引き受ける
@@ -70,7 +72,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 7. 二重起動の防止(観点「並行整合性」)：親 issue に自分の run 開始時刻より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す。**投稿の直後にもう一度確認し、自分のより新しい開始コメントが現れていたら後着に譲って run を終了する**(同時開始の両者が事前確認をすり抜ける競合の緩和。厳密な排他ではない)
 8. **要件変更の検知(機械チェック、LLM なし)**:親 issue に `gate:split-passed` が付いている場合、親の `lastEditedAt` を最新の分割ゲート PASS verdict コメントの時刻と比較する(§0.10 の受理ゲート再判定と同じ GraphQL 比較)。本文がそれより新しく編集されているのに `loop:replan` ラベルが無ければ、「本文の編集を検知したが、再計画は行っていない。反映するには `loop:replan` を付ける」と親に1度だけコメントする(同じ `lastEditedAt` に対して再投稿しない。冪等)。このコメントを投稿するとき、リポジトリに `loop:replan` ラベルが無ければ先に作る(人間が付けるラベルは、付けようとした時点に存在しなければならない。loop-init が古い導入先への後方互換)。編集へ黙って自動追従しない(誤字修正のたびに再分割が走るのを防ぎ、再計画の意思決定を人間の明示に置く)。`loop:replan` が付いている場合の処理は §1d による
 9. WIP 確認(観点「スループット管理」)：**ready(draft でない)の親 PR**(親 PR の判定基準は head ブランチが `loop/parent-` で始まること) が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す(人間の判断待ちは親 PR に集約されているため、数えるのも親 PR である。子 PR と draft は数えない)
-10. **受理ゲート**:契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)
+10. **受理ゲート**:契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)。
 
 ## 1. 分割と実行計画(分割ゲート、レイヤー構成)
 
@@ -78,7 +80,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 
 sub-issues で子 issue 一覧を得る。
 
-- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文と、親コメントに分割ゲートの差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。返る分割案 YAML が分割ゲートの被検査物になる
+- **子 issue が無い場合**:`tasuki-decomposer` へ委譲する(渡すのは親 issue 本文、契約の抜粋= `child_issue_required_fields` と `parent_issue_required_fields`(いずれも欄コメントを含む)と子が受ける `receives` 定義と `split_criteria`、親コメントに分割ゲートの差し戻し verdict があればそれ。前回と同型の分割案の再生産を防ぐ)。**この契約の抜粋は、decomposer への委譲(差し戻しの再出力、§1d の差分分割モード、子の修正モードを含む)のたびに毎回渡す**(decomposer は分割基準と欄の定義を契約から引くため、欠けると基準なしで分割する)。返る分割案 YAML が分割ゲートの被検査物になる
 - **子 issue が既にある場合**:まず親コメントの最新分割ゲートの PASS verdict に添付された分割案と突き合わせる。**未起票の子が残っていれば(部分起票のクラッシュ復旧)、再判定せずに §1b の PASS 経路の残りを完了させる**:不足分の起票、依存(blocked_by)の設定、`gate:split-passed` の付与の3つをすべて行ってから 1c へ進む(依存を設定せずに進むと、前提が入っていない default branch から worker が実装する)。分割案の添付が無い(人間起票の)場合は、既存の子 issue 群の本文が被検査物になる
   - **例外**:親に `loop:triage` が付いている場合はこの補完を行わない。分割ゲートが分割案の欠陥(依存の循環等)を理由に停止させた状態であり、補完すると欠陥のある分割をそのまま完成させてしまう。分割案自体を decomposer に作り直させる
 
@@ -89,14 +91,14 @@ sub-issues で子 issue 一覧を得る。
 
 - 被検査物(分割案 YAML または既存子 issue 群の本文)
 - 親 issue 本文(要件の対応照合用)
-- 契約の `gates.split.phase` が指すフェーズの `receives` 定義(子の待ち位置)+差し戻し履歴
+- 契約の `gates.split.phase` が指すフェーズの `receives` 定義と `gates.split.set_signals` と `split_criteria`(子の待ち位置と分割基準)+差し戻し履歴
 
 verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。**PASS の verdict コメントには、人間可読の子一覧(各子のタイトルと対応する親要件)を主として残し、機械可読の分割案 YAML は `<details>` に畳む**(全文を生で貼らない。畳んだ YAML が分割案の永続化=部分起票クラッシュからの復旧と監査の基盤)。
 集合レベルの基準は契約の `gates.split.set_signals`(依存の循環、親要件の孤児、親予算との整合)に依る。
 
 - **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict のみ)。反復は `max_iterations_per_gate`。分割ゲートは opus 判定のため昇格先は無く、超過で `loop:triage`
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、`gate:split-returned` と `loop:triage` を付けて修正待ちにする
-- **PASS** → 分割案の場合、**分割案の機械処理(件数照合、起票)を shell のワンライナーで行わない**。分割案を1子1ファイルに保存してから1件ずつ処理する(YAML を zsh 配列で回してタイトルと本文が1つズレて起票される事故が実地で起きた)。起票前に機械チェックを行う:子件数と各 `予算(max_iterations)` の合計が親の予算(コスト上限)欄と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。通過したら orchestrator が子 issue を起票する。ここで照合する親予算が件数や反復数を数値で示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。**使うラベルがリポジトリに無ければ、その場で作ってから付ける**(冪等。loop-init より後に増えたラベルを、既存の導入先でも使えるようにする)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
+- **PASS** → 分割案の場合、**分割案の機械処理(件数照合、起票)を shell のワンライナーで行わない**。分割案を1子1ファイルに保存してから1件ずつ処理する(YAML を zsh 配列で回してタイトルと本文が1つズレて起票される事故が実地で起きた)。起票前に機械チェックを行う:分割案が親の予算欄(欄名は契約の `parent_issue_required_fields` の予算の欄に依る)と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。照合の内容は契約の `gates.split.set_signals` の親予算整合シグナルに依り、親予算が子側と同じ単位の数値(反復数、timebox)を示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。通過したら orchestrator が子 issue を起票する。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準の欄が契約にある場合は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。**使うラベルがリポジトリに無ければ、その場で作ってから付ける**(冪等。loop-init より後に増えたラベルを、既存の導入先でも使えるようにする)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
 
 `gate:split-passed` は恒久ではない。**付与後に子集合が変化した場合(子の追加、削除、blocked-by の変更を毎 run 検知)は分割ゲートを再判定し、レイヤー計画を作り直す**(計画コメントは最新を正とする)。
 
@@ -160,16 +162,18 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 ただし **担当したまま落ちた実行を回収する経路を持つ**。assignee が設定済みの子 issue について、**基準時刻**から `stale_assignment_minutes`(既定60分)以上経過していれば、停止した実行の残骸とみなして assignee を外し(`loop:in-progress` が付いていれば併せて外し)、通常の再入対象に戻す。回収したことは子 issue にコメントで残す。
 基準時刻は「最後のループ由来コメント(着手、verdict、レポート、質問、回収コメント)の時刻」とする(assign と着手コメントは同時に行うため、ループの割り当てには必ず基準点がある)。
 **誤回収を避けるため、回収前に必ず生存を確認する**。子 issue に対応するブランチまたは PR があれば、その最終コミット時刻も基準時刻の候補に含め、いずれか新しいほうで判定する(直近のコミットがあれば稼働中とみなして回収しない)。
-**長時間ジョブのプロトコル中の子(最後のループ由来コメントが PID とログパスの報告)は、そのログの最終更新時刻と PID の生存も基準時刻の候補に含める**。ジョブはコメントもコミットも増やさずに走り続けるため、経過時間だけで判定すると生きているジョブを残骸と誤認し、再入した worker が同じジョブを二重起動する。orchestrator は委譲中の Agent 呼び出しでブロックされ進捗コメントを残せないため、コミット時刻がこの確認の主たる根拠になる。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
+**長時間ジョブのプロトコル中の子(最後のループ由来コメントが PID とログパスの報告)は、そのログの最終更新時刻と PID の生存も基準時刻の候補に含める**。
+**ループ由来コメントは最終更新時刻(編集を含む)で数える**(maker は作業中、方針コメントを編集して進捗を更新することがある。作成時刻だけを見ると、作業中の子を残骸と誤認する)。**`gh issue view --json comments` は `createdAt` しか返さないため、GraphQL で `comments { nodes { createdAt lastEditedAt } }` を引き、`lastEditedAt` があればそちらを基準時刻にする**。ジョブはコメントもコミットも増やさずに走り続けるため、経過時間だけで判定すると生きているジョブを残骸と誤認し、再入した worker が同じジョブを二重起動する。orchestrator は委譲中の Agent 呼び出しでブロックされ進捗コメントを残せないため、コミット時刻がこの確認の主たる根拠になる。**判定条件に `loop:in-progress` を要求してはならない**。assignee はこの §2 の入口で設定し、`loop:in-progress` は 2c の worker 委譲時に付くため、2a や 2b でクラッシュした実行はラベルを持たないまま assignee だけを残す。
 この回収が無いと、クラッシュした実行が担当した子 issue は以後すべての run から永久にスキップされ、`loop:triage` にも上がらないまま停止する。
 差し戻し中の子 issue の再入は、ラベルで区別する。
 
 - `gate:start-returned` で本文末尾に `via tasuki-decomposer` がある子(修正の主体はループ内の decomposer):起票者待ちにしない。最終 verdict より後に本文が編集されていれば 2a から再入し、未編集なら orchestrator が decomposer 修正セッションを自ら起動する(verdict を渡して本文を更新させ、2a から再入する)。この自己修正の反復も `max_iterations_per_gate` に計上し、超過で `loop:triage`
 - `gate:start-returned` で人間起票の子(修正の主体は起票者):最後の verdict コメントより後に issue 本文が編集されている場合のみ、2a から再入する(未編集ならスキップし、起票者待ちを維持する)。編集の検知には GraphQL の `lastEditedAt` を使う(`gh api graphql` で issue の `lastEditedAt` を取得し、最終 verdict コメントの `createdAt` と比較する)。**本文の編集は timeline イベントに現れない**ため、timeline を根拠に「未編集」と判定してはならない
-- `gate:outcome-returned`(修正の主体はループ内の worker):起票者待ちにしない。最終 verdict より後に新しい loop-report コメントがあれば 2f の再判定から再入する。無ければ、差し戻し verdict の `return_to` に従って再出力または実装差し戻しの worker を orchestrator 自身が起動する(2a と着手ゲートはやり直さない。実装済みの issue に新規実装を走らせない)
+- `gate:outcome-returned`(修正の主体はループ内の worker):起票者待ちにしない。最終 verdict より後に新しい loop-report コメント、または既存 loop-report コメントの verdict より新しい編集(`lastEditedAt` で検知する。stale 回収と同じ GraphQL)があれば 2f の再判定から再入する。無ければ、差し戻し verdict の `return_to` に従って再出力または実装差し戻しの worker を orchestrator 自身が起動する(2a と着手ゲートはやり直さない。実装済みの issue に新規実装を走らせない)
 
 ### 2a. 門前払い(機械チェック、LLM なし)
 
+**この機械チェックは `enabled_gates` に `start` が無くても常に走る**(空欄の検出に LLM は要らず、費用も掛からない。LLM 判定を外した契約でも、必須欄の空だけは必ず検める)。
 契約の `child_issue_required_fields` の各見出しについて、issue 本文の該当セクションが空でないかを確認する。
 空欄があれば、LLM を呼ばずに差し戻す。不足欄を人間可読の markdown(箇条書き)で列挙したコメントを issue に残し、`gate:start-returned` ラベルを付ける。
 同じ内容のコメントが既にあれば再投稿しない(冪等)。
@@ -177,6 +181,10 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 あわせて **予算欄の値を読み取る**。子 issue の `予算(max_iterations)` の値を、この issue の内側ループ上限として採用する(有効上限= min(契約の `max_inner_loop`, issue の予算値)。パースできない場合は差し戻し対象)。
 
 ### 2b. 着手ゲート(契約照合)
+
+**契約の `enabled_gates` に `start` が無ければ、この LLM 判定は行わない**(§2a の機械チェックだけで §2c へ進む)。
+外してある契約では、decomposer が作った子を分割ゲートが集合として既に検めており、同じ欄をもう一度 LLM で見ることが二重になるためである。
+ただし**人間が起票した子**(親コメントの分割案に対応が無い子)は分割ゲートを通っていないので、`start` が無い契約でもこの判定を行う。
 
 reviewer へ委譲する。
 **reviewer の解決規則**：契約の `gates[].reviewer` が `gate-reviewer` なら plugin の `tasuki-gate-reviewer` へ委譲する。それ以外の名前なら、その名前の導入先プロジェクト agent へ委譲する(orchestrator はメインセッションなのでプロジェクト agent を直接呼べる。出力契約は同じ verdict JSON)。
@@ -219,23 +227,25 @@ PASS したら `gate:start-passed` を付け、ラベルを片付ける(共通�
 
 ### 2c. 実装(worker)
 
-`tasuki-worker`(sonnet、worktree 分離)へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。**worker のブランチは統合ブランチ(`loop/parent-<親番号>`)から切り、PR も統合ブランチに向ける**(default branch に向けない)。
+**契約の `worker_agent`(既定 `tasuki-worker`)**へ委譲し、子 issue に `loop:in-progress` ラベルを付ける。maker の差し替えはこのキーで行う(導入先での差し替えも同じキー)。**worker のブランチは統合ブランチ(`loop/parent-<親番号>`)から切り、PR も統合ブランチに向ける**(default branch に向けない)。
 `loop:in-progress` は worker 委譲中だけの状態であり、met / abort に加え、`loop:triage` を付けるとき(上限超過、check-run なし等)と 2b への差し戻し時にも必ず外す。
-渡すのは**子 issue 本文と統合ブランチ名(`loop/parent-<親番号>`)**のみ。
+渡すのは**子 issue 本文と issue 番号、統合ブランチ名(`loop/parent-<親番号>`)**(番号はコメント投稿と PR 本文の `Refs` に要る。本文だけでは自分の番号が分からない)。
 統合ブランチ名を渡し忘れると、worker は default branch から実装して default branch 向けの PR を作る(子 issue 本文に親番号が入る保証は無い)。
-worker の義務は、**実装前の方針コメント**、worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成(ラベルは PR に付ける)、loop-report 形式の報告、掃除。
-実装方針のコメントは、人間が実装前に方向性を止めるための出口である。差し戻しでは新規に投稿せず、同じコメントを編集して更新する(冪等)。
+maker の義務の正は agent 定義(既定なら worker.md)である。worker なら**実装前の方針コメント**、worktree 上での実装、self-verify、Conventional Commits、`loop:pr` ラベル付き draft PR 作成(ラベルは PR に付ける)、loop-report 形式の報告、掃除。差し替えた maker では第1手のコメントの名前が変わることがあり、以降この手順で「方針コメント」と書く箇所は、その maker の第1手コメントと読み替える。
+方針コメントは、人間が実行前に方向性を止めるための出口である。差し戻しでは新規に投稿せず、同じコメントを編集して更新する(冪等)。
 
 差し戻し再実行は **必ず新規の worker セッション** で行う(観点「コンテキスト衛生」)。
 前セッションを継続せず、渡すのは子 issue 本文+差し戻し verdict(または CI findings、verifier の未達項目)のみ。
+ただし maker が入力として前提する渡し物(issue 番号、ブランチ名)は、差し戻しの委譲でも毎回渡す(欠けると maker は推測せず入力不足で終了し、委譲が空回りする)。
+**差し戻しで渡すブランチ名は、その issue の既存 open PR があればその head ブランチ(前セッションの作業の継続)、無ければ統合ブランチとする**(統合ブランチを渡すと、maker は前セッションの PR を特定できず、同じ issue に2本目の PR を開く)。
 
 ### 2d. checks-local(形式ゲート、反復判定)
 
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点「フィードバック速度」)。
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
-2. `.tasuki/profile.yaml` が参照する providers のコマンド(lint / format / typecheck / test)を実行し、exit code で合否を読む。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義は default branch(信頼された版)から読む**。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
-3. テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`packs/**/providers.yaml`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)
+2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(pytest 等)を実行すると、その過程で読み込まれる PR 側のコード(conftest.py 等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
+3. 契約の `enabled_gates` にある `checks-*` ゲートが指す provider のコマンドをすべて実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。`checks-*` ゲートが無い契約では実行する検査は無く、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約(`.tasuki/profile.yaml`)と providers の定義(`.tasuki/providers.yaml`。`/tasuki:loop-init` が pack から書き出したもの)、pack 由来のスクリプト(`.tasuki/normalizers/`)は default branch(信頼された版)から読む**(**`.tasuki/providers.yaml` が無い導入先**は、このファイルを設ける前に loop-init を実行したリポジトリである。plugin 側の pack の providers を既定値として使って続行し、`/tasuki:loop-init` の再実行で `.tasuki/providers.yaml` を作るよう1度だけ案内する。停止はしない)(スクリプトは default branch 版を `mktemp -d` で作った一時ディレクトリへ取り出して実行する。子ブランチ側の写しを実行すると、改変検知の前に改変済みスクリプトが走る。固定パスにしないのは、共有ホストで先に置かれたディレクトリを掴む余地を残さないためである。**許可は展開先の親ディレクトリのプレフィックスで与える**(`mktemp -d` が返すパスは run ごとに変わるが親は変わらないため、`Bash(python3 /tmp/*)` や `Bash(python3 /var/folders/*)` の形なら毎回一致する。どちらになるかは環境で決まるので、`/tasuki:loop-init` が導入時に `mktemp -d` を1度実行して確かめ、その親に対応する許可を提案する))。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
 6. 全て成功 → verifier(2e)へ
@@ -247,6 +257,7 @@ worker の義務は、**実装前の方針コメント**、worktree 上での実
 `tasuki-verifier` へ委譲する。
 渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準と打ち切り条件のみ。
 **PR のブランチ名を必ず渡す**(verifier は再実行を default branch ではなくそのブランチの一時 worktree で行う)。
+照合対象が統合の子(全子に依存し、他の子の成果をまとめる子)の場合は、**親 issue 本文も渡す**(verifier は親の要件まで遡って対応を検める)。
 verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。
 
 まず verifier の `drift_check` を確認する。
@@ -267,19 +278,20 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 ### 2f. 成果ゲート
 
 **判定対象は、worker が投稿した最新の loop-report 形式コメント**とする(再出力後は最新のものだけを判定する。verdict コメントには判定対象コメントの URL を記録し、冪等判定と発振検知の照合はこの URL を anchor にする)。
-
 まず **成果ゲートの門前払い**(機械チェック、LLM なし)を行う。
 契約の `report_required_fields` の各見出しについて、レポートコメントの該当セクションが空でないかを確認する。
+見出しは欄名と完全一致で数え、**コードブロック(フェンス)内の見出しは数えない**(部分一致は打ち消しの見出しを、フェンス内はテンプレ例を、実在の節と誤認して素通りさせる)。
 不足があれば LLM を呼ばずに `gate:outcome-returned` を付け、不足欄を列挙したコメントを残して、レポート再出力の worker を起動する。
 
 門前払いを通過したら reviewer へ委譲する。
 解決規則は 2b と同じ(既定は `tasuki-gate-reviewer` を **sonnet** で呼び、`escalate_to: opus` の昇格時は同じ agent を **opus** で呼ぶ)。
 
-渡すのは次の3つだけ。
+渡すのは次の4つだけ。
 
 - 判定対象のレポートコメント
-- 契約の `gates.outcome.phase` が指すフェーズの `receives` 定義+差し戻し履歴(過去 verdict があれば)
-- 子 issue 本文(受け入れ条件、成功基準。対応表の N対1 照合用)
+- 契約の `gates.outcome.phase` が指すフェーズの `receives` 定義と、`report_required_fields`(欄コメントを含む。欄の意味の照合用)
+- 子 issue 本文(要件の欄。対応表の N対1 照合用)
+- 差し戻し履歴(過去 verdict があれば)
 
 返った verdict を issue コメントに記録する(人間可読の markdown +畳んだ JSON。冪等)。
 エスカレーション規則は着手ゲートと同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
@@ -383,15 +395,21 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
    欄は契約の `parent_pr_required_fields` を正とし、次の要領で埋める(欄名を手順書側で増やさない)。
 
    - **検証の要約**(契約の「何が変わるか」の前置き):check-runs 全緑、統合ゲート PASS、出荷前レビューの結果を1行で(承認の前提が揃った、という宣言)
-   - **承認してほしい判断**:各子の実装方針コメントの「選択と理由」から、親 issue の要件に書かれていない裁量の決定を集めて列挙する。**各判断に「どの子(#N)で決めたか」と「どこで検められたか」(検めたゲートや検証したテスト)を必ず添える**。読み手が「この判断は誰がいつ下し、何が担保しているか」を1行で辿れることが、コードを読まずに承認できる条件である
+   - **承認してほしい判断**:各子の実装方針コメントの「選択と理由」から、親 issue の要件に書かれていない裁量の決定を集めて列挙する(**maker が実装方針コメントを持たない契約では、その maker の第1手コメントを入力元にする**)。**各判断に「どの子(#N)で決めたか」と「どこで検められたか」(検めたゲートや検証したテスト)を必ず添える**。読み手が「この判断は誰がいつ下し、何が担保しているか」を1行で辿れることが、コードを読まずに承認できる条件である
    - **やらなかったこと**:スコープ外に残した既知の課題。**どの子の作業で見つかったかを添える**(次の親 issue の種として辿れるように)。あわせて、各項目を次の親 issue として起票できる下書き(親テンプレの必須欄のうち、背景と目的を発見時の文脈から埋めたもの)を `<details>` に畳んで添える。**起票はしない**(リポジトリに issue を増やすかは人間の判断。機械はコピーして起票できる状態までを用意する)
    - **リスクと戻し方**:壊れたときに何が起き、どう戻すか
    - **対応 issue**:`Closes` の列挙(取り込み時に close 済みの保険)
 2. **親 PR を ready 化する。** draft は「組み立て中」の印であり、統合ゲートを通った時点で組み立ては終わっている。人間に判断を求める PR が draft のままなのは誤った合図になる(レビューと差し戻しが出た場合は draft に戻して 2d へ)。
 
-**状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付ける。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
-再入時は、`loop:review` が付いていて統合ブランチの先端が verdict より新しくなければ「レビュー待ち」を維持し、レビューをやり直さない。
-**レビュー結果は親 PR のコメントに残す**(所見ゼロの場合も「所見なし」と1件残す)。run をまたぐ場合、次の run はこのコメントの有無で分岐する: 所見コメントがあり修正が要る → 該当する子を特定して worker へ差し戻す(上記3)。「所見なし」→ そのまま人間のマージ待ち。コメントが無い → レビュー待ちを維持する(orchestrator は結果を推測しない)。
+**状態の持ち方**:3c に入るとき、**親 issue** に `loop:review` ラベルを付け、**同時に親 PR へレビュー開始コメントを1件残す**(冪等。ラベルは付与時刻を持たないため、待ち時間の起点はこのコメントの時刻とする)。ready 化して人間のマージ待ちに入るとき、または差し戻して 2d へ戻すときに外す。
+再入時は、`loop:review` が付いていて統合ブランチの先端が verdict より新しくなければ、レビューをやり直さない。
+**レビュー結果は親 PR のコメントに残す**(所見ゼロの場合も「所見なし」と1件残す)。run をまたぐ場合、次の run はこのコメントの有無で分岐する: 所見コメントがあり修正が要る → 該当する子を特定して worker へ差し戻す(上記3)。「所見なし」→ そのまま人間のマージ待ち。
+**コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる**(結果を推測しない点は共通)。
+
+- `full` / `scaled`(orchestrator が自動実行する設定): レビュー subagent が結果を残す前に落ちたということなので、**レビューを起動し直す**(待ち続けると、ラベルだけが付いた状態で親 PR が draft のまま無期限に止まり、triage にも上がらない)。**起動し直しは `max_iterations_per_gate` まで**とし、超えたら `loop:triage` を付けて中断する(結果を残せない構造的な理由があるときに、run のたびに同じ位置へ戻る反復を止める。起動回数はレビュー開始コメントの件数で数える)
+- `manual`(人間が起動する設定): レビュー待ちを維持する。ただしレビュー開始コメントからの経過が `stale_assignment_minutes` を超えたら `loop:triage` を付けて可視化する(沈黙した待ちを inbox に出す)
+
+3c で付けた `loop:triage` は、レビュー結果コメントが現れた時点で外す(共通規則のラベルの整理は verdict を持つゲート向けであり、3c は verdict を持たないため、外す条件をここで定める)。
 
 **レビュー観点(5つ)**
 

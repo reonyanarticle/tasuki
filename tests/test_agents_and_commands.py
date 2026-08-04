@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -160,3 +161,39 @@ def test_loop_pr_label_goes_on_the_pr() -> None:
     """loop:pr を PR に付けること(issue に付けると WIP 集計が機能しない)。"""
     text = (ROOT / "agents/worker.md").read_text()
     assert "ラベルは PR に付ける。issue には付けない" in text
+
+
+# プロファイル名の言及を許容するファイルと一致数の上限(現状の残存箇所。減らすのはよい)。
+# - loop.md: フェーズ名の例示と worker_agent の既定の説明
+# - loop-init.md: プロファイル選択そのものを扱うコマンド
+_PROFILE_NAME_ALLOWED: dict[str, int] = {
+    "commands/loop.md": 3,
+    "commands/loop-init.md": 4,
+}
+
+# 日本語の密着表記(「developmentプロファイル」)と大文字も検出する。\b は \w に日本語が
+# 含まれるため密着表記で成立しない。英字の連続(別語の一部)は除外する。
+_PROFILE_NAME = re.compile(r"(?i)(?<![a-z])(development|experiment)(?![a-z])")
+
+
+def test_profile_names_do_not_leak_into_core_layers() -> None:
+    """非契約レイヤー(agents / skills / commands)にプロファイル名の分岐を増やさないこと。
+
+    3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が手順書と skill に
+    literal に書かれていたため、10ファイルへ「読み替え節」を足す羽目になった(読み替え節1つが
+    抽象の漏れ1つである)。プロファイルごとの違いは契約(split_criteria、欄コメント等)が
+    持ち、非契約レイヤーは契約のキーの有無で分岐する。
+    このテストが落ちたら、プロファイル名の分岐を書く前に契約へパラメータを足せないか疑う。
+    許容ファイル内でも一致数の上限を超えたら失敗する(許容を「増やさない」の強制)。
+    """
+    for rel in _PROFILE_NAME_ALLOWED:
+        assert (ROOT / rel).exists(), f"許容リストのファイルが実在しない: {rel}"
+    offenders = []
+    for base in ("agents", "skills", "commands"):
+        for path in sorted((ROOT / base).rglob("*.md")):
+            rel = str(path.relative_to(ROOT))
+            count = len(_PROFILE_NAME.findall(path.read_text()))
+            limit = _PROFILE_NAME_ALLOWED.get(rel, 0)
+            if count > limit:
+                offenders.append(f"{rel}: {count} 件(上限 {limit})")
+    assert not offenders, offenders

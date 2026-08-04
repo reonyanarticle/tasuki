@@ -498,6 +498,11 @@ def test_draft_command_is_designed() -> None:
     assert "`gates.intake.phase`" in d  # 契約から引く(フェーズ名を書かない)
     assert "このコマンド独自の基準を持たない" in d
     assert "実装方式は本文に書かない" in d
+    assert "`too_concrete_signals`" in d  # 何が「解き方」かも契約から引く
+    # 実走で生成本文に絶対日付が入った(issue は完走まで参照され続ける文書である)
+    assert "issue 本文に絶対日付を書かない" in d
+    # 自己照合は独立判定より弱いので、その旨を起票者に伝える
+    assert "割れなかったこと自体を起票者に伝える" in d
     assert "参考メモ" in d
     assert "ラベルは付けず、verdict も issue に残さない" in d  # 事前審査は正式判定でない
     assert "確認を得てから" in d  # 勝手に起票しない
@@ -538,7 +543,7 @@ def test_field_review_fixes_are_designed() -> None:
 def test_trace_review_findings_are_fixed() -> None:
     """第6観点「手順のトレース」の試走が検出した8欠陥の修正が残っていること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "子 issue 本文と統合ブランチ名" in loop  # worker への受け渡し
+    assert "子 issue 本文と issue 番号、統合ブランチ名" in loop  # worker への受け渡し
     assert "`loop:triage` が付いた子には着手しない" in loop  # 裁定前の再実行防止
     assert "レビュー結果は親 PR のコメントに残す" in loop  # 3c の run またぎ
     assert "マージが conflict で拒否された場合" in loop  # 子 PR の conflict 分岐
@@ -795,3 +800,114 @@ def test_toc_adaptation_is_reflected() -> None:
     # C: レイヤー報告は覗いてよい任意のチェックポイント
     loop = (ROOT / "commands/loop.md").read_text()
     assert "覗いてよい任意のチェックポイント" in loop
+
+
+def test_loop_report_skill_pulls_fields_from_contract() -> None:
+    """レポート skill が欄名を契約から引くこと(プロファイル固有の欄を skill に写さない)。
+
+    3つ目のプロファイルを試作したとき、skill に development の欄が literal に
+    書かれていたため「読み替え節」を足す羽目になった(その成果物には受け入れ条件も
+    テストも無く、共通の必須構成に忠実な報告は成果ゲートの門前払いを必ず落ちた)。
+    欄の正を契約に一本化し、skill には共通規則だけを残す。
+    """
+    sk = (ROOT / "skills/loop-report/SKILL.md").read_text()
+    assert "`report_required_fields`" in sk
+    assert "欄の意味は契約の欄コメントが定める" in sk
+    assert "プロファイルの読み替え" not in sk  # 読み替え節を復活させない
+
+
+def test_preship_review_recovers_from_crashed_review() -> None:
+    """レビュー結果コメントが無い状態からの再入が、モードで分岐すること。
+
+    自動実行の設定で「待ちを維持」を選ぶと、ラベルだけが残って親 PR が
+    draft のまま無期限に止まり、triage inbox にも上がらない。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる" in loop
+    assert "レビューを起動し直す" in loop
+
+
+def test_providers_definition_has_a_home_in_the_target_repo() -> None:
+    """checks-local が読む providers 定義を loop-init が導入先に書き出すこと。
+
+    plugin の packs/ は導入先リポジトリに存在しないため、書き出しが無いと
+    「default branch から providers を読む」の参照先が無い。
+    """
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "`.tasuki/providers.yaml` へ書き出す" in init
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`.tasuki/providers.yaml`" in loop
+    # 導入先に存在しないパスを改変検知の対象にしない
+    assert "packs/**/providers.yaml" not in loop
+
+
+def test_gate_review_skill_judges_only_by_contract() -> None:
+    """判定側の skill が契約だけを物差しにすること(存在しない欄で差し戻さない)。
+
+    かつては development の欄名を具体列挙し、別プロファイル用の読み替え節で打ち消していた。
+    具体列挙が原則に勝つ構造を廃し、分割基準と欄の意味を契約から引く。
+    """
+    sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
+    assert "契約に存在しない欄を根拠に差し戻さない" in sk
+    assert "`split_criteria`" in sk  # 分割基準は契約から引く
+    assert "`report_required_fields`" in sk  # レポート欄も契約から引く
+    assert "プロファイルでの読み替え" not in sk  # 読み替え節を復活させない
+
+
+def test_new_governance_file_has_migration_path() -> None:
+    """後から必須にしたファイルは、持たない既存導入先での扱いを定めること。
+
+    `.tasuki/providers.yaml` はこの版で新設した。持たないリポジトリで
+    checks-local が止まると、既存の導入先が黙って動かなくなる。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`.tasuki/providers.yaml` が無い導入先" in loop
+    assert "停止はしない" in loop
+
+
+def test_contract_consolidation_review_fixes() -> None:
+    """契約一本化の変更に対する5観点レビュー所見の修正が残っていること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 差し戻し委譲の入力(前提入力を毎回渡し、ブランチは既存 PR の head を優先)
+    assert "差し戻しの委譲でも毎回渡す" in loop
+    assert "既存 open PR があればその head ブランチ" in loop
+    # decomposer への契約抜粋(split_criteria 等)は全モードの委譲で毎回渡す
+    assert "のたびに毎回渡す" in loop
+    assert "`split_criteria`" in loop
+    assert "split_criteria" in (ROOT / "agents/decomposer.md").read_text()
+    # 統合の子の照合には親 issue 本文を渡す
+    assert "親 issue 本文も渡す" in loop
+    # outcome-returned 再入はレポートの編集更新も検知する
+    assert "verdict より新しい編集" in loop
+    # 門前払いは完全一致で、フェンス内の見出しを数えない
+    assert "コードブロック(フェンス)内の見出しは数えない" in loop
+    # 旧契約への後方互換と、契約×plugin の版ずれ検出
+    assert "旧い契約への後方互換" in loop
+    assert "契約と plugin の版ずれ" in loop
+    # loop-init の再実行(移行)手順
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "既存の `.tasuki/` がある(再実行=移行の)場合" in init
+
+
+def test_report_fields_carry_meaning_comments() -> None:
+    """report_required_fields の各欄行に欄コメントが付いていること。
+
+    欄の意味は skill の本文から契約の欄コメントへ移した。コメントは yaml.safe_load に
+    見えないため、raw テキストで固定しないと全部消しても緑のまま意味の実体が失われる。
+    """
+    import yaml
+
+    for name in ("development", "experiment"):
+        text = (ROOT / f"profiles/{name}.yaml").read_text()
+        fields = yaml.safe_load(text)["templates"]["report_required_fields"]
+        for field in fields:
+            lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
+            assert lines, (name, field)
+            assert any("#" in ln for ln in lines), (name, field, "欄コメントが無い")
+
+
+def test_mechanical_preflight_survives_gate_removal() -> None:
+    """LLM 判定を外した契約でも、必須欄の空チェックは走ること。"""
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "`enabled_gates` に `start` が無くても常に走る" in loop
+    assert "人間が起票した子" in loop  # 分割ゲートを通っていない子は LLM 判定へ
