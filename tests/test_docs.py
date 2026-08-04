@@ -58,8 +58,9 @@ def test_design_tree_lists_existing_profiles() -> None:
     """
     import re as _re
 
-    tree = (ROOT / "docs/DESIGN.md").read_text()
-    listed = set(_re.findall(r"([a-z]+)\.yaml", tree.split("## plugin ディレクトリ構成")[1]))
+    body = (ROOT / "docs/DESIGN.md").read_text().split("## plugin ディレクトリ構成")[1]
+    tree = body.split("```")[1]  # 見出し直後のコードフェンス1つだけを見る
+    listed = set(_re.findall(r"([a-z]+)\.yaml", tree))
     actual = {p.stem for p in (ROOT / "profiles").glob("*.yaml")}
     assert listed >= actual, (listed, actual)
     assert listed - actual <= {"providers"}, (listed, actual)
@@ -924,7 +925,12 @@ def test_subagent_nesting_claims_match_current_spec() -> None:
     (https://code.claude.com/docs/en/sub-agents)。
     Claude Code の仕様に依存する記述は、こう固定しないと古いまま生き残る。
     """
-    wrong = ("subagent は別の subagent を起動できない", "subagent は子 subagent を起動できない")
+    wrong = (
+        "subagent は別の subagent を起動できない",
+        "subagent は子 subagent を起動できない",
+        "SPAWN_DEPTH` の設定が必要",  # 設定しないとネストできない、という趣旨の別表現
+        "SPAWN_DEPTH=2` を設定すると",
+    )
     for base in ("docs", "commands", "agents", "skills"):
         for path in sorted((ROOT / base).rglob("*.md")):
             text = path.read_text()
@@ -955,7 +961,7 @@ def test_contract_consolidation_review_fixes() -> None:
     assert "コードブロック(フェンス)内の見出しは数えない" in loop
     # 初期化コマンドは既存の調整を黙って捨てない
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "上書きの前に次の3つを行う" in init
+    assert "上書きの前に次の4つを行う" in init
 
 
 def test_report_fields_carry_meaning_comments() -> None:
@@ -978,5 +984,6 @@ def test_report_fields_carry_meaning_comments() -> None:
 def test_mechanical_preflight_survives_gate_removal() -> None:
     """LLM 判定を外した契約でも、必須欄の空チェックは走ること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "`enabled_gates` に `start` が無くても常に走る" in loop
+    assert "`enabled_gates` に `start` が無くても走らせる" in loop
+    assert "`preflight: template-fields` を持つ契約で走る" in loop  # 有無は契約から引く
     assert "人間が起票した子" in loop  # 分割ゲートを通っていない子は LLM 判定へ

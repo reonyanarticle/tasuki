@@ -41,15 +41,16 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 
 ### 3. 契約プロファイルの配置
 
-**既に `.tasuki/` がある場合は、上書きの前に次の3つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
+**既に `.tasuki/` がある場合は、上書きの前に次の4つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
 
 1. 既存契約の repo override(必須欄の追加、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)を新しい契約へ引き継ぐ
 2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
-3. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
+3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
+4. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
 
 `profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。
-以後このリポジトリでの契約の正は `.tasuki/profile.yaml` である。**上書きしてよい範囲の正は契約スキーマの文書が定める**(必須欄(`templates`)の追加を含む)。
-**必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。
+以後このリポジトリでの契約の正は `.tasuki/profile.yaml` である。**上書きしてよい範囲の正は、契約ファイル冒頭のコメントが定める**(必須欄(`templates`)の追加を含む。規則が契約と一緒に導入先へ運ばれる形にしてある)。
+**必須欄を足すのは、その仕事の型を毎回テンプレが問いかける形にしたいときに使う**(例: 実験を常時行うリポジトリが子の必須欄に「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を足す)。足した欄は門前払いの対象になり、issue テンプレにも現れる。**足した欄には意味を1行の欄コメントとして書く**(ゲートと decomposer は欄の意味をそこから引く。コメントが無いと欄名だけが渡り、空チェックにしか効かない)。
 欄を減らすことはしない(ゲートの判定材料が消える)。
 あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
 **選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
@@ -293,4 +294,4 @@ jobs:
 **生成物はブートストラップ用ブランチ(`tasuki/init`)にコミットして push し、default branch への PR を1件開く。**
 default branch へ直接 push しない。
 生成物(契約、CI workflow、テンプレート)はガバナンスの制定であり、人間承認を経て default branch に入る。承認の形はループ本体と同型である(機械はコミットと push と PR 作成まで、反映は人間のマージだけ)。
-最後に、PR の URL と、未完了の手動作業(**ブートストラップ PR のレビューとマージ**、secret 設定、branch protection、fixture の採用、spawn depth 設定)を分けて報告する。
+最後に、PR の URL と、未完了の手動作業(**ブートストラップ PR のレビューとマージ**、secret 設定、branch protection、fixture の採用)を分けて報告する。

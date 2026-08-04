@@ -343,8 +343,10 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 5. 組み込みスラッシュコマンドの headless 実行可否。不可なら形式ゲートの security は GitHub Action 側([OPERATIONS.md](OPERATIONS.md))のみを使う
 6. GitHub sub-issues / issue dependencies。`gh` CLI と REST API の対応範囲。未対応操作は GraphQL API へフォールバック
 7. plugin からの CI workflow ファイル生成。GitHub Apps / Actions の権限(`workflows` 書き込み権限が必要な点)
+8. **subagent のネスト**。既定の階層上限と、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` が上限を上げるのか下げるのか(https://code.claude.com/docs/en/sub-agents)
+9. **Agent 起動時の `model` 指定**と agent 定義の `model` の優先順位(同上)
 
-### 検証結果(公式ドキュメントで確認済み)
+### 検証結果(確認した時点のもの。仕様は動くため、依存する記述を書くたびに現行仕様と突き合わせる)
 
 1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし

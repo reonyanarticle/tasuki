@@ -87,7 +87,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件がゲートを通る流れ
-    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合、成果ゲート、CI の全緑を経て、orchestrator が子 PR を ready 化して統合ブランチへ取り込む。形式、成果、CI の差し戻しは worker に戻る。
+    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合、成果ゲート、CI の全緑を経て、orchestrator が子 PR を ready 化して統合ブランチへ取り込む。形式、成果、CI の差し戻しは worker に戻り、着手ゲートの差し戻しはループ起票の子なら decomposer、人間起票の子なら起票者へ戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
@@ -101,7 +101,7 @@ flowchart TD
     checks -.->|NG| W
     outcome -.->|NG| W
     CI -.->|NG| W
-    start -.->|差し戻し| T["人間へ"]:::human
+    start -.->|差し戻し| T["ループ起票の子は decomposer へ<br/>人間起票の子は起票者へ"]:::human
 ```
 
 ## 前提
@@ -189,21 +189,21 @@ gitGraph
     branch child-2
     commit id: "子A 基盤"
     checkout loop/parent-1
-    merge child-2 id: "ループが取り込む"
+    merge child-2 id: "子A を取り込む"
     branch child-3
     commit id: "子B"
     checkout loop/parent-1
     branch child-4
     commit id: "子C"
     checkout loop/parent-1
-    merge child-3 id: "取り込み(並行)"
-    merge child-4 id: "取り込み(並行) "
+    merge child-3 id: "子B を取り込む"
+    merge child-4 id: "子C を取り込む"
     checkout main
     commit id: "hotfix(ループ外)"
     checkout loop/parent-1
-    merge main id: "定点: main を取り込む"
+    merge main id: "main 取り込み"
     checkout main
-    merge loop/parent-1 id: "親PR: 人間がマージ" type: HIGHLIGHT
+    merge loop/parent-1 id: "親PR マージ" type: HIGHLIGHT
 ```
 
 子 PR は統合ブランチ(`loop/parent-1`)へ合流し、ループが取り込む。

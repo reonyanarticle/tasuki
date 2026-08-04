@@ -81,7 +81,7 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 - 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
 - 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
-観点の出典は [commands/loop.md](../commands/loop.md) の出荷前レビュー節が正で、両者はほぼ同じ範囲を指している。
+観点の正は [commands/loop.md](../commands/loop.md) の出荷前レビュー節である。
 
 ## issue に残す出力の原則
 

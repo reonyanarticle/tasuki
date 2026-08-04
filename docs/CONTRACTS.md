@@ -132,16 +132,22 @@ preship_review:                   # 出荷前レビュー(loop.md 3c)のコス�
 
 `worker_agent:` は maker の差し替えキーである(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
 
+### repo override で変えてよい範囲
+
+**正は契約ファイル冒頭のコメント**(`profiles/development.yaml`)であり、導入先へコピーされて一緒に運ばれる。
+以下はその解説である。
+
+導入先の `.tasuki/profile.yaml` で変えてよいのは、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
+必須欄の追加は、その導入先で毎回問いかけたい欄をテンプレと門前払いに持ち込む手段である(実験を常時行うリポジトリが「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を子の必須欄に足す、など)。
+**足した欄には意味を欄コメントとして1行書く**(decomposer とゲートは欄の意味を欄コメントから引くため、コメントの無い欄は門前払いの空チェックにしか効かない)。
+欄の削除は行わない(ゲートの判定材料が消える)。
+**必須欄の追加は、走行中(open)の親 issue が無いときに反映する**(門前払いは現在レイヤーの子を毎 run 検めるため、走行中に欄が増えると既存の子が一斉に差し戻される)。この制約は契約の変更全般に当てはまる(run は開始時に読んだ契約で最後まで走る)。
+**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の experiment 廃止の記録)。
+
 ### language pack の providers.yaml
 
 デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
 対象リポジトリは repo override でコマンドを変更できる。
-
-repo override(`.tasuki/profile.yaml`)で変えてよいのは、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、そして**必須欄(`templates`)の追加**である。
-必須欄の追加は、その導入先で毎回問いかけたい欄をテンプレと門前払いに持ち込む手段である(実験を常時行うリポジトリが「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を子の必須欄に足す、など)。
-欄の削除は行わない(ゲートの判定材料が消える)。
-**必須欄の追加は、走行中(open)の親 issue が無いときに反映する**(門前払いは現在レイヤーの子を毎 run 検めるため、走行中に欄が増えると既存の子が一斉に差し戻される)。この制約は契約の変更全般に当てはまる(run は開始時に読んだ契約で最後まで走る)。
-**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の experiment 廃止の記録)。
 
 pack は `providers` のほかに、生成物の一覧(`artifacts`)と CI 生成に使う定義(`ci`: セットアップ手順、normalizer の実行系、lockfile、改変検知の対象パス)を持つ。
 以下は `providers` 部分の抜粋である(全体は packs/python/providers.yaml が正)。

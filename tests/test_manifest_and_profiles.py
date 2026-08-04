@@ -165,11 +165,42 @@ def test_contract_has_no_unread_keys(dev_profile: dict) -> None:
         for base in ("commands", "agents", "skills")
         for p in (ROOT / base).rglob("*.md")
     )
+
+    def keys_of(node: object) -> set[str]:
+        """契約のキーを入れ子も含めて集める(死んだキーが下層に隠れないように)。"""
+        found: set[str] = set()
+        if isinstance(node, dict):
+            for k, v in node.items():  # pyright: ignore[reportUnknownVariableType]
+                found.add(str(k))
+                found |= keys_of(v)
+        elif isinstance(node, list):
+            for item in node:  # pyright: ignore[reportUnknownVariableType]
+                found |= keys_of(item)
+        return found
+
     # 手順書が別名で引くキーは、その別名を読まれた証拠とする
-    aliases: dict[str, str] = {"phases": "`receives` 定義", "budgets": "max_iterations_per_gate"}
-    for key in dev_profile:
-        token = aliases.get(key) or str(key)
-        assert token in readers, f"どの手順書からも読まれない契約キー: {key}"
+    aliases: dict[str, str] = {
+        "phases": "`receives` 定義",
+        "budgets": "max_iterations_per_gate",
+        "receives": "`receives` 定義",
+        "hands_off": "`receives` 定義",
+        "from": "`receives` 定義",
+        "name": "`gates[].phase`",
+        "phase": "`gates[].phase`",
+        "id": "`enabled_gates`",
+        "kind": "`kind: mechanical`",
+        "provider": "provider",
+        "preflight": "`preflight: template-fields`",
+        "with": "`ci.setup`",
+    }
+    # 欄名そのもの(日本語)はキーではなく値なので対象外
+    for key in sorted(k for k in keys_of(dev_profile) if k.isascii()):
+        alias = aliases.get(key)
+        # 別名を持たないキーは、コード表記(`key` か key:)で引かれていることを求める。
+        # 素の部分文字列一致にすると、無関係な語に含まれて素通りする(profile が
+        # .tasuki/profile.yaml に含まれる等)。
+        hit = alias in readers if alias else (f"`{key}`" in readers or f"{key}:" in readers)
+        assert hit, f"どの手順書からも読まれない契約キー: {key}"
 
 
 def test_repo_override_may_add_required_fields() -> None:

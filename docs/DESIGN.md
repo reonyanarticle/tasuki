@@ -120,8 +120,7 @@ deploy と release の分離(feature flag)により、未完成の機能を理�
 ```mermaid
 flowchart TD
     accTitle: レイヤー実行の構造
-    accDescr: 同じレイヤーの子 issue は並行して実装され、ゲートを通った子 PR をループが統合ブランチへ取り込む。全子の取り込みが合流点で、そこで再計画の発効と default branch の取り込みを行ってから次レイヤーに着手する。人間のマージは最後の親 PR の1回だけ。
-    classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
+    accDescr: 同じレイヤーの子 issue は並行して実装され、ゲートを通った子 PR をループが統合ブランチへ取り込む。全子の取り込みが合流点で、そこで再計画の発効と default branch の取り込みを行ってから次レイヤーに着手する。灰色の子はまだ着手していないレイヤーである。
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
     classDef pending fill:#6e7781,stroke:#57606a,color:#fff
 
@@ -136,53 +135,63 @@ flowchart TD
     subgraph L2["レイヤー2(子A と子B に依存)"]
         C["子C worker → 子 PR"]:::pending
     end
-    C --> FIN["統合ゲート → 出荷前レビュー(subagent)→ 親 PR ready 化"]:::work
-    FIN --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human
+    C --> FIN["以降は run 全体の図へ(統合ゲート以降)"]:::work
 ```
+
+灰色は未着手のレイヤーである。
 
 ## ループ詳細フロー
 
-`/tasuki:loop` の1 run が通る経路の全体である(手順の正は [commands/loop.md](../commands/loop.md)。この図は§番号への地図)。
+`/tasuki:loop` の1 run が通る経路である(手順の正は [commands/loop.md](../commands/loop.md)。この図は § 番号への地図)。
+外側(run 全体)と内側(子1件)を2枚に分ける。
 
 ```mermaid
 flowchart TD
-    accTitle: ループ詳細フロー
-    accDescr: 起動から人間のマージまでの全経路。前提チェックと受理ゲート、分割と起票、統合ブランチと親 PR の準備、レイヤーごとの着手ゲートから取り込みまでの内側ループ、合流点での再計画と定点取り込み、統合ゲート、出荷前レビュー、承認コメント、人間のマージ。差し戻しは点線で示す。
+    accTitle: run 全体の経路
+    accDescr: 起動から人間のマージまでの外側の経路。前提チェックと受理ゲート、分割と起票、統合ブランチと親 PR の準備、レイヤーごとの内側ループ(別図)、合流点での再計画と定点取り込み、統合ゲート、出荷前レビュー、承認コメント、人間のマージ。差し戻しは点線で示す。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
     classDef stop fill:#cf222e,stroke:#a40e26,color:#fff
 
-    S0["§0 前提と状態復元<br/>信頼チェック / 門前払い / 要件変更検知 / WIP"]:::work --> G0{"受理ゲート<br/>opus"}:::gate
-    G0 -->|PASS| S1a["§1a decomposer が分割案<br/>(既存子があれば突合)"]:::work
+    S0["§0 前提と状態復元"]:::work --> G0{"§0.10 受理ゲート<br/>opus"}:::gate
+    G0 -->|PASS| S1a["§1a decomposer が分割案"]:::work
     G0 -.->|差し戻し| TRI["loop:triage(人間の裁定待ち)"]:::stop
-    S1a --> G1{"分割ゲート<br/>opus(集合判定)"}:::gate
-    G1 -->|PASS| S1b["§1b 起票(1子1ファイル)<br/>依存設定 / tasuki:child"]:::work
+    S1a --> G1{"§1b 分割ゲート<br/>opus(集合判定)"}:::gate
+    G1 -->|PASS| S1b["§1b 子 issue の起票と依存設定"]:::work
     G1 -.->|差し戻し| S1a
-    S1b --> S1c["§1c 統合ブランチ loop/parent-N<br/>空コミット + draft 親 PR(Closes 列挙)"]:::work
-    S1c --> LOOP
-
-    subgraph LOOP ["§2 現在レイヤーの各子(並行)"]
-        G2{"着手ゲート<br/>haiku → sonnet"}:::gate -->|PASS| W["§2c worker(sonnet、worktree)<br/>方針コメント → 実装 → draft 子 PR"]:::work
-        W --> CL["§2d checks-local<br/>一時 worktree で改変検知 → provider 実行<br/>(検知はコード実行より前)"]:::work
-        CL -->|緑| V["§2e verifier(sonnet)<br/>再実行で SC 照合 + drift 検査"]:::work
-        CL -.->|赤| W
-        V -->|met| G3{"成果ゲート<br/>sonnet → opus"}:::gate
-        V -.->|continue / abort| W
-        G3 -->|PASS| CI["§2g checks-ci(fail-closed)"]:::work
-        G3 -.->|書き方| RPT["レポートのみ再出力"]:::work
-        RPT -.-> G3
-        CI -->|全緑| MG["ready 化 → 統合ブランチへマージ<br/>子 issue を close"]:::work
-        CI -.->|失敗| W
-    end
-
-    MG --> S3a["§3a 合流点<br/>replan 発効(§1d) / 定点1: default branch 取り込み"]:::work
+    S1b --> S1c["§1c 統合ブランチと draft 親 PR"]:::work
+    S1c --> LOOP["§2 現在レイヤーの各子(内側は下の図)"]:::work
+    LOOP --> S3a["§3a 合流点(replan 発効 / default branch 取り込み)"]:::work
     S3a -->|次レイヤーあり| LOOP
-    S3a -->|全レイヤー完了| G4{"統合ゲート<br/>opus(親要件⇔子成果)"}:::gate
-    G4 -->|PASS| S3c["§3c-1 定点2: merge-base 一致<br/>出荷前レビュー(subagent、preship_review で規模制御)"]:::work
+    S3a -->|全レイヤー完了| G4{"§3b 統合ゲート<br/>opus(親要件⇔子成果)"}:::gate
+    G4 -->|PASS| S3c["§3c-1 出荷前レビュー"]:::work
     G4 -.->|孤児要件| TRI
-    S3c --> AP["§3c-2 承認コメント投稿 → 親 PR ready 化"]:::work
+    S3c --> AP["§3c-2 承認材料の投稿と ready 化"]:::work
     AP --> HM["人間: 親 PR をマージ(唯一の反映点)"]:::human
+```
+
+内側(子 issue 1件が通る経路)は次のとおり。
+
+```mermaid
+flowchart TD
+    accTitle: 子 issue 1件の内側の経路
+    accDescr: 門前払いと着手ゲートを通ると worker が実装し、checks-local、verifier、成果ゲート、CI を経て統合ブランチへ取り込まれる。形式と成果と CI の差し戻しは worker へ、レポートの書き方の不足はレポート再出力へ戻る。差し戻しは点線で示す。
+    classDef gate fill:#8250df,stroke:#6639ba,color:#fff
+    classDef work fill:#bf8700,stroke:#9a6700,color:#fff
+
+    P["§2a 門前払い(機械)"]:::work --> G2{"§2b 着手ゲート<br/>haiku → sonnet"}:::gate
+    G2 -->|PASS| W["§2c worker(方針コメント → 実装 → draft 子 PR)"]:::work
+    W --> CL["§2d checks-local(改変検知 → provider 実行)"]:::work
+    CL -->|緑| V["§2e verifier(SC 照合 + drift 検査)"]:::work
+    CL -.->|赤| W
+    V -->|met| G3{"§2f 成果ゲート<br/>sonnet → opus"}:::gate
+    V -.->|continue / abort| W
+    G3 -->|PASS| CI["§2g checks-ci(fail-closed)"]:::work
+    G3 -.->|書き方| RPT["レポートのみ再出力"]:::work
+    RPT -.-> G3
+    CI -->|全緑| MG["ready 化 → 取り込み → 子 issue を close"]:::work
+    CI -.->|失敗| W
 ```
 
 ## 子 issue の状態遷移
@@ -192,18 +201,18 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     accTitle: 子 issue の状態遷移
-    accDescr: 起票から取り込みまでの子 issue の状態。着手ゲートを通ると実装中になり、差し戻しは worker へ、裁定が要るものは triage で停止する。統合ブランチへの取り込みで close される。replan は未取り込みの子だけを改訂または撤回できる。
+    accDescr: 起票から取り込みまでの子 issue の状態。着手ゲートを通ると実装中になり、差し戻しは worker へ、裁定が要るものは triage で停止する。統合ブランチへの取り込みで close される。replan は未取り込みの子だけを撤回できる。
 
-    [*] --> Filed: 起票(tasuki:child)
-    Filed --> Started: 着手ゲート PASS(gate:start-passed)
-    Filed --> Returned: 差し戻し(gate:start-returned)
-    Returned --> Filed: 本文修正(decomposer または起票者)
-    Started --> InProgress: worker 委譲(loop:in-progress + assignee)
-    InProgress --> InProgress: checks-local / verifier / 成果ゲートの反復
-    InProgress --> Merged: CI 全緑 → 統合ブランチへ取り込み(close)
-    InProgress --> Triage: 予算超過 / abort(loop:triage)
-    Triage --> Filed: 人間がラベルを外す
-    Filed --> Retired: replan で撤回(close + 撤回コメント)
+    [*] --> Filed: 起票
+    Filed --> Started: 着手ゲート PASS
+    Filed --> Returned: 着手ゲート差し戻し
+    Returned --> Filed: 本文修正
+    Started --> InProgress: worker 委譲
+    InProgress --> InProgress: 検査と照合の反復
+    InProgress --> Merged: CI 全緑 → 取り込み
+    InProgress --> Triage: 予算超過 / abort
+    Triage --> Filed: 人間が裁定
+    Filed --> Retired: replan で撤回
     Merged --> [*]
     Retired --> [*]
 ```
@@ -240,5 +249,5 @@ orchestrator のモデルはメインセッションのモデルそのもので�
 2. 同一ゲートで差し戻しが2回連続した場合も上位モデルへ昇格する(小型モデルの判定基準自体のズレを検出)
 3. エスカレーション連鎖の終点は `haiku → sonnet → opus → Fable 裁定 → 人間`。差し戻し上限超過時、Fable が状況を要約し「契約の不備 / タスクの筋の悪さ / モデル能力の限界」を切り分けてから triage inbox に渡す(人間の判断コスト削減)
 
-v1 は `model_selection: static` とし、v2 で `bandit`(Thompson Sampling 等によるタスク複雑度ベースの動的選択)を予約する。
+v1 はモデルを静的に固定し、v2 で bandit(Thompson Sampling 等によるタスク複雑度ベースの動的選択)を予約する。
 回帰 fixture([OPERATIONS.md](OPERATIONS.md))に判定モデルを記録しておくことで、人間の正解ラベルがそのまま bandit の報酬データになる。
