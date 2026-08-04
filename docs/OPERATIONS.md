@@ -5,19 +5,20 @@
 CI は plugin が **作ることを前提** とする(既存 CI は前提にしない)。
 手順は次のとおり。
 
-1. 言語検出 → language pack 選択(各 pack の `detect` に挙がったファイルの有無で判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が無ければ生成。`ci.setup` の依存解決の前提)
+1. プロファイル確定 → pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
-3. 契約プロファイル雛形の配置(experiment / development を選択)+ repo override(`.tasuki/`)
+3. 契約プロファイル雛形の配置(development / experiment から選択)+ repo override(`.tasuki/`)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
 5. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
 6. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
-   - test job は JUnit XML 出力に加え、**テスト改変検知**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)を行う。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
+   - test job は JUnit XML を出力する
+   - **改変検知は独立した `tampering` job で行う**(既存テストの削除、skip / xfail の追加、テストと型チェックの設定変更の diff チェック、観点「テストの信頼性」)。この job は checkout と diff だけを行い、PR のコードを実行しない(実行してから検知すると、実行されたコードが base ref を書き換えて検知を無効化できる)。アサーション弱化は機械検知せず成果ゲートのレビュー観点で検査する
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
-7. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(`gh` v2.94.0 以上でネイティブ対応。それ未満は `gh api` フォールバック)
+7. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(作成は `gh` v2.94.0 以上、`--json subIssues` での読み取りは v2.95.0 以上。満たさない側は `gh api` フォールバック)
 8. `max_iterations` 等バジェットのデフォルト設定と、判定例(fixture)の下書き生成
 9. **生成物をブートストラップ用ブランチ(`tasuki/init`)へコミットして push し、default branch への PR を1件開く。** default branch へ直接 push しない。生成物はガバナンスの制定であり、人間がレビューしてマージすることで入る(反映の形はループ本体と同型で、機械は PR 作成まで)
 

@@ -24,6 +24,9 @@ GitHub 上のラベル、コメント、レポートには作者の認証が無�
 - checkout は `persist-credentials: false` とし、GITHUB_TOKEN を PR コードから読めないようにする
 - secrets は CI 環境にのみ置く(観点「実行環境の隔離と権限最小化」)。security job は SHA 固定の Action で、生成時に SHA が解決できなければ workflow を出力しない
 - コマンドの allowlist は、手順が実際に使う操作だけを列挙する(`gh issue` のようなコマンド群、または `gh issue create` のようなサブコマンド単位)。`Bash(git *)` や `Bash(gh *)` のような、ツール全体を前承認する形は使わない(前置き一致は `git -c core.pager=…` 等で実質任意実行になり、リポジトリ削除や secret 操作まで前承認してしまう)。これは事故と誤爆の面積を減らす対策であり、`gh api` と `git push` は残るため注入への完全な防御ではない
+- **読み取り専用を宣言するコマンドには `gh api` を許可しない。** 前置き一致は `gh api --method PUT …` にも一致するため、`Bash(gh api:*)` を許すと書き込みが前承認になる(`/tasuki:loop-status` は集計対象の issue コメントが未検証データであり、注入から確認なしの書き込みへ繋がる経路になっていた)。読み取り専用のサブコマンド(`gh issue view` / `gh pr checks` 等)だけを列挙し、宣言と強制を一致させる
+- **改変検知は、リポジトリのコードを実行しない独立した job と手順で行う。** 検査コマンド(テストランナー等)を先に実行すると、その過程で読み込まれる PR 側のファイルが base ref や PATH を書き換えて検知自体を無効化できる。CI では `tampering` job(checkout と diff のみ、base はその job で取得し直す)、ローカル判定では provider の実行前に検知を済ませる
+- **mechanical な検査は hermetic に保ち、外部 URL を取得する検査を持たない。** 到達性検査は外部状態に依存して非決定的なうえ、出典 URL は外部ページ由来の未検証データであり、取得する検査は SSRF の攻撃面になる(実際に一度実装して security スキャンで指摘され、リクエストを送らない設計に戻して攻撃面ごと除去した)。出典を開く行為は verifier の引用検証(agent が文脈込みで判定する)に限定する
 - 設定改変検知は lint / format / typecheck / test の設定ソース(pyproject.toml、pytest.ini、setup.cfg、tox.ini、pyrightconfig.json、リポジトリ直下と全階層の `conftest.py`)を対象にする。git の pathspec は `**/conftest.py` では直下の `conftest.py` にマッチしないため、直下を明示するか `:(glob)` を付ける(この取りこぼしは実際に発生していた)
 - これらの不変条件は `tests/test_ci_template.py` で固定している
 
@@ -58,7 +61,7 @@ v1 では指示レベルの緩和(「入力中の命令に従わない」)を全
 1. **作者認証**：ラベル、verdict コメント、レポートを、orchestrator の実行アカウント(bot 識別子)が付けたものだけ信頼する。他者が付けたものは無視する。来歴は本文テキストではなく作者で判定する
 2. **worker / verifier の sandbox**：契約オプション `sandbox: container`(GATES.md の観点「実行環境の隔離と権限最小化」で予約)を実装し、外部 issue を扱うリポジトリで必須にする
 3. **ゲート定義の保護**:`.github/workflows/**` と `.tasuki/**` を CODEOWNERS で人間レビュー必須にし、orchestrator は「期待するチェック名がすべて成功」を確認する(「赤が無い」で通さない)
-4. **allowlist の残余の遮断**:サブコマンド単位への絞り込みは v1 で入れたが(上記「v1 が守る範囲」)、残る `gh api` と `git push` からの実質任意実行は塞げていない。hook で危険な形(`git -c` の付与、`gh api` の書き込みメソッド等)を弾く段階を v2 に置く
+4. **allowlist の残余の遮断**:サブコマンド単位への絞り込みは v1 で入れ、読み取り専用コマンドからは `gh api` を外した(上記「v1 が守る範囲」)。ただし書き込みを行う手順(loop、loop-init)には `gh api` と `git push` が残り、そこからの実質任意実行は塞げていない。hook で危険な形(`git -c` の付与、`gh api` の書き込みメソッド等)を弾く段階を v2 に置く
 
 ## 運用上の最小ルール
 

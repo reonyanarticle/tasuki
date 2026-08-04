@@ -53,11 +53,18 @@ phases:
       too_concrete_signals: ["子レポートの生転載"]
 
 templates:                        # issue テンプレの必須欄(着手ゲートの門前払いの機械チェック対象)
+  # 各欄の意味は実プロファイルの欄コメントが定める(loop-report skill と gate-reviewer はそこから引く。
+  # 欄の解釈を skill や agent 定義に写さない)
   parent_issue_required_fields: [背景, 目的, 価値, 予算(コスト上限), 完了の定義]
   child_issue_required_fields: [対応する親要件, 目的, 受け入れ条件, 成功基準, 打ち切り条件, 予算(max_iterations)]
   report_required_fields: [要件⇔結果の対応表, 結論, 期待値の根拠, 再現手順, 生データへのリンク, 参照した skill と委譲した subagent]
   pr_required_fields: [概要, 対応する親要件, 受け入れ条件の充足, 変更点, 影響範囲と revert 可否, 対応 issue, 検証方法]
   parent_pr_required_fields: [何が変わるか, 承認してほしい判断, やらなかったこと, リスクと戻し方, 対応 issue]
+
+# 分割基準(decomposer と分割ゲートが従う。プロファイルごとの基準の違いを契約が持ち、手順書と agent 定義に写さない)
+split_criteria:
+  good_task_conditions: [単独でマージして壊れない, テストを同梱できる, 単独で revert できる, 一読で理解できる]
+  always_separate: [リファクタリングと機能追加, ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove), 相互に依存しない機能同士]
 
 gates:
   - id: intake
@@ -141,6 +148,8 @@ experiment.yaml と development.yaml の差分は次の4点で、ゲート機構
 experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
 analysis 単独の受け渡し照合は v2 の検討項目として残す(v1 では分割しない)。
 
+`worker_agent:` は maker の差し替えキーであり、全プロファイルで有効(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
+
 ### language pack の providers.yaml
 
 デフォルトのツール選定は lint = Ruff、整形 = Black、型 = basedpyright、テスト = pytest とする。
@@ -174,8 +183,9 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:` は実装時の追加である。
+契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
 `templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
+`split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は ROADMAP.md の撤回の記録に残す)。
 
 ## issue テンプレート仕様
 

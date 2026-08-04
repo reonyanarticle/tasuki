@@ -12,6 +12,8 @@ budgets:
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
+worker_agent: tasuki-worker       # maker の差し替えキー(導入先の repo override で上書きできる)
+
 phases:
   - name: problem-definition      # 課題定義(親 issue)
     hands_off:
@@ -65,21 +67,21 @@ templates:
     - 予算(コスト上限)
     - 完了の定義
   child_issue_required_fields:
-    - 対応する親要件
+    - 対応する親要件             # 親 issue のどの要件のための子か(引用で示す)
     - 目的
-    - 受け入れ条件
-    - 成功基準
-    - 打ち切り条件
-    - 予算(max_iterations)
-    - 実験条件(データ・環境・パラメータ・seed)
-    - 評価データの分離(dev/test)
+    - 受け入れ条件               # AC-1、AC-2 … と採番。テストで判定できる形で書く
+    - 成功基準                   # SC-1 … と採番
+    - 打ち切り条件               # 反復や時間の上限。到達したら現時点の結果+残課題で終了
+    - 予算(max_iterations)       # 内側ループの反復上限(有効上限= min(契約の max_inner_loop, この値))
+    - 実験条件(データ・環境・パラメータ・seed)   # 統制条件の固定(モデル、データ版数、フラグ)
+    - 評価データの分離(dev/test)  # 内側ループの反復で参照するのは dev のみ。テストセットの評価は最終報告の1回だけ
   report_required_fields:
-    - 要件⇔結果の対応表
-    - 結論
-    - 期待値の根拠
-    - 数字の由来セット(dev/test)
-    - 再現手順
-    - 生データへのリンク
+    - 要件⇔結果の対応表          # 受け入れ条件 AC-n と成功基準 SC-n の各項目に結果を1行で対応づける(孤児を残さない)
+    - 結論                       # 成功基準を満たしたか、打ち切り条件に達したかを冒頭で言い切る
+    - 期待値の根拠               # 各要件のテストの期待値が仕様(受け入れ条件)のどの記述に由来するか(実装出力を写した期待値でないことを示す)
+    - 数字の由来セット(dev/test)  # 本文中のすべての数字に由来セットを明記。テストセットの数字は最終報告の1回だけ(内側ループの反復で参照した数字は dev セットであることを明示する)
+    - 再現手順                   # コマンドと環境に加え、seed、環境固定(lockfile)、データ版数を含める
+    - 生データへのリンク         # 本文は集計値のみ。生データはアクセス制御されたリンクにする
     - 参照した skill と委譲した subagent   # 成果の前提を辿る(無ければ「なし」と書く)
   parent_pr_required_fields:      # 親 PR(人間が承認する唯一の PR)の必須欄
     - 何が変わるか              # 利用者に見える変化と内部の変化を分けて書く
@@ -95,6 +97,21 @@ templates:
     - 影響範囲と revert 可否
     - 対応 issue
     - 検証方法
+
+# 分割基準(decomposer と分割ゲートが従う。手順書側に写さない)。
+split_criteria:
+  good_task_conditions:           # 各子が満たす条件
+    - 単独でマージして壊れない
+    - テストを同梱できる
+    - 単独で revert できる
+    - 一読で理解できる
+  always_separate:                # 必ず別の子に分ける組み合わせ
+    - 実験と基盤変更
+    - ライブラリ更新と機能開発
+    - 性能改善と機能開発
+    - データ移行と機能開発
+    - feature flag の各段階(add → enable → remove。未完成の機能でレイヤー実行を止めないため、deploy と release は feature flag で分離する)
+    - 相互に依存しない実験どうし
 
 gates:
   - id: intake

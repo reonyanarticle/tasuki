@@ -15,16 +15,17 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 0. **信頼境界の確認(必須)**:tasuki v1 は issue、PR、コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証、sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
 1. git リポジトリであり、GitHub リモート(origin)があること
 2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
-3. `gh --version` を確認する。2.94.0 未満なら sub-issues / issue dependencies は `gh api` フォールバックになる旨を記録する
+3. `gh --version` を確認する。能力ごとに閾値が違うので両方を記録する: **sub-issues と issue dependencies の作成**(`--parent` / `--blocked-by` 等)は 2.94.0 以上、**`--json subIssues` での読み取り**は 2.95.0 以上。満たさない側は `gh api` の GraphQL フォールバックになる(ただし `/tasuki:loop-status` は読み取り専用を保つためフォールバックを持たない)
 
 ## 手順
 
-### 1. 言語検出と依存の整備
+### 1. プロファイルの確定と言語検出、依存の整備
 
-各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 は python pack のみ同梱)。
+まず契約プロファイル(development / experiment)を引数(`$ARGUMENTS`)または対話で確定する(配置は手順3で行う)。
+次に、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
 検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
-pack の `ci.lockfile` が無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須)。
+pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須。`lockfile: null` の pack では何もしない)。
 
 ### 2. プロジェクト資産の棚卸し
 
@@ -40,16 +41,24 @@ pack の `ci.lockfile` が無ければ生成してコミット対象に含める
 
 ### 3. 契約プロファイルの配置
 
-引数(`$ARGUMENTS`)または対話で development / experiment を選び、plugin の `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
+**既存の `.tasuki/` がある(再実行=移行の)場合は、上書きの前に次の4つを行う。**
+
+1. 既存契約の repo override(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)を新しい契約へ引き継ぐ(黙って上書きすると導入先の調整が消える)
+2. 旧 pack が置いたファイル(`.tasuki/checks/` や `.tasuki/normalizers/` 等)のうち、新しい pack に無いものは削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
+3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
+4. 走行中(open)の親 issue があれば、完走または close まで移行を待つよう案内する(欄名やゲートの版が run の途中で変わると、既存のレポートと文書が新しい必須欄の検査に落ち、差し戻しだけが反復する)
+
+手順1で確定したプロファイルの `profiles/<選択>.yaml` を `.tasuki/profile.yaml` にコピーする。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` であり、上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
-あわせて pack の normalizer を `.tasuki/normalizers/` にコピーする(CI から実行するため)。
+あわせて pack に `normalizers/` があれば `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
+**選んだ pack の providers.yaml を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 
 ### 4. issue / PR テンプレートの生成
 
 `.tasuki/profile.yaml` の `templates:` セクションから生成する(プロファイルの必須欄と一字一句対応させる)。
 
 - `.github/ISSUE_TEMPLATE/loop-parent.md`：`parent_issue_required_fields` の各項目を `## 見出し` にする
-- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の見出し下には AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため)
+- `.github/ISSUE_TEMPLATE/loop-child.md`：`child_issue_required_fields` の各項目を `## 見出し` にする。受け入れ条件と成功基準の欄が契約にある場合、その見出し下に AC-1 / SC-1 形式で採番した箇条書きを促すプレースホルダを含める(レポートの対応表と差し戻し履歴を同じ ID で追跡するため。片方の欄しか無い契約では、ある欄だけに適用する)
 - `.github/pull_request_template.md`：`pr_required_fields` の各項目を `## 見出し` にする
 
 見出し直下が空のままの issue は門前払いで差し戻される(親 issue はループ起動時、子 issue は着手ゲートの前。この空チェックが機能するよう、見出し文字列を profile と一致させること)。
@@ -60,12 +69,16 @@ security job は **オプトイン(既定では生成しない)**。
 ユーザーに導入するか確認してから生成する。
 security job(`anthropics/claude-code-security-review` Action)は Anthropic API キー(`CLAUDE_API_KEY` secret)で Claude API を直接呼ぶため、**Claude Code の契約とは別の API 課金**が発生する(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。
 
-- **既定(オプトインしない)**：security job を生成しない。形式ゲートは lint / format / typecheck / test の4ゲート。`notify-success` の `needs` にも入れない
+- **既定(オプトインしない)**：security job を生成しない。形式ゲートは pack の providers が定める(言語 pack なら lint / format / typecheck / test の4ゲート)。`notify-success` の `needs` にも入れない
 - **オプトインした場合**：security job を含めて生成し、`gh secret set CLAUDE_API_KEY` を案内し、`.tasuki/profile.yaml` の `enabled_gates` に `checks-security` を追加する
 
 job を残して条件スキップする形は使わない(スキップは成功に見え、素通りが緑になるため)。
 
 providers.yaml の各 provider から `.github/workflows/loop-gates.yml` を生成する。
+**pack の providers に存在する provider の job だけを生成する**(テンプレートにある lint / typecheck 等の job は、その provider が無ければ出力しない)。
+`notify-success` の `needs` は**実際に生成した job の一覧**から作る(存在しない job を参照すると workflow 全体が invalid になり、0 job のまま緑にも赤にもならない)。
+`output: exit-code` の provider は最小の job(checkout → setup → command 実行)として生成する(SARIF や normalizer のステップを持たない)。
+**改変検知(`tampering` job)は provider の有無にかかわらず必ず生成し、`notify-success` の `needs` に含める。** pack が持つキーだけを埋める(`test_tampering` を持たない pack では設定改変検知の部分だけを残す)。**値が空リストのキー、またはキー自体を持たないブロックは出力しない**(`git diff -- ` は pathspec が空だと全ファイルを対象にするため、空リストをそのまま展開すると新規ファイルを追加した PR がすべて検知に該当して恒久的に赤になる)。この job は PR のコードを実行しない(checkout と diff のみ)。**検知を provider の job のステップとして埋め込まない**(コードを実行してから検知すると、実行されたコードが base ref や PATH を書き換えて検知を無効化できる)。
 次のテンプレートを基に、コマンド部分を providers.yaml の値で埋める。
 
 ```yaml
@@ -126,17 +139,22 @@ jobs:
         run: |
           errors="$(<pack.ci.blocking_count.typecheck> <providers.typecheck.output_file>)"
           test "$errors" -eq 0
-  test:
+  tampering:                         # 改変検知は PR のコードを一切実行しない独立 job で行う
+    # 同じ job でリポジトリのコードを実行してから検知すると、実行されたコード(テストランナーが
+    # 収集時に読み込む設定ファイル等)が base ref や PATH を書き換えて検知自体を無効化できる。
+    # checkout と diff だけの job にする。base はこの job 自身の checkout(fetch-depth: 0)が
+    # 取得した origin/<base> を使う(runner は使い捨てで、この ref は checkout 由来の新鮮な値である。
+    # 追加の git fetch を書いてはならない: persist-credentials: false のため checkout 後の
+    # 認証は無く、private リポジトリでは fetch が必ず失敗して全 PR がマージ不能になる)。
     runs-on: ubuntu-latest
     permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: <pack.ci.setup.uses>
-        with: <pack.ci.setup.with>
-      - run: <pack.ci.setup.install>
-      - run: <providers.test.command>
-      - name: test-tampering check   # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
+      # 生成時: pack が値を持たないキー(空リストや欠落)のブロックは**出力しない**。
+      # `git diff -- ` は pathspec が空だと全ファイルを対象にするため、空リストのまま
+      # 出力すると「ファイルを1つでも追加した PR」がすべて検知に該当して恒久的に赤になる。
+      - name: tampering check        # 観点「テストの信頼性」。機械検知できる範囲: 削除・skip/xfail・設定による除外
         env:
           BASE_REF: ${{ github.base_ref }}   # ${{ }} を run に直接展開しない(スクリプト注入対策)
         run: |
@@ -152,11 +170,25 @@ jobs:
           if git diff --name-status "$base"...HEAD -- <pack.ci.new_config_files> | grep -qE '^A'; then
             echo '::error::検査設定ファイルの新規追加を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
-          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)
-          git diff "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
+          # 既存の設定ソースのうち、チェックを無効化する変更のみ検出する(依存追加など無害な変更は通す)。
+          # --diff-filter=M で「既存ファイルの改変」に限る。新規追加を含めると、ガバナンス
+          # ファイルを作るブートストラップ PR 自身がこの検知に一致して赤になる。
+          git diff --diff-filter=M "$base"...HEAD -- <pack.ci.config_tampering.paths> > /tmp/conf.diff
           if grep -E "^\+.*(<pack.ci.config_tampering.added_line_pattern>)" /tmp/conf.diff; then
             echo '::error::lint / 型 / テストの無効化につながる設定変更を検出。設定変更は機能開発と分離した PR で人間承認を得ること'; exit 1
           fi
+  test:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: <pack.ci.setup.uses>
+        with: <pack.ci.setup.with>
+      - run: <pack.ci.setup.install>
+      - run: <providers.test.command>
+      # 生成時: pack の ci.lockfile が null の場合、この lockfile-diff check ステップは出力しない
+      # (空の pathspec は git が全ファイルを対象にするため、差分のある全 PR で警告が出続ける)
       - name: lockfile-diff check    # 依存追加の検知(警告のみ・非ブロック)
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -192,7 +224,7 @@ jobs:
             exit 1
           fi
   notify-success:                  # 沈黙と故障を区別するため成功も通知する(観点「フィードバック速度」)
-    needs: [lint, format, typecheck, test, security]
+    needs: [lint, format, typecheck, test, tampering, security]
     runs-on: ubuntu-latest
     permissions: { pull-requests: write }
     steps:
@@ -217,7 +249,7 @@ jobs:
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
 - `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点「実行環境の隔離と権限最小化」)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
-- **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(既定は lint / format / typecheck / test。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
+- **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(言語 pack の既定は lint / format / typecheck / test に tampering を加えたもの。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
 
 ### 5b. 既存ゲートと外部レビューツールの棚卸し
 
@@ -249,7 +281,7 @@ jobs:
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
-**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。それ以外の実行許可は提案しない(checks-local は providers の宣言済みコマンドだけを実行し、リポジトリ内のスクリプトを直接実行する検査を持たない)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 
