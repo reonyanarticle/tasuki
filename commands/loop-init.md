@@ -22,8 +22,8 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 契約プロファイルは `development` の1つである(仕事の型ごとに雛形を分けない。実験や評価を伴う仕事も同じ契約で回し、必要なら手順3で必須欄を足す)。
 **plugin 側のファイル(`profiles/`、`packs/`)は必ず `${CLAUDE_PLUGIN_ROOT}` からの絶対パスで読む**(カレントは導入先リポジトリであり、そこにこれらは存在しない)。
-まず、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する(v1 の言語 pack は python のみ同梱)。
-検出できない言語の場合は、v1 は python のみ対応であることを伝えて中断する。
+まず、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する。
+どの pack の `detect` にも一致しなければ、同梱されている pack の一覧を伝えて中断する(2言語目は pack を1枚追加するだけで対応する。core に言語名を書かない)。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
 pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須。`lockfile: null` の pack では何もしない)。
 
@@ -284,7 +284,7 @@ jobs:
 導入先に設計文書(docs/、DESIGN.md、ADR 等)があれば、そこから「この親 issue は PASS のはず」「これは差し戻しのはず」の判定例の下書きを生成し、人間のレビューに出す(手書きより網羅が安定する。採用の判断は人間。手順の正は `tasuki:baton-contract` skill)。
 
 `.tasuki/profile.yaml` の budgets(`max_iterations_per_gate` / `max_inner_loop` / `wip_limit_prs`)をユーザーに提示し、必要なら調整する。
-**生成物が .gitignore で除外されているか検査する。** pack の `artifacts`(python なら `__pycache__/` と `*.pyc` 等)が対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
+**生成物が .gitignore で除外されているか検査する。** pack の `artifacts` が挙げるパターンが対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
 **checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。それ以外の実行許可は提案しない(checks-local は providers の宣言済みコマンドだけを実行し、リポジトリ内のスクリプトを直接実行する検査を持たない)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
 

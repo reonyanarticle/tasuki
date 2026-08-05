@@ -71,7 +71,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 7. 二重起動の防止(観点「並行整合性」)：親 issue に自分の run 開始時刻より新しい orchestrator 開始コメントがないか確認してから、開始コメントを1件残す。**投稿の直後にもう一度確認し、自分のより新しい開始コメントが現れていたら後着に譲って run を終了する**(同時開始の両者が事前確認をすり抜ける競合の緩和。厳密な排他ではない)
 8. **要件変更の検知(機械チェック、LLM なし)**:親 issue に `gate:split-passed` が付いている場合、親の `lastEditedAt` を最新の分割ゲート PASS verdict コメントの時刻と比較する(§0.10(受理ゲート)の再判定と同じ GraphQL 比較)。本文がそれより新しく編集されているのに `loop:replan` ラベルが無ければ、「本文の編集を検知したが、再計画は行っていない。反映するには `loop:replan` を付ける」と親に1度だけコメントする(同じ `lastEditedAt` に対して再投稿しない。冪等)。このコメントを投稿するとき、リポジトリに `loop:replan` ラベルが無ければ先に作る(人間が付けるラベルは、付けようとした時点に存在しなければならない)。編集へ黙って自動追従しない(誤字修正のたびに再分割が走るのを防ぎ、再計画の意思決定を人間の明示に置く)。`loop:replan` が付いている場合の処理は §1d(再計画)による
 9. WIP 確認(観点「スループット管理」)：**ready(draft でない)の親 PR**(親 PR の判定基準は head ブランチが `loop/parent-` で始まること) が `wip_limit_prs` 以上なら、新規 worker を起動せず、その旨を報告して人間レビューを促す(人間の判断待ちは親 PR に集約されているため、数えるのも親 PR である。子 PR と draft は数えない)
-10. **受理ゲート**:まず、**§0.4(親 issue の門前払い)の差し戻し(verdict の `model` が `null`= 機械チェック由来)から復帰した場合に限り**、`gate:intake-returned` と自分が付けた `loop:triage` を外す(`intake` の有効無効に関わらず。欄が埋まれば止める理由が消えるため。LLM 判定由来の差し戻しをここで剥がすと、下の再判定ガードに到達できず毎 run opus を呼ぶ)。そのうえで、契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら opus を呼ばず中断を維持)。判定は **§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)。
+10. **受理ゲート**:まず、**§0.4(親 issue の門前払い)の差し戻し(verdict の `model` が `null`= 機械チェック由来)から復帰した場合に限り**、`gate:intake-returned` と自分が付けた `loop:triage` を外す(`intake` の有効無効に関わらず。欄が埋まれば止める理由が消えるため。LLM 判定由来の差し戻しをここで剥がすと、下の再判定ガードに到達できず毎 run reviewer を呼ぶ)。そのうえで、契約の `enabled_gates` に `intake` が含まれ、かつ親 issue に `gate:intake-passed` が無ければ判定する(含まれなければこの手順を飛ばす)。ただし **全子 issue がマージ済みの親には降りゲート(受理 / 分割ゲート)を遡及適用しない**(enabled_gates の拡張前に完走した親は統合ゲートのみ判定する。この遡及統合ゲートが不要なら人間が親を close して畳んでよい)。また `gate:intake-returned` が付いている場合は、親の `lastEditedAt` が最終受理ゲートの verdict より新しいときだけ再判定する(未編集なら reviewer を呼ばず中断を維持)。判定は **§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(モデルは契約の `gates.intake.model`)。渡すのは親 issue 本文と、契約の `gates.intake.phase` が指すフェーズの `receives` 定義(親→分割の待ち位置)+差し戻し履歴のみ。verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。PASS → `gate:intake-passed` を付け、ラベルを片付ける(共通規則)。差し戻し → `gate:intake-returned` と `loop:triage` を付け、起票者に不足(価値と予算の判断材料)を mention して中断する。予算はテンプレの必須欄として起票者(人間)が記入する(decomposer による見積もり案は v2)。
 
 ## 1. 分割と実行計画(分割ゲート、レイヤー構成)
 
@@ -85,8 +85,8 @@ sub-issues で子 issue 一覧を得る。
 
 ### 1b. 分割ゲート
 
-契約の `enabled_gates` に `split` が含まれ、かつ親 issue に `gate:split-passed` が無ければ判定する(含まれなければ分割の検査を飛ばし、既存の子でそのまま 1c(依存グラフとレイヤー)へ進む)。ただし `gate:split-returned` が付いている場合は、**子集合の変化(追加、削除、blocked_by の変更)があるか**、子 issue 群または親本文の `lastEditedAt` が最終分割ゲートの verdict より新しいときだけ再判定する(孤児要件の差し戻しに対する自然な対応は子の追加であり、新規の子は `lastEditedAt` を持たないため、編集時刻だけを見ると永久に止まる)(未編集なら opus を呼ばず中断を維持する。§0.10(受理ゲート)と同じガード)。
-**§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは次の3つだけ。
+契約の `enabled_gates` に `split` が含まれ、かつ親 issue に `gate:split-passed` が無ければ判定する(含まれなければ分割の検査を飛ばし、既存の子でそのまま 1c(依存グラフとレイヤー)へ進む)。ただし `gate:split-returned` が付いている場合は、**子集合の変化(追加、削除、blocked_by の変更)があるか**、子 issue 群または親本文の `lastEditedAt` が最終分割ゲートの verdict より新しいときだけ再判定する(孤児要件の差し戻しに対する自然な対応は子の追加であり、新規の子は `lastEditedAt` を持たないため、編集時刻だけを見ると永久に止まる)(未編集なら reviewer を呼ばず中断を維持する。§0.10(受理ゲート)と同じガード)。
+**§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(モデルは契約の `gates.split.model`)。渡すのは次の3つだけ。
 
 - 被検査物(分割案 YAML または既存子 issue 群の本文)
 - 親 issue 本文(要件の対応照合用)
@@ -95,7 +95,7 @@ sub-issues で子 issue 一覧を得る。
 verdict は親 issue に人間可読の markdown で記録し、機械可読の JSON は `<details>` に畳む(`tasuki:gate-review` skill の書式。生の JSON を貼らない。冪等)。**PASS の verdict コメントには、人間可読の子一覧(各子のタイトルと対応する親要件)を主として残し、機械可読の分割案 YAML は `<details>` に畳む**(全文を生で貼らない。畳んだ YAML が分割案の永続化=部分起票クラッシュからの復旧と監査の基盤)。
 集合レベルの基準は契約の `gates.split.set_signals`(依存の循環、親要件の孤児、親予算との整合)に依る。
 
-- **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict + §1a(分割の入手)と同じ契約の抜粋)。反復は `max_iterations_per_gate`。分割ゲートは opus 判定のため昇格先は無く、超過で `loop:triage`
+- **差し戻し(分割案が対象)** → 新規の decomposer セッションに分割案の再出力を依頼する(渡すのは親 issue 本文+ verdict + §1a(分割の入手)と同じ契約の抜粋)。反復は `max_iterations_per_gate`。分割ゲートは契約に `escalate_to` を持たないため昇格先は無く、超過で `loop:triage`
 - **差し戻し(既存子 issue が対象)** → 起票者(人間)宛に読み替え、**親 issue** に `gate:split-returned` と `loop:triage` を付けて中断する(verdict は親に記録済み。子個別ではなく分割の集合が対象のため、親で止める)。**差し戻しの verdict コメントには、判定時点の子集合(子番号と `blocked_by`)を `<details>` に畳んで残す**(次の run の再判定ガードが「子集合の変化」を見るための比較基準。残さないと、本文を編集せず依存だけを直した対応が検知できず永久に止まる)
 - **PASS** → 分割案の場合、**分割案の機械処理(件数照合、起票)を shell のワンライナーで行わない**。分割案を1子1ファイルに保存してから1件ずつ処理する(YAML を zsh 配列で回してタイトルと本文が1つズレて起票される事故が実地で起きた)。起票前に機械チェックを行う:分割案が親の予算欄(欄名は契約の `parent_issue_required_fields` の予算の欄に依る)と矛盾しないこと(矛盾すれば分割ゲートの差し戻し扱いで decomposer へ)。照合の内容は契約の `gates.split.set_signals` の親予算整合シグナルに依り、親予算が子側と同じ単位の数値(反復数、timebox)を示していれば機械的に、prose であれば reviewer の判断で確認する(親予算は自由記述のため、真に機械的なのは子の必須欄の空チェックだけである)。通過したら orchestrator が子 issue を起票する。子 issue にはテンプレ必須欄をすべて含め、受け入れ条件と成功基準の欄が契約にある場合は AC-n / SC-n で採番し、`--parent` で親に紐付け、依存(blocked_by)を設定し、本文末尾に `via tasuki-decomposer` を記す(着手ゲートの差し戻しの宛先判別用)。**`tasuki:child` ラベルを付ける**(機械の作業単位の明示。一覧からのフィルタ用)。**使うラベルがリポジトリに無ければ、その場で作ってから付ける**(冪等。loop-init より後に増えたラベルを、既存の導入先でも使えるようにする)。起票は冪等に行う(同タイトルの既存子があれば再起票しない)。依存(blocked_by)の設定が失敗した場合(GitHub が循環を拒否した等)は、分割ゲートが見落とした分割案の欠陥として扱い、部分起票のまま `loop:triage` を付けて停止する(次 run は §1a(分割の入手)の突合で残りを補完しない。分割案自体を decomposer に作り直させる)。全件の起票と依存設定の完了後に親へ `gate:split-passed` を付け、ラベルを片付ける(共通規則)
 
@@ -104,7 +104,7 @@ verdict は親 issue に人間可読の markdown で記録し、機械可読の 
 ### 1c. 依存グラフとレイヤー
 
 子 issue の blocked-by から依存グラフを作る。
-循環の実効的な検査点は分割ゲートである(`set_signals` の「依存の循環」で、issue 化前の分割案 blocked_by を opus が検査する)。GitHub は blocked-by の循環を API で拒否するため、起票済みの子から作ったグラフは常に非循環になる。この §1c(依存グラフとレイヤー)のグラフ検査は二重の安全網であり、万一循環を検出したらエラーとして親 issue に報告し `loop:triage` を付けて停止する(実行しない)。
+循環の実効的な検査点は分割ゲートである(`set_signals` の「依存の循環」で、issue 化前の分割案 blocked_by を分割ゲートが検査する)。GitHub は blocked-by の循環を API で拒否するため、起票済みの子から作ったグラフは常に非循環になる。この §1c(依存グラフとレイヤー)のグラフ検査は二重の安全網であり、万一循環を検出したらエラーとして親 issue に報告し `loop:triage` を付けて停止する(実行しない)。
 非循環なら、**未取り込みの子(open のもの)だけ**で依存のトポロジカル順にレイヤー(L1、L2、…)を構成する(取り込み済みの子は close されており、依存が満たされたものとしてグラフから除く。差し戻し解消後の子は、依存が解決した最初のレイヤーに自然に入る)。
 レイヤー計画を親 issue にコメントする(冪等。子集合が変わった場合は最新の計画コメントを正とする)。
 このコメントは、**先に Skill ツールで `tasuki:plan-comment` を読み込んでから**組み立てる(従っているつもりで記憶から書くと、skill が禁じる「依存関係だけの図」を描く事故が起きる。実地で1回起きた)。冒頭に「人間がすべきこと、止まっている箇所、親要件の取りこぼし」への答えを置き、子ごとの一覧表を付ける。**図を描く場合は「各子で何を作るか」(成果物と手順)を描く。依存の矢印だけの図は表の再掲であり描かない**(描く条件と載せる情報は skill が定める)。各子の状態は `gate:*` / `loop:*` ラベルと PR の状態から決める。以後の run では同じ計画コメントを編集して更新する(冪等)。
@@ -188,13 +188,7 @@ checks-local の一時 worktree は子 issue ごとに固有パスで作り、�
 reviewer へ委譲する。
 **reviewer の解決規則**：契約の `gates[].reviewer` が `gate-reviewer` なら plugin の `tasuki-gate-reviewer` へ委譲する。それ以外の名前なら、その名前の導入先プロジェクト agent へ委譲する(orchestrator はメインセッションなのでプロジェクト agent を直接呼べる。出力契約は同じ verdict JSON)。
 
-**モデルの指定**：gate-reviewer は1つの agent であり、**判定モデルは呼び出しごとに指定する**(Agent の起動時に `model` を渡す。agent 定義の `model` より優先される)。契約の `gates[].model` を既定とし、省略時は下表による。
-
-| ゲート | 標準モデル | エスカレーション先 |
-|---|---|---|
-| 受理 / 分割 / 統合ゲート | opus | 無し(超過で `loop:triage`) |
-| 着手ゲート | haiku | sonnet |
-| 成果ゲート | sonnet | opus |
+**モデルの指定**：gate-reviewer は1つの agent であり、**判定モデルは呼び出しごとに指定する**(Agent の起動時に `model` を渡す。agent 定義の `model` より優先される)。**モデルとエスカレーション先の正は契約の `gates[].model` と `gates[].escalate_to` である**(手順書に写さない。ゲートごとのモデルは費用の調整点であり、導入先が触る値である)。`escalate_to` を持たないゲートには昇格先が無い(下の非対称ルールの orchestrator 裁定へ回る)。
 
 エスカレーションは**同じ agent を上位モデルで呼び直すこと**である(別 agent への切り替えではない)。
 
@@ -209,9 +203,9 @@ reviewer へ委譲する。
 
 **エスカレーション規則**：
 
-- `confidence: low` の PASS → 破棄し、同じ agent を **sonnet** で呼び直して再判定する(low の REJECT はそのまま差し戻してよい)
-- **標準モデルが opus のゲート(受理 / 分割 / 統合)の low-confidence PASS は、下位モデルへ降格せず orchestrator(メインセッション)が裁定する**(迷いの論点に対する判断と理由を verdict コメントに追記する。裁定できなければ `loop:triage`。エスカレーション連鎖の終点は DESIGN.md の非対称ルールに依る)
-- 同一ゲートで差し戻し2連続 → 次回判定を **sonnet** へ昇格する
+- `confidence: low` の PASS → 破棄し、同じ agent を契約の `escalate_to` のモデルで呼び直して再判定する(low の REJECT はそのまま差し戻してよい)
+- **`escalate_to` を持たないゲート(標準が最上位モデルのもの)の low-confidence PASS は、下位モデルへ降格せず orchestrator(メインセッション)が裁定する**(迷いの論点に対する判断と理由を verdict コメントに追記する。裁定できなければ `loop:triage`。エスカレーション連鎖の終点は DESIGN.md の非対称ルールに依る)
+- 同一ゲートで差し戻し2連続 → 次回判定を `escalate_to` のモデルへ昇格する(`escalate_to` が無ければ昇格先は無く、上と同じく orchestrator が裁定する)
 - 差し戻しが `max_iterations_per_gate` を超過 → 停止。状況を要約し「契約の不備 / タスクの筋の悪さ / モデル能力の限界」を切り分けたコメントを**子 issue** に残し、**子に** `loop:triage` を付ける(親には1行の要約だけを残す。理由は子を開いた人間に見えなければならない)
 
 **差し戻し先の読み替え**：`return_to: decomposer` の差し戻しは、子 issue の由来で宛先を分ける。本文末尾に `via tasuki-decomposer` がある子は新規の decomposer セッションへ(子 issue 本文の修正案を作らせ、orchestrator が issue を更新する)。人間起票の子は起票者宛に読み替え、verdict コメントで mention し `loop:triage` を付けて修正待ちにする。
@@ -243,7 +237,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点「フィードバック速度」)。
 
 1. worker のブランチを一時 worktree に checkout する(`git worktree add`。worker の worktree は使わない)
-2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(pytest 等)を実行すると、その過程で読み込まれる PR 側のコード(conftest.py 等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
+2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(テスト実行等)を実行すると、その過程で読み込まれる PR 側のコード(テストランナーの設定ファイル等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
 3. 契約の `enabled_gates` にあるゲートのうち **`kind: mechanical` で、かつその provider が `command` を持つもの**を実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。ゲート ID の綴りではなく `kind` で判別する。`action` だけを持つ provider(外部 Action)は CI 専用でありローカルでは実行しない。実行対象が無ければ、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約と providers は §0.1(契約と providers の読み出し)で default branch から読んだものを使う**(run の途中で読み直さない)。checks-local が実行するのは providers の宣言済みコマンドだけであり、リポジトリ内のスクリプトを直接実行する検査は持たない(v1 の pack の normalizer は CI だけが実行する。子ブランチ側の写しのスクリプトを実行すると、改変検知の前に改変済みスクリプトが走るためである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を削除する
 5. 失敗 → findings(失敗コマンドと要点)を新規 worker セッションに差し戻す。反復回数は `max_iterations_per_gate` で管理する
@@ -285,7 +279,7 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 
 **契約の `enabled_gates` に `outcome` が無ければ、ここから先の LLM 判定は行わない**(門前払いだけで 2g(出荷ゲート)へ進む。2b(着手ゲート)と同じ方針)。
 門前払いを通過したら reviewer へ委譲する。
-解決規則は 2b と同じ(既定は `tasuki-gate-reviewer` を **sonnet** で呼び、`escalate_to: opus` の昇格時は同じ agent を **opus** で呼ぶ)。
+解決規則は 2b と同じ(モデルは契約の `gates.outcome.model`、昇格時は同じ agent を `escalate_to` のモデルで呼ぶ)。
 
 渡すのは次の4つだけ。
 
@@ -295,7 +289,7 @@ orchestrator はそのログと PID を監視し、完了を検知したら**新
 - 差し戻し履歴(過去 verdict があれば)
 
 返った verdict を issue コメントに記録する(人間可読の markdown +畳んだ JSON。冪等)。
-エスカレーション規則は着手ゲートと同様(low-confidence PASS は破棄して opus で再判定、差し戻し2連続で opus へ昇格、上限超過で `loop:triage`)。
+エスカレーション規則は着手ゲートと同様(low-confidence PASS は破棄して `escalate_to` で再判定、差し戻し2連続で `escalate_to` へ昇格、上限超過で `loop:triage`)。
 発振検知(観点「ゲートの発振検知」)も同様に適用する。
 
 差し戻しは verdict の `return_to` で2種類を区別し、どちらも `gate:outcome-returned` を付ける。
@@ -344,10 +338,10 @@ PASS したら `gate:outcome-passed` を付け、ラベルを片付けて(共通
 
 ### 3b. 統合ゲート
 
-最終レイヤーまで完了し、**全子 issue が決着(統合ブランチへの取り込み、または人間による不採用クローズ)し、かつ親 issue に `gate:integration-passed` が無ければ**判定する(3c(出荷前レビュー)の差し戻しで戻ってくるたびに opus を呼び直さない)。両者はどちらも closed になるため、**取り込みの完了コメントの有無で区別する**(完了コメントが無い closed は不採用として扱う)。
+最終レイヤーまで完了し、**全子 issue が決着(統合ブランチへの取り込み、または人間による不採用クローズ)し、かつ親 issue に `gate:integration-passed` が無ければ**判定する(3c(出荷前レビュー)の差し戻しで戻ってくるたびに reviewer を呼び直さない)。両者はどちらも closed になるため、**取り込みの完了コメントの有無で区別する**(完了コメントが無い closed は不採用として扱う)。
 ただし「replan により撤回」コメント付きの closed は再計画による撤回であり、不採用として扱わない(対応する親要件は §1d(再計画)の本文編集で消えており、未充足の材料にならない)。不採用クローズされた子の親要件は「未充足」として統合ゲートに渡し、要件の縮小(親本文の修正)か追加分割かを人間に問う材料にする。
 統合ゲートが照合する契約は `gates.integration.phase` が指すフェーズの `receives` 定義(全親要件⇔子成果の対応、孤児の親要件なし)である。
-**§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(既定は `tasuki-gate-reviewer` を **opus** で呼ぶ)。渡すのは次の4つだけ。
+**§2b(着手ゲート)の reviewer 解決規則**に従って委譲する(モデルは契約の `gates.integration.model`)。渡すのは次の4つだけ。
 
 - 親 issue 本文(要件)
 - 契約の `gates.integration.phase` が指すフェーズの `receives` 定義

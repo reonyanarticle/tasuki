@@ -59,9 +59,15 @@ def test_reviewer_is_single_agent_with_per_call_model() -> None:
     assert [p.name for p in reviewers] == ["gate-reviewer.md"], reviewers
     loop = (ROOT / "commands/loop.md").read_text()
     assert "判定モデルは呼び出しごとに指定する" in loop
-    # ゲート別の標準モデルとエスカレーション先が手順に書かれていること
-    for token in ("opus", "haiku", "sonnet"):
-        assert token in loop, token
+    # モデルの正は契約であり、手順書はモデル名を持たない(契約が全ゲートに値を持つため、
+    # 手順書に写した表は実行時に一度も使われず、導入先が値を変えると即座に嘘になる)
+    assert "`gates[].model` と `gates[].escalate_to` である" in loop
+    # ゲートのモデルは契約から引く(手順書に既定値を写さない)
+    for gate in ("intake", "split", "outcome", "integration"):
+        assert f"`gates.{gate}.model`" in loop, gate
+    assert "haiku" not in loop and "opus" not in loop
+    # sonnet は出荷前レビューの subagent(契約が持たない値)にだけ残る
+    assert loop.count("sonnet") == 1
     # ゲート別の判定基準は skill が単一の正であること
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "## ゲート別の特記事項" in skill
@@ -151,7 +157,7 @@ def test_worker_records_plan_before_implementing() -> None:
     for item in ("作るもの", "既存への接続", "選択と理由", "確かめ方"):
         assert item in text, item
     # 方針の記録が実装より前の手順であること
-    assert text.index("実装方針の記録") < text.index("2. **実装 / 実験**")
+    assert text.index("実装方針の記録") < text.index("2. **実装**")
     # docs 側の位置づけ(GATES.md の節)は test_docs.py が検める(重複させない)
 
 

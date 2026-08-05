@@ -23,7 +23,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue vie
 - `loop:pause` ラベルの親 issue(一時停止中。外せば次の run が再開する)
 - `loop:replan` ラベルの親 issue(要件変更の再計画待ち。次の run の合流点で計画を作り直す)
 - `loop:review` ラベルの親 issue(出荷前レビューの実行中または結果反映中。契約が `preship_review.mode: manual` のときだけ、人間がレビューを起動する番)
-- `loop:triage` ラベルの issue(エスカレーション。Fable 裁定の3分類コメントがあれば要約を併記)
+- `loop:triage` ラベルの issue(エスカレーション。orchestrator の裁定コメント(契約の不備 / タスクの筋の悪さ / モデル能力の限界の3分類)があれば要約を併記)
 - 未回答の task-question(質問コメントに回答が付いていない issue)
 - 承認待ちの axis-question(契約ファイル変更 PR で open のもの)
 - ready 化済みで未マージの**親 PR**(マージは常に人間。子 PR はループが取り込むため含めない)

@@ -1,6 +1,6 @@
 ---
 name: loop-report
-description: tasuki のレポート作成手順。worker が実装と実験の結果を issue に報告するとき、成果ゲートを通る形式で書くために使う。欄の正は契約の report_required_fields。
+description: tasuki のレポート作成手順。worker が作業の結果を issue に報告するとき、成果ゲートを通る形式で書くために使う。欄の正は契約の report_required_fields。
 ---
 
 # レポート作成手順

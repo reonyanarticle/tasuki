@@ -17,6 +17,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
+6. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
 7. ラベル作成(`gate:*`、`loop:*`、`tasuki:*`)、sub-issues / issue dependencies の利用確認(作成も `--json subIssues` での読み取りも `gh` v2.94.0 以上。未満は `gh api` フォールバック)
 8. `max_iterations` 等バジェットのデフォルト設定と、判定例(fixture)の下書き生成
 9. **生成物をブートストラップ用ブランチ(`tasuki/init`)へコミットして push し、default branch への PR を1件開く。** default branch へ直接 push しない。生成物はガバナンスの制定であり、人間がレビューしてマージすることで入る(反映の形はループ本体と同型で、機械は PR 作成まで)
@@ -47,13 +48,13 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 | issue 予算 | 子 issue の予算欄(max_iterations)を内側ループの有効上限に採用(契約値と issue 値の小さい方)。超過で停止して報告 |
 | triage inbox | エスカレーションと axis-question 承認待ちを人間向けに一覧化(`/tasuki:loop-status`) |
 | 停止した実行の回収 | assignee が `stale_assignment_minutes`(既定60分)を超えて残っている子を再入可能に戻す(落ちたセッションが担当のまま子を塞ぐ事故の回収)。wall-clock の上限は子 issue の打ち切り条件が持ち、worker 自身が守る。token 上限は計測手段の導入とあわせて v2 |
-| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。実験ジョブの「待ち」はハートビートで除外 |
+| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。長時間ジョブの「待ち」はハートビートで除外 |
 
 **verifier の成功基準と打ち切り条件がブレーキ、`max_iterations` と停滞検知はシートベルト** である。
 上限はループが既に浪費した後に発火するバックストップであり、停止条件の本体は着手ゲートで事前定義された基準の側にある。
 上限発火が常態化しているなら、直すべきは上限値ではなく契約である。
 
-エスカレーションのモデル昇格連鎖(`haiku → sonnet → opus → Fable 裁定 → 人間`)は [DESIGN.md](DESIGN.md) を参照。
+エスカレーションのモデル昇格連鎖(`haiku → sonnet → opus → orchestrator の裁定 → 人間`)は [DESIGN.md](DESIGN.md) を参照。
 
 ## 観測性とメトリクス
 
