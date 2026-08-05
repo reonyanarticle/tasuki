@@ -1,7 +1,7 @@
 ---
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(gh issue list:*), Bash(rm:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(gh issue list:*), Bash(rm -rf .tasuki/:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -296,7 +296,9 @@ jobs:
 ## 完了報告
 
 **生成物はブートストラップ用ブランチ(`tasuki/init`)にコミットして push し、default branch への PR を1件開く。**
-**`tasuki/init` が既に存在する場合は新規作成せず、そのブランチへ checkout して更新する**(再初期化では前回のブランチが残っている。`git checkout -b` は失敗する)。
+**`tasuki/init` が既に存在する場合は新規作成せず、そのブランチへ checkout して更新する**(再初期化では前回のブランチが残っている。`git checkout -b` は失敗する)。checkout したら **default branch を取り込んでから**生成する(遅れたブランチのままだと PR の diff に無関係な差分が混ざる)。
+**checkout の前に `git status` を確認し、利用者の未コミットの変更があれば、コミットか stash を案内して中断する**(持ち越したままブランチを変えない)。
+**同じ head の open な PR が既にあれば新規作成せず、その本文を更新して URL を報告する**(`gh pr create` は同一 head の open PR があると失敗する)。
 **コミット対象は、この初期化で生成したパスだけに限る**(`.tasuki/`、`.github/ISSUE_TEMPLATE/`、`.github/pull_request_template.md`、`.github/workflows/loop-gates.yml`、lockfile)。`git add -A` は使わない(利用者の無関係な作業中の変更を巻き込む)。
 **push と PR 作成が終わったら、元のブランチへ戻す**(利用者の作業ツリーを `tasuki/init` に置いたまま終わらない)。
 default branch へ直接 push しない。

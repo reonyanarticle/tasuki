@@ -384,11 +384,15 @@ def test_override_range_is_listed_in_one_place() -> None:
     )
     for item in items:
         assert item in header, item
-    contracts_doc = (ROOT / "docs/CONTRACTS.md").read_text()
+    # 説明の写しは CONTRACTS の1節だけ(ファイル全体で探すと別文脈の同じ語に当たる)
+    doc = (ROOT / "docs/CONTRACTS.md").read_text()
+    section = doc.split("### repo override で変えてよい範囲")[1].split("\n### ")[0]
     for item in items:
-        assert item in contracts_doc, item
-    # 手順書と skill は列挙せず、正を指すだけであること
-    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md"):
+        assert item in section, item
+    # 手順書 / skill / DESIGN は列挙せず、正を指すだけであること。
+    # 語の並びではなく共起で見る(読点や助詞を変えた写しを素通りさせない)。
+    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md", "docs/DESIGN.md"):
         text = (ROOT / rel).read_text()
         assert "契約ファイル冒頭のコメント" in text or "profile.yaml` 冒頭のコメント" in text, rel
-        assert "待ち位置定義、reviewer / criteria_skills の割り当て" not in text, rel
+        for line in text.splitlines():
+            assert not ("待ち位置定義" in line and "criteria_skills" in line), (rel, line)

@@ -1323,7 +1323,8 @@ def test_procedure_can_actually_be_walked() -> None:
     init = (ROOT / "commands/loop-init.md").read_text()
 
     # 二重 checkout を避ける(worker の worktree は変更があるため残っている)
-    for text, name in ((loop, "loop.md"), (verifier, "verifier.md")):
+    checks_local = loop.split("### 2d.")[1].split("### 2e.")[0]
+    for text, name in ((checks_local, "loop.md の 2d"), (verifier, "verifier.md")):
         assert "--detach" in text, name
         assert "git worktree remove --force" in text, name
     # 子ブランチ名の規約(orchestrator が対象を一意に決められる)
@@ -1333,7 +1334,8 @@ def test_procedure_can_actually_be_walked() -> None:
     assert "--jq .author_association" in loop
     # 経過時間の判定に使う時刻の出どころ
     assert "Bash(date:*)" in loop.split("---")[1]
-    assert "run 識別子はこの開始コメントの `createdAt`" in loop
+    assert "開始コメントは、投稿してから自分自身の `createdAt`" in loop
+    assert "冪等の判定は本文の一致ではなく**この識別子の有無と値**で行う" in loop
     # 統合ブランチの操作場所と後始末
     assert (
         "統合ブランチへの git 操作(作成、merge、push)は、すべて専用の一時 worktree の中で行う"
@@ -1341,7 +1343,17 @@ def test_procedure_can_actually_be_walked() -> None:
     )
     assert "git merge --abort" in loop
     # 再入点が一意に決まる(2c〜2f はラベルを付けないため)
-    assert "差し戻し中でない子の再入点は、次の順に見て最初に当たったものとする" in loop
+    # 再入表は 2d(改変検知)と 2e(verifier)を飛ばさない順序であること
+    reentry = loop.split("#### 再入点の決定(差し戻し中でない子)")[1].split("差し戻し中の子 issue")[
+        0
+    ]
+    assert "`gate:start-passed` が付いている子だけである" in reentry
+    assert (
+        reentry.index("2c(実装)")
+        < reentry.index("2d(checks-local)")
+        < reentry.index("2e(内側ループの出口)")
+    )
+    assert "レポートの有無は再入点を決めない" in reentry
     assert "checks-local 通過は、**判定したコミットの SHA を載せた1行の冪等コメント**" in loop
     # 再判定ガードは3つの abstraction ゲートすべてにある
     for label in ("gate:intake-returned", "gate:split-returned", "gate:integration-returned"):
@@ -1350,6 +1362,38 @@ def test_procedure_can_actually_be_walked() -> None:
     # 統合ゲート差し戻しからの復帰シグナル
     assert "承認のシグナルは `loop:replan` の付与と定める" in loop
     # loop-init が実行できない操作を要求していないこと
-    assert "Bash(rm:*)" in init and "Bash(gh issue list:*)" in init
+    assert "Bash(gh issue list:*)" in init
+    # 削除の権限はパス前置きまで絞る(SECURITY.md がツール全体の前承認を禁じている)
+    assert "Bash(rm -rf .tasuki/:*)" in init and "Bash(rm:*)" not in init
     assert "`tasuki/init` が既に存在する場合は新規作成せず" in init
     assert "`git add -A` は使わない" in init
+
+
+def test_model_tables_match_the_contract() -> None:
+    """README と DESIGN のモデル配分表が、契約の gates[].model と一致すること。
+
+    手順書からモデル表を剥がしたのと同じ理由(導入先が値を変えると即座に嘘になる)が
+    この2つの写しにも当てはまる。文字列の存在だけを見ると literal のまま緑で残る。
+    """
+    import yaml
+
+    contract = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
+    models = {g["id"]: g["model"] for g in contract["gates"] if g["kind"] == "abstraction"}
+    assert models["intake"] == models["split"] == models["integration"], models
+    expected = {
+        "受理 / 分割 / 統合ゲート": models["intake"],
+        "成果ゲート": models["outcome"],
+        "着手ゲート": models["start"],
+    }
+    tables = {
+        ROOT / "README.md": "| 役割 | 何をするか | モデル |",
+        ROOT / "docs/DESIGN.md": "| 層 | ロール | モデル | 根拠 |",
+    }
+    for path, header in tables.items():
+        text = path.read_text()
+        assert header in text, path.name
+        table = text.split(header)[1].split("\n\n")[0]
+        for label, model in expected.items():
+            line = next((ln for ln in table.splitlines() if label in ln), None)
+            assert line, (path.name, label)
+            assert model.capitalize() in line or model in line, (path.name, label, line)

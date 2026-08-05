@@ -71,7 +71,8 @@ issue コメントに書かれた判定や報告は監査ログとして永続�
 ここでいう「層」は3つである。
 **core**(commands / agents / skills。言語にもプロジェクトにも依存しない手順)、**language pack**(packs/。言語固有の検査コマンドと CI の部品)、**repo override**(導入先の `.tasuki/`。その組織の閾値と必須欄)。
 この3層が器であり、2言語目は pack を1枚足すだけで通るのが正しい状態である(core に言語名が現れたら越境である)。
-実行時の名前解決はこの3層の手前に導入先自身の Claude Code 定義(`.claude/`)を置いた4段になる(順序の正は docs/INTEGRATION.md の「優先順位」)。
+例外は、core 自身が動くために要る道具(YAML パーサ、`allowed-tools` の権限)だけである。これは判定基準ではないので pack には置けない。
+実行時の名前解決はこの3層の手前に導入先自身の Claude Code 定義(`.claude/`)を置いた4段になる(順序の正は [INTEGRATION.md](INTEGRATION.md) の「優先順位」)。
 
 ## 名前は駅伝から
 

@@ -44,9 +44,9 @@ jobs:
               printf '::error::%s に既知以外の指摘がある:\n%s\n' "$manifest" "$unexpected"
               exit 1
             fi
-            # 指摘が1件も出ずに失敗したときは、検証に到達せず落ちている
-            # (フラグの改名、コマンドの廃止、クラッシュ)。緑にしない。
-            if [ "$rc" -ne 0 ] && [ -z "$findings" ]; then
+            # 検証に到達した証跡が無ければ緑にしない(フラグの改名、コマンドの廃止、
+            # 未知のパス種別の黙殺、クラッシュ。exit code だけでは区別できない)。
+            if ! printf '%s\n' "$out" | grep -qE 'Validation (passed|failed)'; then
               printf '::error::%s: claude plugin validate が検証に到達せず終了した(exit %s)\n' "$manifest" "$rc"
               exit 1
             fi
