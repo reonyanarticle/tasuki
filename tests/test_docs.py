@@ -98,7 +98,7 @@ def test_phase3_full_loop_wiring() -> None:
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
-    assert "全子が統合ブランチへ取り込まれたら進む" in loop
+    assert "全子が統合ブランチへ取り込まれ、かつ統合ブランチが緑になってから進む" in loop
     assert "統合ゲート" in loop
     assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
@@ -610,7 +610,7 @@ def test_trace_review_findings_are_fixed() -> None:
     assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
     assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
     # 取り込み後の赤は、専用経路ではなく追い子(実在の子 issue)として通す
-    assert "解消を追い子として起票し、通常の §2(子ごとのゲート実行)に流す" in loop
+    assert "補修の子として起票し、通常の §2(子ごとのゲート実行)に流す" in loop
     assert "専用の経路を作らない" in loop
     worker = (ROOT / "agents/worker.md").read_text()
     assert "--base <統合ブランチ>" in worker
@@ -1429,7 +1429,8 @@ def test_repair_child_has_an_issuing_rule() -> None:
         "起票するのは orchestrator であり、人間承認は要らない",
         "統合ブランチの健全性(親要件の派生ではない)",
         "via tasuki-loop",
-        "同じ解消対象の open な補修の子が既にあれば起票しない",
+        "同じ解消対象(タイトルで判別する)の open な補修の子が既にあれば起票しない",
+        "本文末尾が `via tasuki-loop` の補修の子は、この LLM 判定を行わない",
         "補修の子は §1b(分割ゲート)の再判定の対象にしない",
     ):
         assert rule in loop, rule
@@ -1440,6 +1441,10 @@ def test_repair_child_has_an_issuing_rule() -> None:
     # worker は merged な PR の上で継続しない
     worker = (ROOT / "agents/worker.md").read_text()
     assert "merged / closed な PR の上では継続しない" in worker
-    # docs 側にも旧経路(解消専用 worker)が残っていないこと
+    # 旧経路(解消専用 worker)と、器の二重の名前(解消の追い子)が残っていないこと
     for path in _WRITING_TARGETS:
-        assert "解消専用" not in path.read_text(), path.name
+        text = path.read_text()
+        assert "解消専用" not in text, path.name
+        assert "解消の追い子" not in text, path.name  # 追い子は §1d の replan 由来の器の名前
+    # 3c の再入分岐も同じ経路を指すこと(close 済みの子へ差し戻さない)
+    assert "該当する子を特定して worker へ差し戻す" not in loop
