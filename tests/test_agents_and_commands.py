@@ -167,13 +167,9 @@ def test_loop_pr_label_goes_on_the_pr() -> None:
     assert "ラベルは PR に付ける。issue には付けない" in text
 
 
-# プロファイル名の言及を許容するファイルと一致数の上限(現状の残存箇所。減らすのはよい)。
-# - loop.md: フェーズ名の例示と worker_agent の既定の説明
-# - loop-init.md: プロファイル選択そのものを扱うコマンド
-_PROFILE_NAME_ALLOWED: dict[str, int] = {
-    "commands/loop.md": 2,
-    "commands/loop-init.md": 4,
-}
+# 仕事の型を表す語(旧プロファイル名)を非契約レイヤーに入れないための上限。
+# 契約は profiles/tasuki.yaml の1つになり、型名の器は残っていないので上限は0である。
+_PROFILE_NAME_ALLOWED: dict[str, int] = {}
 
 # 日本語の密着表記(「developmentプロファイル」)と大文字も検出する。\b は \w に日本語が
 # 含まれるため密着表記で成立しない。英字の連続(別語の一部)と URL のパス断片は除外する。
@@ -192,6 +188,7 @@ def test_profile_names_do_not_leak_into_core_layers() -> None:
     """
     for rel in _PROFILE_NAME_ALLOWED:
         assert (ROOT / rel).exists(), f"許容リストのファイルが実在しない: {rel}"
+    assert not (ROOT / "profiles/development.yaml").exists()  # 型名の器は残さない
     offenders = []
     for base in ("agents", "skills", "commands"):
         for path in sorted((ROOT / base).rglob("*.md")):

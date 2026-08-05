@@ -27,7 +27,7 @@ def frontmatter(path: Path) -> dict:
 
 @pytest.fixture(scope="session")
 def dev_profile() -> dict:
-    return load_yaml("profiles/development.yaml")
+    return load_yaml("profiles/tasuki.yaml")
 
 
 @pytest.fixture(scope="session")

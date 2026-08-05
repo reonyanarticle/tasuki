@@ -55,7 +55,7 @@ tasuki/
 │       ├── providers.yaml
 │       └── normalizers/
 └── profiles/
-    └── development.yaml
+    └── tasuki.yaml
 ```
 
 orchestrator は agent としては存在しない。

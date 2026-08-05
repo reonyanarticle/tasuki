@@ -14,7 +14,7 @@ def test_plugin_manifest() -> None:
 
 
 class TestProfiles:
-    """唯一の契約(profiles/development.yaml)の整合性。
+    """唯一の契約(profiles/tasuki.yaml)の整合性。
 
     かつては複数プロファイルを parametrize で回していたが、器を1つに戻したので
     fixture を直接引く(プロファイルが再び増えたら parametrize を戻す)。
@@ -41,8 +41,8 @@ class TestProfiles:
         g1 = next(g for g in dev_profile["gates"] if g["id"] == "split")
         assert any("循環" in s for s in g1["set_signals"])
         assert any("親予算" in s for s in g1["set_signals"])
-        second = dev_profile["phases"][1]["receives"]["too_abstract_signals"]
-        assert any("実現可能性" in s for s in second)
+        decomp = next(p for p in dev_profile["phases"] if p["name"] == "decomposition")
+        assert any("実現可能性" in s for s in decomp["receives"]["too_abstract_signals"])
 
     def test_phase3_gates_enabled(self, dev_profile: dict) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
@@ -77,15 +77,23 @@ class TestProfiles:
             gate = next(g for g in dev_profile["gates"] if g["id"] == gate_id)
             assert "criteria_skills" in gate, gate_id
 
-    def test_phase_handoff_chain(self, dev_profile: dict) -> None:
-        """phases の hands_off.to / receives.from が実在フェーズを指し、連鎖すること。"""
-        phases = dev_profile["phases"]
-        names = [p["name"] for p in phases]
-        for i, phase in enumerate(phases):
-            if "hands_off" in phase:
-                assert phase["hands_off"]["to"] in names, phase["name"]
-            if "receives" in phase:
-                assert phase["receives"]["from"] == names[i - 1], phase["name"]
+    def test_phases_are_all_referenced_by_gates(self, dev_profile: dict) -> None:
+        """phases は gates[].phase が指すものだけを持つこと(読まれない待ち位置を残さない)。
+
+        かつて requirements フェーズはどのゲートからも指されず、hands_off と
+        receives.from も手順書に読み手が無かった(experiment を廃止した根拠と同じ形)。
+        """
+        names = [p["name"] for p in dev_profile["phases"]]
+        assert len(names) == len(set(names)), names
+        targeted = {g["phase"] for g in dev_profile["gates"] if "phase" in g}
+        assert set(names) == targeted, (sorted(names), sorted(targeted))
+        for phase in dev_profile["phases"]:
+            assert set(phase) == {"name", "receives"}, phase["name"]
+            assert set(phase["receives"]) == {
+                "waiting_level",
+                "too_abstract_signals",
+                "too_concrete_signals",
+            }, phase["name"]
 
     def test_templates_required_fields(self, dev_profile: dict) -> None:
         """門前払いの対象となる必須欄リストが空でないこと。"""
@@ -110,10 +118,10 @@ class TestProfiles:
 
 
 def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None:
-    """実験の規律が、専用プロファイルではなく development の契約に載っていること。
+    """実験の規律が、専用プロファイルではなく唯一の契約に載っていること。
 
     experiment プロファイルを廃止したとき、規律(評価データの分離、統制条件、数字の由来セット)を
-    条件付きシグナルとして development へ畳んだ。これが消えると、実験を回したときに
+    条件付きシグナルとして唯一の契約へ畳んだ。これが消えると、実験を回したときに
     データ漏洩と再現不能を止める装置がどこにも無くなる。
     """
     assert not (ROOT / "profiles/experiment.yaml").exists()  # 器は1つに戻した
@@ -123,7 +131,7 @@ def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None
     report = phases["report"]["receives"]["too_abstract_signals"]
     assert any("由来セット" in s for s in report), report
     # 欄コメント側にも再現の統制条件が残っていること(raw テキストで見る)
-    raw = (ROOT / "profiles/development.yaml").read_text()
+    raw = (ROOT / "profiles/tasuki.yaml").read_text()
     assert "seed" in raw and "データ版数" in raw
     # 測定と測定対象を同じ子に入れない
     separate = dev_profile["split_criteria"]["always_separate"]
@@ -168,8 +176,6 @@ def test_contract_has_no_unread_keys(dev_profile: dict) -> None:
         "phases": "`receives` 定義",
         "budgets": "max_iterations_per_gate",
         "receives": "`receives` 定義",
-        "hands_off": "`receives` 定義",
-        "from": "`receives` 定義",
         "name": "`gates[].phase`",
         "phase": "`gates[].phase`",
         "id": "`enabled_gates`",
@@ -232,7 +238,7 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         )
     )
     assert referenced, "契約キーの参照が見つからない"
-    budgets = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["budgets"]
+    budgets = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["budgets"]
     missing = sorted(referenced - set(budgets))
     assert not missing, missing
 
@@ -245,7 +251,7 @@ def test_gate_phase_resolves_in_every_profile() -> None:
     """
     import yaml
 
-    profile = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())
+    profile = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
     phases = {p["name"] for p in profile["phases"]}
     for gate in profile["gates"]:
         if gate.get("kind") != "abstraction":
@@ -272,7 +278,7 @@ def test_pr_template_carries_traceability() -> None:
     """
     import yaml
 
-    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
         "pr_required_fields"
     ]
     assert "対応する親要件" in fields
@@ -367,7 +373,7 @@ def test_override_range_is_listed_in_one_place() -> None:
     1項目の増減で3箇所を追随させる必要があった(一致を固定するテストも無かった)。
     説明を置くのは CONTRACTS だけとし、その一致をここで固定する。
     """
-    contract = (ROOT / "profiles/development.yaml").read_text()
+    contract = (ROOT / "profiles/tasuki.yaml").read_text()
     header = contract.split("budgets:")[0]
     items = (
         "コマンド",

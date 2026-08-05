@@ -4,11 +4,11 @@
 
 ## プロファイル YAML
 
-**正は [profiles/development.yaml](../profiles/development.yaml) であり、以下は読むための写しである。**
+**正は [profiles/tasuki.yaml](../profiles/tasuki.yaml) であり、以下は読むための写しである。**
 欄コメントの文言までは一致させない(構造= 必須欄、ゲート ID、モデル、`enabled_gates`、`split_criteria` の一致はテストが固定する)。
 
 ```yaml
-# profiles/development.yaml
+# profiles/tasuki.yaml
 budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
@@ -21,36 +21,23 @@ budgets:
 worker_agent: tasuki-worker       # maker の差し替えキー
 
 phases:
-  - name: requirements            # 親 issue
-    hands_off:
-      to: decomposition
-  - name: decomposition
+  - name: decomposition           # 親 issue の渡し先
     receives:
-      from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
       too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な価値の同居)"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
-    hands_off:
-      to: implementation
   - name: implementation
     receives:
-      from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
       too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない", "評価や測定を伴う子で、評価データの分離(dev/test)と統制条件(seed、データ版数、環境)が該当するのに測定可能な形で書かれていない"]
       too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
-    hands_off:
-      to: report
   - name: report
     receives:
-      from: implementation
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
       too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし", "評価の数字を報告しているのに由来セット(dev/test)が不明"]
       too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
-    hands_off:
-      to: integration
   - name: integration             # 全子完了→親。統合ゲートが照合する昇りの最終待ち位置
     receives:
-      from: report
       waiting_level: "全親要件⇔子成果の対応が明示され、孤児の親要件が無い"
       too_abstract_signals: ["親要件の孤児(対応する子成果なし)", "対応の明示なし"]
       too_concrete_signals: ["子レポートの生転載"]
@@ -137,7 +124,7 @@ preship_review:                   # 出荷前レビュー(loop.md 3c)のコス�
 
 ### repo override で変えてよい範囲
 
-**正は契約ファイル冒頭のコメント**(`profiles/development.yaml`)であり、導入先へコピーされて一緒に運ばれる。
+**正は契約ファイル冒頭のコメント**(`profiles/tasuki.yaml`)であり、導入先へコピーされて一緒に運ばれる。
 以下はその解説である。
 
 導入先の `.tasuki/profile.yaml` で変えてよいのは、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、**必須欄(`templates`)の追加**、そして **`enabled_gates`(段階導入)** である。

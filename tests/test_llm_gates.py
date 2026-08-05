@@ -1,6 +1,6 @@
 """ゲート判定の LLM 回帰テスト(fixture runner)。
 
-tests/fixtures/gate/ の判定例を、実際の契約(profiles/development.yaml)と
+tests/fixtures/gate/ の判定例を、実際の契約(profiles/tasuki.yaml)と
 突き合わせて haiku に判定させ、期待 verdict と一致するかを検める。
 静的検査では守れない「判定の目盛り」の回帰を検出する。
 
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _load_contract() -> dict:
-    return yaml.safe_load((ROOT / "profiles" / "development.yaml").read_text())
+    return yaml.safe_load((ROOT / "profiles" / "tasuki.yaml").read_text())
 
 
 def _receives_for(gate_id: str) -> dict:

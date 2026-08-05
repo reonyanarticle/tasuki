@@ -585,7 +585,7 @@ def test_field_review_fixes_are_designed() -> None:
     assert "既存ゲートと外部レビューツールの棚卸し" in init
     assert "判定例(fixture)の下書きを自動生成してよい" in init
     # 契約の但し書き(統制条件は要件側)
-    for prof in ("profiles/development.yaml",):
+    for prof in ("profiles/tasuki.yaml",):
         assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
     # 併用の制約(状態機械が重ならないこと)
     assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
@@ -642,7 +642,7 @@ def test_preship_review_runs_in_subagents() -> None:
         assert mode in loop, mode
     import yaml
 
-    for prof in ("profiles/development.yaml",):
+    for prof in ("profiles/tasuki.yaml",):
         c = yaml.safe_load((ROOT / prof).read_text())
         assert c["preship_review"]["mode"] == "scaled", prof
         assert c["preship_review"]["fanout_threshold_lines"] > 0, prof
@@ -652,7 +652,7 @@ def test_worker_reports_used_skills_and_subagents() -> None:
     """レポートに参照 skill と委譲 subagent の欄があること(成果の前提を辿れるようにする)。"""
     import yaml
 
-    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
         "report_required_fields"
     ]
     assert "参照した skill と委譲した subagent" in fields  # 欄の正は契約
@@ -742,7 +742,7 @@ def test_security_reflects_implemented_hardening() -> None:
 def test_contracts_sample_matches_profiles() -> None:
     """CONTRACTS.md の契約サンプルが実プロファイルからずれないこと。
 
-    正は profiles/development.yaml であり CONTRACTS のコードブロックは写しである。
+    正は profiles/tasuki.yaml であり CONTRACTS のコードブロックは写しである。
     文字列の抜き取りだけでは欄名の1文字違いを見逃す(実際、レポートの欄名が
     「要件 ID ⇔結果の対応表」のまま残り、門前払いの完全一致に落ちる形になっていた)。
     構造を読んで突き合わせる。
@@ -750,10 +750,10 @@ def test_contracts_sample_matches_profiles() -> None:
     import yaml
 
     sample_text = (ROOT / "docs/CONTRACTS.md").read_text()
-    assert "**正は [profiles/development.yaml](../profiles/development.yaml) であり" in sample_text
+    assert "**正は [profiles/tasuki.yaml](../profiles/tasuki.yaml) であり" in sample_text
     block = sample_text.split("## プロファイル YAML")[1].split("```yaml")[1].split("```")[0]
     sample = yaml.safe_load(block)
-    real = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())
+    real = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
 
     assert sample["templates"] == real["templates"], "必須欄がずれている"
     assert sample["enabled_gates"] == real["enabled_gates"]
@@ -834,7 +834,7 @@ def test_parent_pr_is_designed_for_approval() -> None:
     """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
     import yaml
 
-    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
         "parent_pr_required_fields"
     ]
     for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
@@ -885,7 +885,7 @@ def test_toc_adaptation_is_reflected() -> None:
 def test_loop_report_skill_pulls_fields_from_contract() -> None:
     """レポート skill が欄名を契約から引くこと(プロファイル固有の欄を skill に写さない)。
 
-    3つ目のプロファイルを試作したとき、skill に development の欄が literal に
+    3つ目のプロファイルを試作したとき、skill に契約の欄名が literal に
     書かれていたため「読み替え節」を足す羽目になった(その成果物には受け入れ条件も
     テストも無く、共通の必須構成に忠実な報告は成果ゲートの門前払いを必ず落ちた)。
     欄の正を契約に一本化し、skill には共通規則だけを残す。
@@ -924,7 +924,7 @@ def test_providers_definition_has_a_home_in_the_target_repo() -> None:
 def test_gate_review_skill_judges_only_by_contract() -> None:
     """判定側の skill が契約だけを物差しにすること(存在しない欄で差し戻さない)。
 
-    かつては development の欄名を具体列挙し、別プロファイル用の読み替え節で打ち消していた。
+    かつては契約の欄名を具体列挙し、別プロファイル用の読み替え節で打ち消していた。
     具体列挙が原則に勝つ構造を廃し、分割基準と欄の意味を契約から引く。
     """
     sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
@@ -1005,10 +1005,10 @@ def test_final_trace_audit_findings_are_fixed() -> None:
     assert "現在の子 issue 群の本文一覧を旧分割案の代わりに渡す" in loop
     init = (ROOT / "commands/loop-init.md").read_text()
     # plugin 側のファイルは plugin ルートからの絶対パスで読む(カレントは導入先)
-    assert "${CLAUDE_PLUGIN_ROOT}/profiles/development.yaml" in init
+    assert "${CLAUDE_PLUGIN_ROOT}/profiles/tasuki.yaml" in init
     assert "カレントは導入先リポジトリであり" in init
     # 契約ファイルのコメントは導入先へコピーされるため、plugin の docs パスを指さない
-    contract = (ROOT / "profiles/development.yaml").read_text()
+    contract = (ROOT / "profiles/tasuki.yaml").read_text()
     assert "docs/CONTRACTS.md" not in contract
 
 
@@ -1107,7 +1107,7 @@ def test_report_fields_carry_meaning_comments() -> None:
     """
     import yaml
 
-    text = (ROOT / "profiles/development.yaml").read_text()
+    text = (ROOT / "profiles/tasuki.yaml").read_text()
     fields = yaml.safe_load(text)["templates"]["report_required_fields"]
     for field in fields:
         lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
