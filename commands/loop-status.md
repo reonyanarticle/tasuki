@@ -23,7 +23,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue vie
 - `loop:pause` ラベルの親 issue(一時停止中。外せば次の run が再開する)
 - `loop:replan` ラベルの親 issue(要件変更の再計画待ち。次の run の合流点で計画を作り直す)
 - `loop:review` ラベルの親 issue(出荷前レビューの実行中または結果反映中。契約が `preship_review.mode: manual` のときだけ、人間がレビューを起動する番)
-- `loop:triage` ラベルの issue(エスカレーション。Fable 裁定の3分類コメントがあれば要約を併記)
+- `loop:triage` ラベルの issue(エスカレーション。orchestrator の裁定コメント(契約の不備 / タスクの筋の悪さ / モデル能力の限界の3分類)があれば要約を併記)
 - 未回答の task-question(質問コメントに回答が付いていない issue)
 - 承認待ちの axis-question(契約ファイル変更 PR で open のもの)
 - ready 化済みで未マージの**親 PR**(マージは常に人間。子 PR はループが取り込むため含めない)
@@ -31,7 +31,7 @@ allowed-tools: Skill, Read, Grep, Glob, Bash(gh issue list:*), Bash(gh issue vie
 ## 2. 進行状況
 
 
-子 issue ごとに1行で表示する。**取り込み済みの子は close されている**ため、open だけを拾うと消える。親の sub-issues から closed も含めて列挙する(`gh issue view <親> --json subIssues`。これは gh 2.95.0 以上で引ける)。
+子 issue ごとに1行で表示する。**取り込み済みの子は close されている**ため、open だけを拾うと消える。親の sub-issues から closed も含めて列挙する(`gh issue view <親> --json subIssues`。これは gh 2.94.0 以上で引ける)。
 **古い gh で `subIssues` を引けない場合は、その旨を表示して進行状況の節を省く**(`tasuki:child` ラベルによる代替列挙は、人間が起票した子にラベルが付かず取りこぼす。読み取り専用を保つため `gh api` フォールバックは使わない。正確な一覧が要るなら gh を更新する)。
 
 ```

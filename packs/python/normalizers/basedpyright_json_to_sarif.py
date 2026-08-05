@@ -1,6 +1,6 @@
 """basedpyright の JSON 出力を SARIF 2.1.0 に変換する normalizer。
 
-core の findings 判定器は SARIF / JUnit XML のみを読む(docs/DESIGN.md)。
+core の findings 判定器は SARIF / JUnit XML のみを読む。
 basedpyright は SARIF を直接出力できないため、CI 上でこのスクリプトを挟んで変換する。
 変換に成功する限り終了コードは 0(ゲート判定は SARIF / summary を読む側が行う)。
 入力が壊れている場合も SARIF を空 results で書き出し、CI の後段(upload-sarif)を
@@ -66,6 +66,8 @@ def _results_from_diagnostics(diagnostics: list[dict], root: Path) -> list[dict]
         start = raw_start if isinstance(raw_start, dict) else {}
         severity = diag.get("severity")
         message = diag.get("message")
+        text = message.strip() if isinstance(message, str) else ""
+        uri = _relative_uri(diag.get("file"), root)
         results.append(
             {
                 "ruleId": diag.get("rule") or "basedpyright",
@@ -74,11 +76,11 @@ def _results_from_diagnostics(diagnostics: list[dict], root: Path) -> list[dict]
                     if isinstance(severity, str)
                     else _DEFAULT_LEVEL
                 ),
-                "message": {"text": message.strip() if isinstance(message, str) else ""},
+                "message": {"text": text},
                 "locations": [
                     {
                         "physicalLocation": {
-                            "artifactLocation": {"uri": _relative_uri(diag.get("file"), root)},
+                            "artifactLocation": {"uri": uri},
                             "region": {
                                 # pyright の行・桁は 0 始まり、SARIF は 1 始まり
                                 "startLine": _int_or_zero(start.get("line")) + 1,

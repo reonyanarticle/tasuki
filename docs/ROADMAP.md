@@ -142,7 +142,7 @@ claude-security スキャン(7観点)を実施し、信頼境界の設計上の�
 アジャイル運用の難所分析で特定した2つのギャップを閉じた。
 
 - **再計画(loop:replan)**:走行中の親要件変更の正式経路。人間が親本文を編集して `loop:replan` を付けると、実行中の worker を走り切らせてから、受理ゲート再判定と decomposer の差分分割(維持 / 改訂 / 追加 / 撤回、取り込み済みへの波及は追い子)で計画を作り直す(loop.md §1d)
-- **default branch の定点取り込み**:ループ外の開発(hotfix 等)との共存。run 開始時(任意)、レイヤー合流時、3c 入場前(必須)の3定点で default branch を統合ブランチへ merge し、conflict と赤は解消専用 worker で 2d 相当に通す。3c は merge-base が default 先端と一致するまで入れない(承認する差分とマージ結果を一致させる)。多親並走(v2)の前提部品でもある
+- **default branch の定点取り込み**:ループ外の開発(hotfix 等)との共存。run 開始時(任意)、レイヤー合流時、3c 入場前(必須)の3定点で default branch を統合ブランチへ merge し、conflict と赤はループが自分で直さず `loop:triage` で人間に渡す(下の「統合ブランチの自己修復を持たない理由」)。3c は merge-base が default 先端と一致するまで入れない(承認する差分とマージ結果を一致させる)。多親並走(v2)の前提部品でもある
 - 3c の承認コメントに「やらなかったこと」の親 issue 下書きを添える(起票は人間)
 - 出荷前レビューを人間起動から orchestrator の subagent 自動実行へ変更し、規模は契約の preship_review(full / scaled / manual)で制御する
 - レポート必須欄に「参照した skill と委譲した subagent」を追加(成果の前提を辿る)
@@ -238,21 +238,134 @@ tasuki 自身が掲げる「検査、運搬、停滞は付加価値を生まな�
 - **契約への一本化**:分割基準(`split_criteria`)と欄の意味(契約の欄コメント)を契約側に置き、skill と agent 定義から literal な列挙を消した。非契約レイヤーはプロファイル名でなく契約のキーの有無で分岐する
 - **プロファイル名の漏れを検出するテスト**:非契約レイヤー(agents / skills / commands)へのプロファイル名の混入を許容リストと件数上限で凍結した。次に抽象を足すとき、漏れが増えたことを機械が知らせる
 - **mechanical ゲートは hermetic であること**:検査はリポジトリの内容だけで結果が決まるものに限る(「決定的= LLM を使わない」と「hermetic =外部状態に依存しない」の混同が、到達性検査という誤りを生んだ)。検査スクリプトがネットワーク系モジュールを import しないことをテストで固定してある
-- **抽象は2例目を通してから固定する**:1例しか無い時点で引いた境界には、その1例の形が焼き込まれる
+- **抽象は、性質の異なる2例目を通してから固定する**:1例しか無い時点で引いた境界には、その1例の形が焼き込まれる(この時点では「2例目を通せば足りる」と書いたが、後の experiment 廃止で不十分と分かった。実験は開発の近い双子であり、2例あっても器の欠陥は見えなかった。原理としての最新形は [PHILOSOPHY.md](PHILOSOPHY.md) の「器も仕事の種類で切らない」が正)
 
 出典(試作時に依拠した先行例): PRISMA(https://pmc.ncbi.nlm.nih.gov/articles/PMC8005925/)、Kitchenham の SLR ガイドライン(https://www.elsevier.com/books/T/A/9780128042182)、agile spike と ADR(https://adr.github.io/)、Anthropic のマルチエージェント調査(https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)、引用検証の実証研究(https://arxiv.org/html/2605.06635v1: リンク有効性 94% に対し事実整合 39〜77%)。
 
-## v1.4 候補(未着手)
+## v1.4: experiment プロファイルの廃止(1契約への一本化)
+
+第2のプロファイルとして持っていた experiment を廃止し、契約を `development` の1つにした。
+実装も実験も同じ契約で回す。
+research と違い**実装が壊れていたわけではない**(E2E で2親8子を完走し、verifier がデータ分離を毎回確認した実績がある)。
+廃止したのは、規律の中身ではなく**器の選び方が間違っていた**からである。
+
+### 器が間違っていた理由
+
+**1. 粒度が合っていない。**
+`/tasuki:loop-init` は選んだプロファイルを `.tasuki/profile.yaml` に1枚だけコピーする。
+つまりプロファイルは**リポジトリ単位**の属性である。
+一方「実験かどうか」は**issue 単位**の性質であり、ML リポジトリでもデータローダのバグ修正は実験ではない。
+リポジトリ単位の器に issue 単位の性質を入れたため、どちらを選んでももう一方の仕事に合わない契約が適用される。
+これは research を撤回したときの理屈(調べ物はタスクの種類ではなく工程である)と同じ形の誤りである。
+
+**2. 差分が欄とフェーズ名しか無かった。**
+experiment と development の実際の差は、子の必須欄2つ(実験条件、評価データの分離)とレポート欄1つ(数字の由来セット)、
+そしてフェーズ名だけだった。
+ゲート、verdict、ルーティング、maker(`tasuki-worker`)、pack、予算の構造はすべて同一である。
+フェーズ名の差は `gates[].phase` の間接参照で吸収されるため値を生んでおらず、`analysis` フェーズに至ってはどのゲートも指しておらず、
+契約自身が「v1 では独立ロールを持たず worker のレポートに畳む」と書いていた(どこからも読まれない設定)。
+
+**3. 無条件必須欄というポカヨケが、実は効いていなかった。**
+専用プロファイルを持つ唯一の根拠は「必須欄を無条件に強制できる」ことだった。
+しかし門前払いが見るのは**見出しが空でないか**だけであり、「該当なし」と書けば通る。
+実効的な防御は着手ゲートのシグナル(LLM 判定)であり、それは「該当するのに書かれていない」形の条件付きシグナルでも同じように効く。
+
+### 畳み方
+
+規律は捨てず、development の契約へ次の形で移した。
+
+- implementation のシグナルに「評価や測定を伴う子で、評価データの分離(dev/test)と統制条件(seed、データ版数、環境)が該当するのに測定可能な形で書かれていない」
+- report のシグナルに「評価の数字を報告しているのに由来セット(dev/test)が不明」。`再現手順` の欄コメントに seed とデータ版数と単回評価の規律を追記
+- `split_criteria.always_separate` に「測定と測定対象の変更(実験と基盤変更)」
+- worker の規律の適用条件を「契約に該当欄がある場合」から「評価や測定を伴うタスク」へ
+
+あわせて、**repo override で必須欄を追加してよい**ことを契約の仕様として明示した。
+実験を常時行う導入先は、自分の `.tasuki/profile.yaml` に「実験条件」「評価データの分離」を足せば、テンプレが毎回問いかける形を取り戻せる。
+仕事の型ごとの雛形を plugin 側に増やすのではなく、導入先の override で表現する(三層構造の原則どおり、型は導入先固有の情報である)。
+
+### 残した規律(この廃止が無くても効くもの)
+
+- **器の粒度を、性質の粒度に合わせる**:リポジトリ単位の器(プロファイル)に issue 単位の性質(仕事の型)を入れない
+- **型は導入先の override で表す**:plugin 側の雛形を型ごとに増やさない(型は導入先固有の情報である)
+- **ポカヨケを名乗る前に、実際に何を止めるか確かめる**:必須欄は「欄の有無」しか止めない。内容の欠落を止めるのは条件付きシグナルである
+
+原理としての最新形は [PHILOSOPHY.md](PHILOSOPHY.md) の「器も仕事の種類で切らない」に置いた。
+
+### 器の名前も型で切らない(v1.4 の続き)
+
+契約を1つに畳んだあとも、ファイル名 `profiles/development.yaml` と冒頭の「開発ループ」という見出しが、器を仕事の型で切る形を教え続けていた。
+実験や評価を伴う仕事も同じ契約で回すのに、コピー元が「開発ループ」と題されている。
+`profiles/tasuki.yaml` に改名し、見出しから型名を落とした。
+
+あわせて、どのゲートからも指されない `requirements` フェーズと、手順書に読み手の無い `hands_off` / `receives.from` を契約から外した。
+これは experiment を廃止した根拠(どのゲートも指さない `analysis` フェーズ)と同じ形の残りである。
+「契約は今読まれるキーだけを持つ」をテストで固定した(`phases` の集合が `gates[].phase` の集合と一致すること)。
+
+### 統合ブランチの自己修復を持たない理由(v1 の判断)
+
+統合ブランチが conflict または赤になったとき、ループは自分で直さず `loop:triage` で人間に渡す。
+発生源は3つある(定点1 の merge conflict、取り込み後の checks-local 赤、3c の出荷前レビューの所見)。
+
+**自己修復を子 issue の器で作ろうとして、撤回した。**
+補修の作業は親要件に対応しない**工程**であり、子 issue(親要件に対応する単独マージ可能な作業単位)とは粒度が合わない。
+入れてみると、着手ゲートの判定除外、差し戻し先の読み替え、分割ゲートの再判定除外、再計画の差分分割除外、decomposer 側の保険の5箇所に読み替え節が要った。
+読み替え節1つが抽象の漏れ1つである([PHILOSOPHY.md](PHILOSOPHY.md) の「器も仕事の種類で切らない」)。
+実際、粒度の不一致は机上ではなく欠陥として現れた。
+「対応する親要件」欄に「親要件の派生ではない」と書かざるを得ず、着手ゲートがそれを必ず差し戻すため、統合ブランチが赤になるたびに人間の裁定が要る状態になっていた。
+
+**根本は「子 issue を統合ブランチへの取り込み時に close する」ことである。**
+close するので、3c の所見を戻す先が無くなり、補修という別の器が要る。
+元の設計では子は親 PR のマージまで open で、親 PR 本文の `Closes` 列挙がそれを閉じていた(その列挙はいま「保険」に格下げされている)。
+close の時点を戻せば (b) と (c) は既存の経路で戻せるが、`§1c` のレイヤー構成が `open` を取り込み済み判定に使っているため1箇所が連動する。
+
+**どちらも実走の例が0件である。**
+E2E では定点1 の merge は走ったが緑で、conflict も取り込み後の赤も一度も起きていない。
+[PHILOSOPHY.md](PHILOSOPHY.md) は「抽象は、性質の異なる2例目を通してから固定する」と定める。
+**実例が出るまで設計しない。**
+止めて triage に落としておけば、何回どの形で起きるかが記録され、それが2例目の材料になる。
+自己修復と close 時点の見直しは v2 とする。
+
+### 後方互換を持たない方針
+
+この時点で配布前であり、導入先が存在しない。
+そのため旧契約への補い、契約と plugin の版ずれ検出、移行手順は持たない(存在しない過去に備える記述は、読み手に「あり得る状態」を誤って教え、手順を太らせる)。
+配布を始めて導入先ができたら、そのときに互換の必要性を判断して再導入する。
+
+### 畳んだ後の検証
+
+E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条件必須欄がある状態で取ったものである。
+条件付きシグナルに畳んだ後も同じ規律が効くかを、次の E2E で実測した。
+
+### v1.4 の E2E 実施結果(tasuki-e2e-eval リポジトリ)
+
+畳んだ後の契約で、規律が効くことと誤爆しないことを実測した。
+題材は「分類のしきい値を測って決める」親1件と、性質の異なる子2件である。
+
+| 検証項目 | 結果 |
+|---|---|
+| 評価を伴う子で規律が欠けていると着手ゲートが差し戻すか | 達成。TOO_ABSTRACT / confidence high。理由の筆頭が新設の条件付きシグナルそのもので、questions も dev/test 分離と seed と実行環境を具体的に要求した |
+| 評価を伴わない子で誤爆しないか | 達成。PASS / confidence high。評価のシグナルは適用されず、判定理由にもその旨が現れた(無条件必須欄だった頃は、実装だけの子にも実験条件の欄を書かせていた) |
+| 差し戻しからの再入(規律を補った子が通るか) | 達成。dev/test 分割と固定 seed とデータの版数を受け入れ条件に足した本文で再判定し、PASS / high。統制条件を実装方式の指定と誤認しなかった |
+| 生成した CI が private リポジトリで緑になるか | 達成(改変検知の job が認証なしで fetch していた欠陥の修正確認を兼ねる) |
+| 改変検知が実際に検知するか | 達成。既存テストへの skip 追加を入れた PR で、`テストの skip / xfail 追加を検出` により赤で停止した |
+
+残る未検証: この E2E は着手ゲートまでで、実装から取り込みまでは通していない。
+条件付きシグナルが report フェーズ(数字の由来セット)でどう効くかは、成果ゲートを実走するまで分からない。
+
+## v1.5 候補(未着手)
 
 1. 分割案 YAML から冪等に起票と依存設定まで行う同梱スクリプト(shell 手作業の廃止。導入先に Python が無い場合の代替が論点)
 2. 子 PR の自動マージを CI に移す(`gh pr merge` が組織の permission ポリシーで ask になる環境向け。loop:pr ラベル+ checks 緑+ base が `loop/*` の PR だけを対象にした automerge job を loop-init が生成する)
 3. 起票支援(/tasuki:draft)の事前審査に、蓄積した判定例(fixture)を目盛りとして渡す
+4. 条件付きシグナルの成果ゲートでの実走検証(評価を伴う子を実装から取り込みまで通し、report フェーズのシグナルが効くかを見る)
+5. `criteria_skills` を1例通す(導入先の skill を判定基準に混ぜる形は、契約に器だけがあり実例が0件である。0例のまま器を増やさないための順序として、次の器を足す前にここを1例にする)
+6. 導入先の `.tasuki/fixtures/` を回す runner(v1 は fixture の形式と手作業の較正手順だけを持ち、読む実体は tasuki 自身のリポジトリの `tests/test_llm_gates.py` にしかない。導入先で契約を変えたときの回帰を自動で検めたい)
 
 ## 未決事項
 
 1. ~~受理ゲートのコスト見積もりを誰が書くか~~ **決着**：起票者(人間)がテンプレ必須欄として記入する(門前払いと整合する最小構成)。decomposer による見積もり案と人間承認のフローは v2 予約
 2. ~~`/tasuki:loop` の起動形態~~ **決着**：v1 は手動起動のみ。スケジュール実行(automations)は v2 予約
-3. experiment プロファイルの成果物置き場。実験ログや生成モデル等の大容量成果物の保存先規約(GitHub 外ストレージとの接続)
+3. 実験の成果物置き場。実験ログや生成モデル等の大容量成果物の保存先規約(GitHub 外ストレージとの接続)
 
 ## 実装時検証事項(着手前に公式ドキュメントで確認)
 
@@ -266,20 +379,24 @@ tasuki 自身が掲げる「検査、運搬、停滞は付加価値を生まな�
 5. 組み込みスラッシュコマンドの headless 実行可否。不可なら形式ゲートの security は GitHub Action 側([OPERATIONS.md](OPERATIONS.md))のみを使う
 6. GitHub sub-issues / issue dependencies。`gh` CLI と REST API の対応範囲。未対応操作は GraphQL API へフォールバック
 7. plugin からの CI workflow ファイル生成。GitHub Apps / Actions の権限(`workflows` 書き込み権限が必要な点)
+8. **subagent のネスト**。既定の階層上限と、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` が上限を上げるのか下げるのか(https://code.claude.com/docs/en/sub-agents)
+9. **Agent 起動時の `model` 指定**と agent 定義の `model` の優先順位(同上)
+10. **`claude plugin validate` の対象解決**。marketplace manifest を同梱したリポジトリでパスを渡すと marketplace だけを検証し、plugin manifest を検証しない(両方を明示指定する必要がある)。`--strict` の有無と出力形式(指摘行の書式)もここに含む(https://code.claude.com/docs/en/plugins)
+11. **CI が固定している `@anthropic-ai/claude-code` のバージョン**。上げるときは `--strict` が存在すること、指摘行の書式が変わっていないこと、上の項目10の対象解決が変わっていないことを確かめてから上げる(固定しないと供給網が緩み、上げないと新しい検証規則が効かない)
 
-### 検証結果(公式ドキュメントで確認済み)
+### 検証結果(確認した時点のもの。仕様は動くため、依存する記述を書くたびに現行仕様と突き合わせる)
 
 1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools:` で絞る。**絞り方はサブコマンド単位とする**(`Bash(gh issue:*)` のような形。`Bash(gh *)` のようなツール全体の前承認は使わない。理由と規則は [SECURITY.md](SECURITY.md) が正)
 5. **差異あり**：組み込みスラッシュコマンドは `claude -p` から呼べない。対応として形式ゲートの security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
-6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
+6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。**`gh issue view --json subIssues` での読み取りも同じ v2.94.0 で入っている**(当初「読み取りは v2.95.0 以上」と書いていたが誤りだった。v2.94.0 のリリースノートが Issues 2.0 対応を掲げ、同タグの `pkg/cmd/issue/view/view.go` が `subIssues` を JSON 欄に列挙している。出典: https://github.com/cli/cli/releases/tag/v2.94.0)。それ未満は `gh api` フォールバック
 7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
 
-**設計への反映**：subagent は既定で別の subagent を起動できない(`Agent` ツールが除去される)ことも確認した。
-このため orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
+**設計への反映**：orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
+(**訂正**:当初この理由を「subagent は別の subagent を起動できないから」としていたが、これは誤りだった。現行仕様では subagent は既定でメインセッションの3階層下まで subagent を起動でき、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` はその上限を**下げる**設定である(`1` でネスト無効)。出典: https://code.claude.com/docs/en/sub-agents 。orchestrator をメインセッションに置く理由は、人間への報告と裁定の窓口であることに置き直した。)
 ゲート別モデルは、gate-reviewer を1つの agent とし、Agent の起動引数で `model` を指定して実現する。
 エスカレーションは同じ agent を上位モデルで呼び直すことである。
 (**訂正**:当初は「agent frontmatter の `model:` が静的なためモデル固定3変種にする」としていたが、起動ごとの `model` 指定が可能であることを確認したため統合した。起動引数の `model` は agent 定義の `model` より優先される。)
-worker からプロジェクト subagent への委譲は、導入先の `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 設定によるオプトインで可能にする([DESIGN.md](DESIGN.md))。
+worker からプロジェクト subagent への委譲は、既定のネスト上限の範囲でそのまま行える([DESIGN.md](DESIGN.md))。

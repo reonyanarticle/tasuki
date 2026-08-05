@@ -42,7 +42,10 @@ def report() -> dict:
                 "range": {"start": {"line": 2, "character": 0}},
             },
         ],
-        "summary": {"errorCount": 1},
+        # convert() は summary を読まず diagnostics を数える。
+        # 実物の basedpyright では両者は一致するが、どちらが正かを固定するため
+        # ここではわざと食い違わせる(CI の blocking_count は summary を jq で読む)。
+        "summary": {"errorCount": 99},
     }
 
 
@@ -53,7 +56,7 @@ def test_convert(tmp_path: Path, report: dict) -> None:
 
     error_count = normalizer.convert(src, dst)
 
-    assert error_count == 1
+    assert error_count == 1  # summary.errorCount(99)ではなく diagnostics を数える
     sarif = json.loads(dst.read_text())
     results = sarif["runs"][0]["results"]
     assert [r["level"] for r in results] == ["error", "warning", "note"]

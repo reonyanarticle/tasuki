@@ -1,0 +1,13 @@
+{
+  "name": "tasuki",
+  "description": "tasuki 単体を配布するマーケットプレイス(このリポジトリ自身)",
+  "owner": {
+    "name": "reonyanarticle"
+  },
+  "plugins": [
+    {
+      "name": "tasuki",
+      "source": "./"
+    }
+  ]
+}

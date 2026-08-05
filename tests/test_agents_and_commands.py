@@ -59,9 +59,16 @@ def test_reviewer_is_single_agent_with_per_call_model() -> None:
     assert [p.name for p in reviewers] == ["gate-reviewer.md"], reviewers
     loop = (ROOT / "commands/loop.md").read_text()
     assert "判定モデルは呼び出しごとに指定する" in loop
-    # ゲート別の標準モデルとエスカレーション先が手順に書かれていること
-    for token in ("opus", "haiku", "sonnet"):
-        assert token in loop, token
+    # モデルの正は契約であり、手順書はモデル名を持たない(契約が全ゲートに値を持つため、
+    # 手順書に写した表は実行時に一度も使われず、導入先が値を変えると即座に嘘になる)
+    assert "`gates[].model` と `gates[].escalate_to` である" in loop
+    # ゲートのモデルは契約から引く(手順書に既定値を写さない)
+    for gate in ("intake", "split", "outcome", "integration"):
+        assert f"`gates.{gate}.model`" in loop, gate
+    low = loop.lower()  # 地の文は大文字始まりで書くので綴りに依存しない形で見る
+    assert "haiku" not in low and "opus" not in low
+    # sonnet は出荷前レビューの subagent(契約が持たない値)にだけ残る
+    assert low.count("sonnet") == 1
     # ゲート別の判定基準は skill が単一の正であること
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "## ゲート別の特記事項" in skill
@@ -95,12 +102,12 @@ def test_labels_used_are_created() -> None:
     """
     import re
 
+    # 作成リストの節だけを見る(全文だと別文脈の言及で緑になる)
     init_text = (ROOT / "commands/loop-init.md").read_text()
+    init_text = init_text.split("### 6. ラベル作成")[1].split("\n### ")[0]
     used: set[str] = set()
     for path in (ROOT / "commands/loop.md", ROOT / "commands/loop-status.md"):
         used |= set(re.findall(r"`(gate:[a-z-]+|loop:[a-z-]+)`", path.read_text()))
-    # ワイルドカード表記は集合ではないので除く
-    used = {label for label in used if "*" not in label}
     missing = sorted(label for label in used if label not in init_text)
     assert not missing, missing
 
@@ -121,7 +128,7 @@ def test_no_runtime_unresolvable_docs_references() -> None:
 def test_verifier_status_contract() -> None:
     """verifier の status 列挙と loop.md の分岐が一致すること(drifting は status ではない)。"""
     verifier_text = (ROOT / "agents/verifier.md").read_text()
-    assert '"met | continue | abort | waiting"' in verifier_text.replace("status", "status")
+    assert '"met | continue | abort | waiting"' in verifier_text
     loop_text = (ROOT / "commands/loop.md").read_text()
     assert "drift_check" in loop_text, "loop.md は drift_check を先に判定する"
 
@@ -151,10 +158,8 @@ def test_worker_records_plan_before_implementing() -> None:
     for item in ("作るもの", "既存への接続", "選択と理由", "確かめ方"):
         assert item in text, item
     # 方針の記録が実装より前の手順であること
-    assert text.index("実装方針の記録") < text.index("2. **実装 / 実験**")
-    # 設計上の位置づけが docs に残っていること
-    gates = (ROOT / "docs/GATES.md").read_text()
-    assert "### 実装方針をどこに置くか" in gates
+    assert text.index("実装方針の記録") < text.index("2. **実装**")
+    # docs 側の位置づけ(GATES.md の節)は test_docs.py が検める(重複させない)
 
 
 def test_loop_pr_label_goes_on_the_pr() -> None:
@@ -163,13 +168,9 @@ def test_loop_pr_label_goes_on_the_pr() -> None:
     assert "ラベルは PR に付ける。issue には付けない" in text
 
 
-# プロファイル名の言及を許容するファイルと一致数の上限(現状の残存箇所。減らすのはよい)。
-# - loop.md: フェーズ名の例示と worker_agent の既定の説明
-# - loop-init.md: プロファイル選択そのものを扱うコマンド
-_PROFILE_NAME_ALLOWED: dict[str, int] = {
-    "commands/loop.md": 2,
-    "commands/loop-init.md": 4,
-}
+# 仕事の型を表す語(旧プロファイル名)を非契約レイヤーに入れないための上限。
+# 契約は profiles/tasuki.yaml の1つになり、型名の器は残っていないので上限は0である。
+_PROFILE_NAME_ALLOWED: dict[str, int] = {}
 
 # 日本語の密着表記(「developmentプロファイル」)と大文字も検出する。\b は \w に日本語が
 # 含まれるため密着表記で成立しない。英字の連続(別語の一部)と URL のパス断片は除外する。
@@ -188,6 +189,7 @@ def test_profile_names_do_not_leak_into_core_layers() -> None:
     """
     for rel in _PROFILE_NAME_ALLOWED:
         assert (ROOT / rel).exists(), f"許容リストのファイルが実在しない: {rel}"
+    assert not (ROOT / "profiles/development.yaml").exists()  # 型名の器は残さない
     offenders = []
     for base in ("agents", "skills", "commands"):
         for path in sorted((ROOT / base).rglob("*.md")):

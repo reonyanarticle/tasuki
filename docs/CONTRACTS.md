@@ -4,9 +4,11 @@
 
 ## プロファイル YAML
 
+**正は [profiles/tasuki.yaml](../profiles/tasuki.yaml) であり、以下は読むための写しである。**
+欄コメントの文言までは一致させない(構造= 必須欄、ゲート ID、モデル、`enabled_gates`、`split_criteria` の一致はテストが固定する)。
+
 ```yaml
-# profiles/development.yaml
-profile: development
+# profiles/tasuki.yaml
 budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
@@ -16,38 +18,26 @@ budgets:
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
+worker_agent: tasuki-worker       # maker の差し替えキー
+
 phases:
-  - name: requirements            # 親 issue
-    hands_off:
-      to: decomposition
-  - name: decomposition
+  - name: decomposition           # 親 issue の渡し先
     receives:
-      from: requirements
       waiting_level: "背景・目的・価値・予算が記載され、解き方は未指定"
       too_abstract_signals: ["価値の記載なし", "予算欄が空", "実現可能性の前提(必要なデータ、環境、権限)が読み取れない", "完了の定義が1回のレビューで判断できる範囲を超えている(項目過多、独立な価値の同居)"]
       too_concrete_signals: ["子タスクの実装方式まで指定"]
-    hands_off:
-      to: implementation
   - name: implementation
     receives:
-      from: decomposition
       waiting_level: "受け入れ条件つきで単独マージ可能な単位。実装方式は未指定"
-      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない"]
+      too_abstract_signals: ["曖昧語(適切に・柔軟に等)", "受け入れ条件の欠落", "打ち切り条件の欠落", "『常に分ける』組み合わせの同居(リファクタリングと機能追加等)", "前提(必要なデータ、環境、権限)の記載なし", "非機能要件(性能・速度・実行コスト等)が該当するのに測定可能な基準として書かれていない", "評価や測定を伴う子で、評価データの分離(dev/test)と統制条件(seed、データ版数、環境)が該当するのに測定可能な形で書かれていない"]
       too_concrete_signals: ["特定ライブラリ・実装方式の指定(検証の統制条件(対象の固定、比較条件、コマンドのフラグ等)は要件でありここに含めない)"]
-    hands_off:
-      to: report
-      exit_criteria_required: true
   - name: report
     receives:
-      from: implementation
       waiting_level: "要件⇔結果の対応表と結論。生データは添付リンクのみ"
-      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし"]
+      too_abstract_signals: ["対応表なし", "結論なし", "再現手順の欠落", "期待値の根拠(仕様由来)の記載なし", "評価の数字を報告しているのに由来セット(dev/test)が不明"]
       too_concrete_signals: ["生ログ・生データの本文貼り付け", "secrets・個人情報の掲載"]
-    hands_off:
-      to: integration
   - name: integration             # 全子完了→親。統合ゲートが照合する昇りの最終待ち位置
     receives:
-      from: report
       waiting_level: "全親要件⇔子成果の対応が明示され、孤児の親要件が無い"
       too_abstract_signals: ["親要件の孤児(対応する子成果なし)", "対応の明示なし"]
       too_concrete_signals: ["子レポートの生転載"]
@@ -64,7 +54,7 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
 # 分割基準(decomposer と分割ゲートが従う。プロファイルごとの基準の違いを契約が持ち、手順書と agent 定義に写さない)
 split_criteria:
   good_task_conditions: [単独でマージして壊れない, テストを同梱できる, 単独で revert できる, 一読で理解できる]
-  always_separate: [リファクタリングと機能追加, ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove), 相互に依存しない機能同士]
+  always_separate: [リファクタリングと機能追加, 測定と測定対象の変更(実験と基盤変更。同じ子で両方を動かすと、差が手法由来か環境由来か切り分けられない), ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove。未完成の機能でレイヤー実行を止めないため、deploy と release は feature flag で分離する), 相互に依存しない機能同士]
 
 gates:
   - id: intake
@@ -95,7 +85,7 @@ gates:
     blocking_threshold: error     # SARIF level
   - id: checks-format
     kind: mechanical
-    provider: format              # exit-code 判定(black --check)
+    provider: format              # exit-code 判定(コマンドは pack の providers が定める)
   - id: checks-typecheck
     kind: mechanical
     provider: typecheck
@@ -128,27 +118,21 @@ enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-
 preship_review:                   # 出荷前レビュー(loop.md 3c)のコスト制御
   mode: scaled                    # full = 常に観点別5セッション / scaled = diff 規模で自動選択 / manual = 人間が起動
   fanout_threshold_lines: 200     # scaled のとき、観点別に分ける diff 行数の閾値
-
-model_selection: static           # v2 で bandit(タスク複雑度ベースの動的選択)を予約
-
-question_routing:
-  task-question: issue-comment    # 起票者へ。回答で issue 本文を更新
-  axis-question: contract-pr      # 契約ファイル変更 PR として起票。人間が承認
 ```
 
-### experiment プロファイルとの差分
+`worker_agent:` は maker の差し替えキーである(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
 
-experiment.yaml と development.yaml の差分は次の4点で、ゲート機構、verdict、ルーティングは共通である。
+### repo override で変えてよい範囲
 
-- phases の名称(課題定義→実験計画→実行→分析→報告)
-- `exit_criteria_required` の中身(評価指標、データセット、seed)
-- 着手ゲートの必須欄(実験条件、評価データの分離(dev/test))
-- レポート必須欄への追加(数字の由来セット(dev/test))
+**正は契約ファイル冒頭のコメント**(`profiles/tasuki.yaml`)であり、導入先へコピーされて一緒に運ばれる。
+以下はその解説である。
 
-experiment の analysis フェーズは、v1 では独立ロールを持たず worker のレポート作成(分析の節)に畳む。
-analysis 単独の受け渡し照合は v2 の検討項目として残す(v1 では分割しない)。
-
-`worker_agent:` は maker の差し替えキーであり、全プロファイルで有効(既定 `tasuki-worker`。INTEGRATION.md の worker 差し替えはこのキーで行う)。
+導入先の `.tasuki/profile.yaml` で変えてよいのは、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、**必須欄(`templates`)の追加**、そして **`enabled_gates`(段階導入)** である。
+必須欄の追加は、その導入先で毎回問いかけたい欄をテンプレと門前払いに持ち込む手段である(実験を常時行うリポジトリが「実験条件(データ、環境、パラメータ、seed)」と「評価データの分離(dev/test)」を子の必須欄に足す、など)。
+**足した欄には意味を欄コメントとして1行書く**(decomposer とゲートは欄の意味を欄コメントから引くため、コメントの無い欄は門前払いの空チェックにしか効かない)。
+欄の削除は行わない(ゲートの判定材料が消える)。
+**必須欄の追加は、走行中(open)の親 issue が無いときに反映する**(門前払いは現在レイヤーの子を毎 run 検めるため、走行中に欄が増えると既存の子が一斉に差し戻される)。この制約は契約の変更全般に当てはまる(run は開始時に読んだ契約で最後まで走る)。
+**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の「v1.4: experiment プロファイルの廃止(1契約への一本化)」)。
 
 ### language pack の providers.yaml
 
@@ -183,19 +167,20 @@ providers:
     output: pr-comment
 ```
 
-契約スキーマのうち `templates:`、`enabled_gates:`、`exit_criteria_fields:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
-`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`exit_criteria_fields:` は experiment の打ち切り基準欄を機械チェックするため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズの呼び名はプロファイルによって異なるため、手順書に名前を書くと実験用プロファイルで解決できなくなる)。
-`split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は ROADMAP.md の撤回の記録に残す)。
+契約スキーマのうち `templates:`、`enabled_gates:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
+`templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズ名を手順書に直接書くと、導入先がフェーズを言い換えたときに解決できなくなる)。
+`split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は [ROADMAP.md](ROADMAP.md) の「v1.3: 調査プロファイル(research)の試作と撤回」に残す)。
 
 ## issue テンプレート仕様
 
-契約 YAML から `/tasuki:loop-init` が生成する。
+必須欄の単一ソースは契約 YAML である。
+`/tasuki:loop-init` がファイルとして生成するのは親 issue / 子 issue / 子 PR の3つで、レポートと親 PR の承認コメントはテンプレートを持たず、実行時に契約から組み立てる(レポートは `tasuki:loop-report` skill、承認コメントは loop.md の 3c-2)。
 
 | テンプレ | 必須欄 |
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
-| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations) / 実験条件(experiment のみ。データ、環境、パラメータ、seed) / 評価データの分離(experiment のみ) |
-| レポート | 要件 ID ⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
+| 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations)(導入先が repo override で欄を足してよい) |
+| レポート | 要件⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | 子 PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 | 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue(loop.md の 3c-2 が投稿する) |
 
@@ -203,7 +188,7 @@ providers:
 
 親の `予算(コスト上限)` と子の `予算(max_iterations)` は、**ループの反復、実行コストの上限**である(loop が暴走しないためのバックストップ)。
 一方、その機能や検証そのものに必要な費用や、守るべき性能、速度などの制約(非機能要件)は、`価値` と `受け入れ条件` / `成功基準` に**測定可能な形**で書く。
-前者は orchestrator と watchdog が、後者は verifier と着手 / 成果ゲートが照合する(責任の置き場所が異なる)。
+前者は orchestrator が、後者は verifier と着手 / 成果ゲートが照合する(責任の置き場所が異なる)。
 
 ## 質問ルーティング
 

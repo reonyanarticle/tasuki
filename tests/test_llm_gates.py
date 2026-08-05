@@ -1,6 +1,6 @@
 """ゲート判定の LLM 回帰テスト(fixture runner)。
 
-tests/fixtures/gate/ の判定例を、実際の契約(profiles/development.yaml)と
+tests/fixtures/gate/ の判定例を、実際の契約(profiles/tasuki.yaml)と
 突き合わせて haiku に判定させ、期待 verdict と一致するかを検める。
 静的検査では守れない「判定の目盛り」の回帰を検出する。
 
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _load_contract() -> dict:
-    return yaml.safe_load((ROOT / "profiles" / "development.yaml").read_text())
+    return yaml.safe_load((ROOT / "profiles" / "tasuki.yaml").read_text())
 
 
 def _receives_for(gate_id: str) -> dict:
@@ -51,8 +51,11 @@ def _receives_for(gate_id: str) -> dict:
     return phases[phase]["receives"]
 
 
-def _build_prompt(gate_id: str, body: str) -> str:
+def _build_prompt(gate_id: str, body: str, requirements: str | None = None) -> str:
     receives = _receives_for(gate_id)
+    # 照合先を要する判定(分割 / 成果 / 統合)は requirements 無しでは孤児判定ができない
+    # (規則は skills/baton-contract/SKILL.md)。fixture が持つなら必ず渡す。
+    against = f"照合先(要件):\n{requirements}\n\n" if requirements else ""
     return (
         "あなたは抽象度ゲートの判定者である。契約と入力を照合し、"
         "verdict JSON のみを出力せよ(説明文は不要)。\n\n"
@@ -60,6 +63,7 @@ def _build_prompt(gate_id: str, body: str) -> str:
         f"- waiting_level: {receives['waiting_level']}\n"
         f"- too_abstract_signals: {receives['too_abstract_signals']}\n"
         f"- too_concrete_signals: {receives['too_concrete_signals']}\n\n"
+        f"{against}"
         f"入力:\n{body}\n\n"
         '出力スキーマ: {"gate": "' + gate_id + '", "verdict": "PASS|TOO_ABSTRACT|TOO_CONCRETE", '
         '"confidence": "high|low", "reasons": ["..."]}'
@@ -90,7 +94,7 @@ def _fixtures() -> list:
 @pytest.mark.parametrize("path", _fixtures(), ids=lambda p: p.stem)
 def test_gate_fixture(path) -> None:
     fixture = yaml.safe_load(path.read_text())
-    verdict = _judge(_build_prompt(fixture["gate"], fixture["input"]))
+    verdict = _judge(_build_prompt(fixture["gate"], fixture["input"], fixture.get("requirements")))
     assert verdict["verdict"] == fixture["expected_verdict"], (
         f"{path.stem}: expected {fixture['expected_verdict']} "
         f"got {verdict['verdict']} (reasons={verdict.get('reasons')})"

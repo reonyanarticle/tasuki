@@ -1,6 +1,14 @@
 # 成果ゲート: 対応表の無いレポートは TOO_ABSTRACT
+# 照合先(requirements)が無いとレポート単体では孤児要件を判定できないため必ず併記する
+# (規則は tasuki:baton-contract skill)。
 gate: outcome
 expected_verdict: TOO_ABSTRACT
+requirements: |
+  ## 受け入れ条件
+  - AC-1: 出力の1行目が「id,name,price」である
+  - AC-2: データ行は2行目から始まり、既存の行数と一致する
+  ## 成功基準
+  - SC-1: 1行目の完全一致をアサートするテストがある
 input: |
   ## 結論
   うまく動くようになりました。テストも通っています。

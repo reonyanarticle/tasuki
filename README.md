@@ -26,8 +26,9 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 | `TOO_ABSTRACT` | 曖昧すぎて、受け手が追加の解釈なしには受け取れない |
 | `TOO_CONCRETE` | 詳しすぎて、受け手の判断余地を奪っている |
 
-開発と検証(実験)の2プロファイルで使える汎用構成とし、コードの検査対象はまず Python を実装している。
-扱うのは**実行される成果物**(コードと実験)であり、調べ物のような実行されない成果物は対象にしない(理由は [docs/ROADMAP.md](docs/ROADMAP.md) の調査プロファイルの撤回に残してある)。
+契約は1つ(`profiles/tasuki.yaml`)で、実装も実験も同じ契約で回す。仕事の型ごとに雛形を分けないのは、型がリポジトリではなく issue ごとの性質だからである(経緯は [docs/ROADMAP.md](docs/ROADMAP.md))。
+コードの検査対象はまず Python を実装している。
+扱うのは**実行される成果物**(コードと実験)であり、調べ物のような実行されない成果物は対象にしない。
 
 ## ゲートの一覧
 
@@ -42,11 +43,12 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 | **受理ゲート** | 親 issue を書いた直後 | やりたいことが、分割できる粒度まで書けているか(背景、目的、価値、予算、完了の定義) | 起票者 | `intake` |
 | **分割ゲート** | 親を子 issue へ割ったとき | 分割の集合として妥当か(依存が循環していないか、取りこぼした親要件がないか、予算に収まるか) | 分割役 | `split` |
 | **着手ゲート** | 子 issue に着手する直前 | 実装役がそのまま着手できる粒度か(受け入れ条件と打ち切り条件があるか、実装方式を決めつけていないか) | 起票者または分割役 | `start` |
-| **形式ゲート** | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 | `checks` |
+| **形式ゲート** | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 | `checks-*` |
 | **成果ゲート** | 実装が終わったとき | 報告が読める形か(要件と結果の対応表があるか、生ログを貼っていないか) | 実装役 | `outcome` |
 | **統合ゲート** | 全子が統合ブランチへ取り込まれた後 | 親の完了の定義を満たしたか(どの子にも拾われなかった要件が残っていないか) | 起票者 | `integration` |
 
-ラベルは識別子から作られる(`gate:intake-passed`、`gate:start-returned` のように付く)。
+ラベルは**抽象度ゲートの**識別子から作られる(`gate:intake-passed`、`gate:start-returned` のように付く)。
+形式ゲート(`checks-*`)はラベルを持たない(合否は CI の check-run が正であり、issue のラベルに写さない)。
 
 **どのゲートも「良し悪し」ではなく「抽象度のズレ」だけを見る。**
 コードの良否は形式ゲート(機械判定)と人間のレビューが受け持ち、ゲートは受け渡しの位置だけを検める。
@@ -86,7 +88,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件がゲートを通る流れ
-    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合、成果ゲート、CI の全緑を経て、orchestrator が子 PR を ready 化して統合ブランチへ取り込む。形式、成果、CI の差し戻しは worker に戻る。
+    accDescr: 着手ゲートを通ると worker が実装し、形式ゲートと verifier の基準照合、成果ゲート、CI の全緑を経て、orchestrator が子 PR を ready 化して統合ブランチへ取り込む。形式、成果、CI の差し戻しは worker に戻り、着手ゲートの差し戻しはループ起票の子なら decomposer、人間起票の子なら起票者へ戻る。
     classDef human fill:#0969da,stroke:#0a4c9e,color:#fff
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
@@ -100,13 +102,13 @@ flowchart TD
     checks -.->|NG| W
     outcome -.->|NG| W
     CI -.->|NG| W
-    start -.->|差し戻し| T["人間へ"]:::human
+    start -.->|差し戻し| T["ループ起票の子は decomposer へ<br/>人間起票の子は起票者へ"]:::human
 ```
 
 ## 前提
 
 - git リポジトリと GitHub リモート
-- `gh` CLI(sub-issues / issue dependencies を使うため v2.94.0 以上を推奨。未満は `gh api` フォールバック)
+- `gh` CLI(sub-issues / issue dependencies の作成と読み取りに v2.94.0 以上を推奨。未満は `gh api` フォールバック。ただし `/tasuki:loop-status` の進行状況表示はフォールバックを持たない)
 - Python プロジェクト(`pyproject.toml`)と `uv`
 - CI は plugin が生成する(既存 CI は前提にしない)
 
@@ -119,12 +121,17 @@ Claude Code に plugin として読み込む。
 claude --plugin-dir /path/to/tasuki
 ```
 
-常用する場合は `.claude-plugin/marketplace.json` を用意し、`/plugin marketplace add <パス>` で登録する。
-読み込めたら `/plugin` の一覧に tasuki が出る。
+常用する場合は marketplace として登録する(このリポジトリは `.claude-plugin/marketplace.json` を同梱している)。
+
+```bash
+claude plugin marketplace add /path/to/tasuki
+```
+
+登録したら `/plugin` の一覧に tasuki が出る。
 
 ## 使い方
 
-1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約プロファイル、issue と PR のテンプレート、CI workflow、ラベルが生成され、**ブートストラップ PR として提出される**(内容を確認してマージすると使える状態になる)
+1. plugin を導入し、対象リポジトリで `/tasuki:loop-init` を実行する。契約、issue と PR のテンプレート、CI workflow、ラベルが生成され、**ブートストラップ PR として提出される**(内容を確認してマージすると使える状態になる)。実験条件など毎回書かせたい欄があれば、このときに必須欄として足せる
 2. やりたいことを **親 issue に1つ書く**(テンプレの必須欄=背景、目的、価値、予算、完了の定義を埋める)。子 issue は自分で書かない。書き方に自信が無ければ `/tasuki:draft` に1文で要望を伝えると、リポジトリの裏取りと質問で下書きを作り、受理ゲートと同じ基準で事前審査してから起票する(粒度が書き手のスキルに依存しない)
 3. `/tasuki:loop <親 issue 番号>` を実行する。ループがまず issue をレビューする。受理ゲートで親が書けているかを見て、分割ゲートで子への割り方を見て、着手ゲートで子1件ずつが実装できる粒度かを見る。通ったものだけ実装に進む。issue が曖昧なら triage で差し戻すので、指摘に沿って issue を直して再実行する
 4. `/tasuki:loop-status <親番号>` で進行状況と裁定待ち(triage)を確認する。親 issue を指定すると、子ごとの一覧表で全体を俯瞰できる(依存に分岐や合流があるときは mermaid の図も添う)
@@ -135,7 +142,7 @@ issue を書く前に別途レビューさせる工程は要らない。
 
 走行中の変化には2つの経路がある。
 **要件を変えたくなったら**、親 issue 本文を編集して `loop:replan` ラベルを付ける(実行中の作業を走り切らせてから、ゲートを通して計画を作り直す。編集だけでは反映されない)。取り込み済みの成果は巻き戻さず、変更は未着手の子の改訂と撤回、追加の子で適応する。
-**hotfix はそのまま default branch へマージしてよい**(ループがレイヤーの区切りで統合ブランチへ取り込み、親 PR の承認前には必ず最新の default branch を含めた状態にする)。
+**hotfix はそのまま default branch へマージしてよい**(ループがレイヤーの区切りで統合ブランチへ取り込み、親 PR の承認前には必ず最新の default branch を含めた状態にする)。取り込みが conflict した、または取り込んだ結果が赤になった場合は、ループは自分で直さず状況を書いて `loop:triage` で止まる。
 
 補足(任意だが推奨):ゲートのレビュアーは契約の「待ち位置」という自然言語で判定するため、最初は人間の感覚とズレる。
 「この issue は PASS のはず」「これは差し戻しのはず」という判定例を数件書いて目盛りを合わせると、初回から判定が安定する。
@@ -162,11 +169,12 @@ tasuki はローカルに状態ファイルを持たない。
 ### 暴走しない仕組み
 
 自走ループで怖いのは、止まらないことと、気づかないうちに検査を迂回することである。
-tasuki は次の4つで止める。
+tasuki は次の5つで止める。
 
 - **反復予算**:ゲートごとの差し戻し回数(`max_iterations_per_gate`)と、実装の反復回数(子 issue の `予算(max_iterations)`)に上限がある。超えたら人間へ渡す
 - **WIP 上限**:人間のマージ待ちの親 PR が `wip_limit_prs` に達したら新しい実装を始めない。ボトルネックは人間のレビュー帯域だと明示する
 - **fail-closed**:CI の結果が1件も無い、あるいは job が実行されなかった場合は「成功」とみなさない。検査を通っていない実装は出荷判定に進めない
+- **自分で直せない場面では止める**:統合ブランチが conflict した、検査が赤になった、出荷前レビューが修正の要る所見を出した — これらはループが自力で直そうとせず、状況と再現手順を書いて `loop:triage` であなたに渡す(自己修復の機構を持たないのは意図した判断である。理由は [docs/ROADMAP.md](docs/ROADMAP.md))
 - **マージは常に人間**:default branch への反映は、統合ブランチをまとめた親 PR の人間マージの1回だけ。子 PR はループが統合ブランチへ取り込む(人間は必要なときだけ開く)
 
 また、人間はいつでも親 issue に `loop:pause` ラベルを付けてループを止められる(理由は要らない。外せば続きから再開する)。
@@ -188,21 +196,21 @@ gitGraph
     branch child-2
     commit id: "子A 基盤"
     checkout loop/parent-1
-    merge child-2 id: "ループが取り込む"
+    merge child-2 id: "子A を取り込む"
     branch child-3
     commit id: "子B"
     checkout loop/parent-1
     branch child-4
     commit id: "子C"
     checkout loop/parent-1
-    merge child-3 id: "取り込み(並行)"
-    merge child-4 id: "取り込み(並行) "
+    merge child-3 id: "子B を取り込む"
+    merge child-4 id: "子C を取り込む"
     checkout main
     commit id: "hotfix(ループ外)"
     checkout loop/parent-1
-    merge main id: "定点: main を取り込む"
+    merge main id: "main 取り込み"
     checkout main
-    merge loop/parent-1 id: "親PR: 人間がマージ" type: HIGHLIGHT
+    merge loop/parent-1 id: "親PR マージ" type: HIGHLIGHT
 ```
 
 子 PR は統合ブランチ(`loop/parent-1`)へ合流し、ループが取り込む。

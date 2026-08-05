@@ -5,12 +5,11 @@
 CI は plugin が **作ることを前提** とする(既存 CI は前提にしない)。
 手順は次のとおり。
 
-1. プロファイル確定 → pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
+1. pack 選択(各 pack の `detect` に挙がったファイルの有無で言語 pack を判定する)。pack の `providers` が使うツールの dev 依存と、`ci.lockfile` を整備する(lockfile が非 null で無ければ生成。`ci.setup` の依存解決の前提)
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
-3. 契約プロファイル雛形の配置(development / experiment から選択)+ repo override(`.tasuki/`)
+3. 契約の雛形(`profiles/tasuki.yaml`)を `.tasuki/profile.yaml` へ配置+ repo override(必須欄の追加を含む)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
-5. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
-6. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
+5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
    - test job は JUnit XML を出力する
@@ -18,7 +17,8 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
-7. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(作成は `gh` v2.94.0 以上、`--json subIssues` での読み取りは v2.95.0 以上。満たさない側は `gh api` フォールバック)
+6. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
+7. ラベル作成(`gate:*`、`loop:*`、`tasuki:*`)、sub-issues / issue dependencies の利用確認(作成も `--json subIssues` での読み取りも `gh` v2.94.0 以上。未満は `gh api` フォールバック)
 8. `max_iterations` 等バジェットのデフォルト設定と、判定例(fixture)の下書き生成
 9. **生成物をブートストラップ用ブランチ(`tasuki/init`)へコミットして push し、default branch への PR を1件開く。** default branch へ直接 push しない。生成物はガバナンスの制定であり、人間がレビューしてマージすることで入る(反映の形はループ本体と同型で、機械は PR 作成まで)
 
@@ -33,7 +33,7 @@ providers.yaml が単一ソースであり、CI workflow、orchestrator のロ�
 
 security-review Action の制約は4つある(採用時に README とドキュメントで確認した)。
 
-- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離と権限最小化」)
+- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離、権限最小化」)
 - この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。このため **security job はオプトイン**とし、既定では生成しない。`/tasuki:loop-init` で選択した場合のみ job を生成し `enabled_gates` に `checks-security` を追加する(条件スキップによる見かけの成功は作らない)
 - 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。形式ゲートの判定には action outputs の findings 件数を使う
 - Action の参照はコミット SHA に固定する(ブランチやタグの参照は差し替え可能で supply-chain リスクになる)
@@ -47,14 +47,14 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 | 内側ループ打ち切り | verifier が成功基準と打ち切り条件で判定。基準は着手ゲートで事前定義済であること(自己採点の防止) |
 | issue 予算 | 子 issue の予算欄(max_iterations)を内側ループの有効上限に採用(契約値と issue 値の小さい方)。超過で停止して報告 |
 | triage inbox | エスカレーションと axis-question 承認待ちを人間向けに一覧化(`/tasuki:loop-status`) |
-| watchdog | 反復回数と直交する第二の停止装置。wall-clock の上限超過で停止して報告(反復1回が異常に長い事故を検出)。token 上限は計測手段の導入とあわせて v2 |
-| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。実験ジョブの「待ち」はハートビートで除外 |
+| 停止した実行の回収 | assignee が `stale_assignment_minutes`(既定60分)を超えて残っている子を再入可能に戻す(落ちたセッションが担当のまま子を塞ぐ事故の回収)。wall-clock の上限は子 issue の打ち切り条件が持ち、worker 自身が守る。token 上限は計測手段の導入とあわせて v2 |
+| 停滞検知 | 反復、ピンポン、モノローグのパターン検知(観点「停滞検知」)。長時間ジョブの「待ち」はハートビートで除外 |
 
-**verifier の成功基準と打ち切り条件がブレーキ、`max_iterations` と watchdog はシートベルト** である。
+**verifier の成功基準と打ち切り条件がブレーキ、`max_iterations` と停滞検知はシートベルト** である。
 上限はループが既に浪費した後に発火するバックストップであり、停止条件の本体は着手ゲートで事前定義された基準の側にある。
 上限発火が常態化しているなら、直すべきは上限値ではなく契約である。
 
-エスカレーションのモデル昇格連鎖(`haiku → sonnet → opus → Fable 裁定 → 人間`)は [DESIGN.md](DESIGN.md) を参照。
+エスカレーションのモデル昇格連鎖(`haiku → sonnet → opus → orchestrator の裁定 → 人間`)は [DESIGN.md](DESIGN.md) を参照。
 
 ## 観測性とメトリクス
 
@@ -81,7 +81,7 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 - 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
 - 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
-観点の出典は Google のコードレビュー指針と Findy Library の「What review verifies」で、両者はほぼ同じ範囲を指している。
+観点の正は [commands/loop.md](../commands/loop.md) の出荷前レビュー節である。
 
 ## issue に残す出力の原則
 

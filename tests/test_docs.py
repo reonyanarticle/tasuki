@@ -30,11 +30,40 @@ def test_no_stale_references() -> None:
 
     ROADMAP.md は E2E の発見記録として旧パス名を歴史的に言及するため除外する。
     """
+    # 撤回した拡張(調査と実験)の実体への参照が復活していないこと。
+    # ROADMAP は撤回の記録としてこれらの名前を歴史的に言及するため除外する。
+    removed = ("tasuki-spec", ".claude/loop", "profiles/experiment.yaml", "profiles/research.yaml")
     for path in MD_FILES:
         text = path.read_text()
         assert "tasuki-spec" not in text, path.name
-        if path.name != "ROADMAP.md":
-            assert ".claude/loop" not in text, path.name
+        if path.name == "ROADMAP.md":
+            continue
+        for token in removed:
+            assert token not in text, (path.name, token)
+    # plugin 側の実体も消えたままであること
+    gone_paths = (
+        "profiles/experiment.yaml",
+        "profiles/research.yaml",
+        "agents/researcher.md",
+        "packs/docs",
+    )
+    for gone in gone_paths:
+        assert not (ROOT / gone).exists(), gone
+
+
+def test_design_tree_lists_existing_profiles() -> None:
+    """DESIGN.md のディレクトリツリーが実在するプロファイルだけを挙げること。
+
+    ツリーは手書きなので、ファイルを消してもツリーだけ古い状態が残る。
+    """
+    import re as _re
+
+    body = (ROOT / "docs/DESIGN.md").read_text().split("## plugin ディレクトリ構成")[1]
+    tree = body.split("```")[1]  # 見出し直後のコードフェンス1つだけを見る
+    listed = set(_re.findall(r"([a-z]+)\.yaml", tree))
+    actual = {p.stem for p in (ROOT / "profiles").glob("*.yaml")}
+    assert listed >= actual, (listed, actual)
+    assert listed - actual <= {"providers"}, (listed, actual)
 
 
 def test_gates_catalog_has_25_perspectives() -> None:
@@ -70,6 +99,9 @@ def test_phase3_full_loop_wiring() -> None:
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
     assert "全子が統合ブランチへ取り込まれたら進む" in loop
+    # base の健全性はレイヤーの前進条件ではなく worker 起動直前の条件で見る
+    # (前進条件で書くと、次の run で §1c がグラフを組み直したときに空振りする)
+    assert "worker を起動する直前に、統合ブランチが赤で止まっていないかを確認する" in loop
     assert "統合ゲート" in loop
     assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
@@ -254,16 +286,17 @@ def test_readme_explains_gate_symbols() -> None:
     # 記号ではなく名前で説明していること(識別子は英語で別列に置く)
     r = (ROOT / "README.md").read_text()
     assert "## ゲートの一覧" in r
-    for symbol, name in (
-        ("受理ゲート", "受理"),
-        ("分割ゲート", "分割"),
-        ("着手ゲート", "着手"),
-        ("形式ゲート", "形式"),
-        ("成果ゲート", "成果"),
-        ("統合ゲート", "統合"),
+    for name, ident in (
+        ("受理ゲート", "intake"),
+        ("分割ゲート", "split"),
+        ("着手ゲート", "start"),
+        ("形式ゲート", "checks-*"),
+        ("成果ゲート", "outcome"),
+        ("統合ゲート", "integration"),
     ):
-        assert f"**{symbol}**" in r, symbol
-        assert name in r, name
+        row = next((ln for ln in r.splitlines() if f"**{name}**" in ln), None)
+        assert row, name
+        assert f"`{ident}`" in row, (name, ident)  # 識別子は英語で別列に置く
     # 説明が、記号を最初に使う「処理の流れ」より前にあること
     assert r.index("## ゲートの一覧") < r.index("## 処理の流れ")
 
@@ -328,16 +361,45 @@ def test_operations_documents_preship_review_and_output_rules() -> None:
 
 
 def test_diagrams_are_conditional_and_renderable() -> None:
-    """図は構造がある箇所にだけ置き、識別子は ASCII、代替テキストを持つこと。"""
+    """図は構造がある箇所にだけ置き、識別子は ASCII、代替テキストを持つこと。
+
+    ノード ID は行頭にだけ現れるとは限らない(`A --> B["..."]` の B のように
+    矢印やラベルの後ろにも書ける)。行頭起点で拾うと flowchart の1行目しか
+    検査されないため、行内も走査する。
+    形状の括弧を持たないノード(`A --> B` の B)も ID なので、矢印の直後の
+    トークンは括弧の有無に関わらず拾う。
+    """
     import re
 
+    # 図の指示行はノード宣言ではない(accDescr の日本語が ID と誤検出される)
+    directive = re.compile(
+        r"^\s*(accTitle|accDescr|%%|style|classDef|class\s|click|linkStyle|direction)"
+    )
+    # 行頭 / 空白 / 矢印の先 / ラベル区切り(`|`)/ 連結(`&`)の直後に来る、
+    # 形状の開き括弧(`[` `(` `{`)を伴うトークンをノード ID とみなす
+    node = re.compile(r"(?:^|[\s|&>])([^\s\[\](){}|>]+)[\[({]")
+    arrow = re.compile(r"-{2,}>|-\.-+>|={2,}>|-{3,}|~{3,}")
     for path in (ROOT / "README.md", ROOT / "docs/DESIGN.md"):
         for block in re.findall(r"```mermaid\n(.*?)```", path.read_text(), re.S):
             assert "accTitle:" in block and "accDescr:" in block, path.name
             # ノード ID に日本語を使わない(ID は ASCII、表示ラベルのみ日本語)
-            ids = re.findall(r"^\s*([^\s\[{(]+)[\[{(]", block, re.M)
-            bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
+            ids: list[str] = []
+            for raw in block.splitlines():
+                if directive.match(raw):
+                    continue
+                line = re.sub(r'"[^"]*"', '""', raw)  # 引用ラベルは除く
+                ids += node.findall(line)
+                # 矢印の直後は必ずノード。ラベル(`|...|`)を落としてから先頭語を見る
+                for seg in arrow.split(re.sub(r"\|[^|]*\|", " ", line))[1:]:
+                    head = seg.split()
+                    if head:
+                        # `:::class` と stateDiagram の遷移ラベル(`: 説明`)を落とす
+                        token = head[0].split(":")[0]
+                        ids.append(re.split(r"[\[({]", token)[0])
+            bad = [i for i in ids if i and not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
             assert not bad, (path.name, bad)
+            if block.lstrip().startswith("flowchart"):
+                assert len(set(ids)) >= 2, (path.name, "flowchart のノードを拾えていない")
 
 
 def test_common_gate_rules_are_single_source() -> None:
@@ -527,7 +589,7 @@ def test_field_review_fixes_are_designed() -> None:
     assert "既存ゲートと外部レビューツールの棚卸し" in init
     assert "判定例(fixture)の下書きを自動生成してよい" in init
     # 契約の但し書き(統制条件は要件側)
-    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+    for prof in ("profiles/tasuki.yaml",):
         assert "要件でありここに含めない" in (ROOT / prof).read_text(), prof
     # 併用の制約(状態機械が重ならないこと)
     assert "対象 issue 集合が重ならない場合に限る" in (ROOT / "docs/INTEGRATION.md").read_text()
@@ -550,7 +612,9 @@ def test_trace_review_findings_are_fixed() -> None:
     assert "着手も回収もしない" in loop  # 人間の手動 assign との判別
     assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
     assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
-    assert "解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR" in loop  # 取り込み後の赤
+    # 取り込み後の赤は、専用経路ではなく追い子(実在の子 issue)として通す
+    assert "定点1と同じ扱いで、止めて人間に渡す" in loop
+    assert "**ループは自分で直さず、止めて人間に渡す。**" in loop
     worker = (ROOT / "agents/worker.md").read_text()
     assert "--base <統合ブランチ>" in worker
     assert "統合ブランチとは限らない" in worker  # worktree base の明示
@@ -584,7 +648,7 @@ def test_preship_review_runs_in_subagents() -> None:
         assert mode in loop, mode
     import yaml
 
-    for prof in ("profiles/development.yaml", "profiles/experiment.yaml"):
+    for prof in ("profiles/tasuki.yaml",):
         c = yaml.safe_load((ROOT / prof).read_text())
         assert c["preship_review"]["mode"] == "scaled", prof
         assert c["preship_review"]["fanout_threshold_lines"] > 0, prof
@@ -592,8 +656,14 @@ def test_preship_review_runs_in_subagents() -> None:
 
 def test_worker_reports_used_skills_and_subagents() -> None:
     """レポートに参照 skill と委譲 subagent の欄があること(成果の前提を辿れるようにする)。"""
+    import yaml
+
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
+        "report_required_fields"
+    ]
+    assert "参照した skill と委譲した subagent" in fields  # 欄の正は契約
     report_skill = (ROOT / "skills/loop-report/SKILL.md").read_text()
-    assert "参照した skill と委譲した subagent" in report_skill
+    assert "成果の前提を辿る欄がある契約では" in report_skill  # skill は欄名を写さず条件で書く
     worker = (ROOT / "agents/worker.md").read_text()
     assert "参照した skill と委譲した subagent の欄を必ず埋める" in worker
 
@@ -676,14 +746,33 @@ def test_security_reflects_implemented_hardening() -> None:
 
 
 def test_contracts_sample_matches_profiles() -> None:
-    """CONTRACTS.md の契約サンプルが実プロファイルの判定シグナルからずれないこと。
+    """CONTRACTS.md の契約サンプルが実プロファイルからずれないこと。
 
-    サンプルは正典を名乗るため、profiles/ の変更(承認サイズ、但し書き)を写し損ねると
-    導入先が古いスキーマを正として上書きしてしまう。
+    正は profiles/tasuki.yaml であり CONTRACTS のコードブロックは写しである。
+    文字列の抜き取りだけでは欄名の1文字違いを見逃す(実際、レポートの欄名が
+    「要件 ID ⇔結果の対応表」のまま残り、門前払いの完全一致に落ちる形になっていた)。
+    構造を読んで突き合わせる。
     """
-    sample = (ROOT / "docs/CONTRACTS.md").read_text()
-    assert "完了の定義が1回のレビューで判断できる範囲を超えている" in sample
-    assert "要件でありここに含めない" in sample
+    import yaml
+
+    sample_text = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "**正は [profiles/tasuki.yaml](../profiles/tasuki.yaml) であり" in sample_text
+    block = sample_text.split("## プロファイル YAML")[1].split("```yaml")[1].split("```")[0]
+    sample = yaml.safe_load(block)
+    real = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
+
+    assert sample["templates"] == real["templates"], "必須欄がずれている"
+    assert sample["enabled_gates"] == real["enabled_gates"]
+    assert sample["split_criteria"] == real["split_criteria"]
+    assert [g["id"] for g in sample["gates"]] == [g["id"] for g in real["gates"]]
+    for key in ("model", "kind", "phase", "escalate_to", "preflight", "provider"):
+        assert [g.get(key) for g in sample["gates"]] == [g.get(key) for g in real["gates"]], key
+    assert [p["name"] for p in sample["phases"]] == [p["name"] for p in real["phases"]]
+    for s_phase, r_phase in zip(sample["phases"], real["phases"], strict=True):
+        assert s_phase.get("receives") == r_phase.get("receives"), s_phase["name"]
+    # テンプレート仕様の表も、契約の実欄名で書くこと(門前払いは完全一致で数える)
+    for field in real["templates"]["report_required_fields"]:
+        assert field in sample_text, field
 
 
 def test_loop_init_ships_via_bootstrap_pr() -> None:
@@ -707,7 +796,6 @@ def test_code_review_round2_fixes() -> None:
     for grant in ("Bash(ps:*)", "Bash(tail:*)"):
         assert grant in loop.split("---")[1], grant  # 長時間ジョブの生存確認に必要
     assert "head ブランチが `loop/parent-` で始まる" in loop  # 親 PR の判定基準
-    assert "このキーが無い旧契約では `mode: scaled`" in loop  # preship_review のフォールバック
     assert "Bash(gh --version)" in (ROOT / "commands/loop-init.md").read_text().split("---")[1]
     draft = (ROOT / "commands/draft.md").read_text()
     assert "Bash(git fetch:*)" in draft.split("---")[1]
@@ -753,12 +841,11 @@ def test_parent_pr_is_designed_for_approval() -> None:
     """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
     import yaml
 
-    for name in ("development", "experiment"):
-        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
-            "parent_pr_required_fields"
-        ]
-        for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
-            assert f in fields, (name, f)
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
+        "parent_pr_required_fields"
+    ]
+    for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
+        assert f in fields, f
     loop = (ROOT / "commands/loop.md").read_text()
     # 裁量の決定を実装方針から親 PR へ集約する規則
     assert "承認してほしい判断" in loop
@@ -805,7 +892,7 @@ def test_toc_adaptation_is_reflected() -> None:
 def test_loop_report_skill_pulls_fields_from_contract() -> None:
     """レポート skill が欄名を契約から引くこと(プロファイル固有の欄を skill に写さない)。
 
-    3つ目のプロファイルを試作したとき、skill に development の欄が literal に
+    3つ目のプロファイルを試作したとき、skill に契約の欄名が literal に
     書かれていたため「読み替え節」を足す羽目になった(その成果物には受け入れ条件も
     テストも無く、共通の必須構成に忠実な報告は成果ゲートの門前払いを必ず落ちた)。
     欄の正を契約に一本化し、skill には共通規則だけを残す。
@@ -844,7 +931,7 @@ def test_providers_definition_has_a_home_in_the_target_repo() -> None:
 def test_gate_review_skill_judges_only_by_contract() -> None:
     """判定側の skill が契約だけを物差しにすること(存在しない欄で差し戻さない)。
 
-    かつては development の欄名を具体列挙し、別プロファイル用の読み替え節で打ち消していた。
+    かつては契約の欄名を具体列挙し、別プロファイル用の読み替え節で打ち消していた。
     具体列挙が原則に勝つ構造を廃し、分割基準と欄の意味を契約から引く。
     """
     sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
@@ -854,15 +941,148 @@ def test_gate_review_skill_judges_only_by_contract() -> None:
     assert "プロファイルでの読み替え" not in sk  # 読み替え節を復活させない
 
 
-def test_new_governance_file_has_migration_path() -> None:
-    """後から必須にしたファイルは、持たない既存導入先での扱いを定めること。
+def test_section_references_carry_names() -> None:
+    """手順書内部の節参照(§)に節名を併記すること(ドキュメント規約)。
 
-    `.tasuki/providers.yaml` はこの版で新設した。持たないリポジトリで
-    checks-local が止まると、既存の導入先が黙って動かなくなる。
+    番号だけの参照は、読み手が該当節を探すまで意味が取れない。
+    規約は .claude/rules/docs.md にあり、書かれているだけでは守られないためここで固定する。
+    """
+    pattern = re.compile(r"§[0-9]+(?:\.[0-9]+)?(?:[a-z](?:-[0-9])?)?")
+    offenders = []
+    for path in sorted((ROOT / "commands").glob("*.md")):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if line.startswith("#") or "§番号" in line:  # 見出しと規約文そのものは除く
+                continue
+            for m in pattern.finditer(line):
+                if not line[m.end() :].startswith("("):
+                    offenders.append(f"{path.name}:{lineno}: {m.group()}")
+    assert not offenders, offenders
+
+
+def test_scan_artifacts_are_ignored() -> None:
+    """セキュリティスキャンの作業ディレクトリが誤ってコミットされないこと。
+
+    撤回前の全文書の写しを含むため、追跡すると検索が二重ヒットし、
+    古い記述が生き返ったように見える。
+    """
+    ignored = (ROOT / ".gitignore").read_text()
+    assert "CLAUDE-SECURITY-*/" in ignored
+
+
+_PLUGIN_PATH = re.compile(r"(docs|profiles|packs|commands|agents|skills)/[A-Za-z]")
+
+
+def test_distributed_files_have_no_unresolvable_references() -> None:
+    """導入先へコピーされるファイルが、plugin 内のパスを参照しないこと。
+
+    profiles/*.yaml は .tasuki/profile.yaml へ、packs/*/providers.yaml は
+    .tasuki/providers.yaml へ丸ごとコピーされる。導入先に docs/ も profiles/ も
+    存在しないため、そこへの参照は読み手が辿れない
+    (agents / skills / commands に対する同種の検査は別テストが持つ)。
+    """
+    offenders = []
+    targets = [
+        *sorted((ROOT / "profiles").glob("*.yaml")),
+        *sorted((ROOT / "packs").rglob("providers.yaml")),
+        *sorted((ROOT / "packs").rglob("normalizers/*.py")),  # これも .tasuki/ へコピーされる
+    ]
+    assert targets, "配布対象のファイルが見つからない"
+    for path in targets:
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(_PLUGIN_PATH, line):
+                offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()[:60]}")
+    assert not offenders, offenders
+
+
+def test_final_trace_audit_findings_are_fixed() -> None:
+    """最終状態の手順トレース監査の所見が反映されていること。
+
+    いずれも新規セッションが文字どおり歩くと詰まる箇所である。
     """
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "`.tasuki/providers.yaml` が無い導入先" in loop
-    assert "停止はしない" in loop
+    # ブートストラップ PR 未マージのとき、作業ツリーを見て通過させない
+    assert "作業ツリーを見てはならない" in loop
+    # mechanical でも command を持たない provider はローカル実行しない
+    assert "その provider が `command` を持つもの" in loop
+    # 予算欄の読み取りは門前払いの有無に依らず走らせる(有効上限の出どころ)
+    assert "予算欄の読み取りは、上の空チェックを行うかどうかに関わらず必ず行う" in loop
+    # 門前払いの差し戻しも verdict 同型(再入の基準時刻と委譲の入力になる)
+    assert "`tasuki:gate-review` skill の verdict スキーマで残す" in loop
+    # 人間起票の親に replan が付いた場合の代替入力
+    assert "現在の子 issue 群の本文一覧を旧分割案の代わりに渡す" in loop
+    init = (ROOT / "commands/loop-init.md").read_text()
+    # plugin 側のファイルは plugin ルートからの絶対パスで読む(カレントは導入先)
+    assert "${CLAUDE_PLUGIN_ROOT}/profiles/tasuki.yaml" in init
+    assert "カレントは導入先リポジトリであり" in init
+    # 契約ファイルのコメントは導入先へコピーされるため、plugin の docs パスを指さない
+    contract = (ROOT / "profiles/tasuki.yaml").read_text()
+    assert "docs/CONTRACTS.md" not in contract
+
+
+def test_gate_inputs_and_label_cleanup_are_complete() -> None:
+    """委譲の渡し物とラベルの後始末に穴が無いこと。
+
+    受け手が使うと宣言しているものを渡し手が渡していない、付けたラベルを外す手順が
+    ゲート無効時に走らない、といった穴は run を止めるか triage を汚す。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 統合ゲートにも契約を渡す(gate-reviewer は契約ファイルを自力で読めない)
+    assert "契約の `gates.integration.phase` が指すフェーズの `receives` 定義" in loop
+    # 出荷前レビューは AC / SC を照合するので子 issue の欄が要る
+    assert "各子 issue の受け入れ条件と成功基準の欄" in loop
+    # 回収モードの worker に PID とログパスを渡す
+    assert "worker が報告した PID とログパスと完了の判定条件" in loop
+    # decomposer への差し戻しでも契約の抜粋を渡す
+    assert "verdict + §1a(分割の入手)と同じ契約の抜粋" in loop  # §1b 固有(§1d にも同名の句がある)
+    # ゲートを無効にした契約でもラベルを外す
+    assert "`intake` の有効無効に関わらず" in loop
+    assert "`start` の有効無効に関わらず" in loop
+    # 成果ゲートの門前払いは outcome 無効でも通る経路を持つ
+    assert "含まれない場合も **2f の門前払い(機械チェック)だけを行ってから**" in loop
+    # 再判定のガード(同じ状態で opus を呼び直さない)
+    assert "`gate:split-returned` が付いている場合は" in loop
+    assert "`gate:integration-passed` が無ければ" in loop
+    # run を壊した種類の修正(実走で詰まった経路)
+    default_branch = "default branch 名は `gh repo view --json defaultBranchRef` で解決する。"
+    assert default_branch + "main を仮定しない" in loop
+    # 契約を run 中に再読み出ししない
+    assert "§0.1(契約と providers の読み出し)で default branch から読んだものを使う" in loop
+    assert "ブートストラップ PR が未マージである" in loop  # loop-init の再実行を案内しない
+    # ゲートを無効にした契約でも門前払いのラベルは片付く
+    assert "`outcome` の有効無効に関わらず" in loop
+    # 無効にしたゲートの LLM 判定は走らせない(2b と対称)
+    assert "`outcome` が無ければ、ここから先の LLM 判定は行わない" in loop
+    # replan は統合ゲートの通過も解除する
+    assert "`gate:integration-passed` を外し" in loop
+    # 漂流で戻すときは着手ゲートの通過を解除する
+    assert "**`gate:start-passed` を外してから**着手ゲート相当の再照合" in loop
+
+
+def test_subagent_nesting_claims_match_current_spec() -> None:
+    """subagent のネストについて、現行仕様と逆の記述を持たないこと。
+
+    「subagent は別の subagent を起動できない」を前提に orchestrator の置き場所を
+    説明していたが、現行仕様では既定でメインセッションの3階層下まで起動でき、
+    CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH は上限を下げる設定である
+    (https://code.claude.com/docs/en/sub-agents)。
+    Claude Code の仕様に依存する記述は、こう固定しないと古いまま生き残る。
+    """
+    wrong = (
+        "subagent は別の subagent を起動できない",
+        "subagent は子 subagent を起動できない",
+        "SPAWN_DEPTH` の設定が必要",  # 設定しないとネストできない、という趣旨の別表現
+        "SPAWN_DEPTH=2` を設定すると",
+    )
+    for base in ("docs", "commands", "agents", "skills"):
+        for path in sorted((ROOT / base).rglob("*.md")):
+            text = path.read_text()
+            for phrase in wrong:
+                # ROADMAP は訂正の記録としてこの語を引用するため、訂正の文脈だけ許す
+                if phrase in text and "**訂正**" not in text:
+                    raise AssertionError(f"{path.relative_to(ROOT)}: 現行仕様と逆の記述: {phrase}")
+    design = (ROOT / "docs/DESIGN.md").read_text()
+    assert "3階層下まで" in design
+    assert "上限を下げる設定" in design
 
 
 def test_contract_consolidation_review_fixes() -> None:
@@ -881,12 +1101,9 @@ def test_contract_consolidation_review_fixes() -> None:
     assert "verdict より新しい編集" in loop
     # 門前払いは完全一致で、フェンス内の見出しを数えない
     assert "コードブロック(フェンス)内の見出しは数えない" in loop
-    # 旧契約への後方互換と、契約×plugin の版ずれ検出
-    assert "旧い契約への後方互換" in loop
-    assert "契約と plugin の版ずれ" in loop
-    # loop-init の再実行(移行)手順
+    # 初期化コマンドは既存の調整を黙って捨てない
     init = (ROOT / "commands/loop-init.md").read_text()
-    assert "既存の `.tasuki/` がある(再実行=移行の)場合" in init
+    assert "上書きの前に次の4つを行う" in init
 
 
 def test_report_fields_carry_meaning_comments() -> None:
@@ -897,17 +1114,337 @@ def test_report_fields_carry_meaning_comments() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
-        text = (ROOT / f"profiles/{name}.yaml").read_text()
-        fields = yaml.safe_load(text)["templates"]["report_required_fields"]
-        for field in fields:
-            lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
-            assert lines, (name, field)
-            assert any("#" in ln for ln in lines), (name, field, "欄コメントが無い")
+    text = (ROOT / "profiles/tasuki.yaml").read_text()
+    fields = yaml.safe_load(text)["templates"]["report_required_fields"]
+    for field in fields:
+        lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
+        assert lines, field
+        assert any("#" in ln for ln in lines), (field, "欄コメントが無い")
 
 
 def test_mechanical_preflight_survives_gate_removal() -> None:
     """LLM 判定を外した契約でも、必須欄の空チェックは走ること。"""
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "`enabled_gates` に `start` が無くても常に走る" in loop
+    assert "`enabled_gates` に `start` が無くても走らせる" in loop
+    assert "`preflight: template-fields` を持つ契約で走る" in loop  # 有無は契約から引く
     assert "人間が起票した子" in loop  # 分割ゲートを通っていない子は LLM 判定へ
+
+
+def test_name_resolution_order_agrees_across_documents() -> None:
+    """名前解決の順序を書く2箇所(skill と INTEGRATION)が一致すること。
+
+    skill は agent が実行時に読み、INTEGRATION は設計の正である。
+    導入先から docs/ を辿れないため skill 側に写しを置いているので、
+    ズレないことを機械で固定する(規約「同じ事実を2つの文書に書かない」の例外扱い)。
+    """
+    order = "project"
+    for path, text in (
+        ("skills/baton-contract/SKILL.md", (ROOT / "skills/baton-contract/SKILL.md").read_text()),
+        ("docs/INTEGRATION.md", (ROOT / "docs/INTEGRATION.md").read_text()),
+    ):
+        line = next(ln for ln in text.splitlines() if ln.startswith("名前解決は"))
+        assert order in line, path
+        assert (
+            line.index(order)
+            < line.index("repo override")
+            < line.index("language pack")
+            < line.index("plugin デフォルト")
+        ), path
+    # project 層の実体が INTEGRATION に定義されていること(「project とは何か」が読める)
+    integration = (ROOT / "docs/INTEGRATION.md").read_text()
+    assert "ここでの project は導入先リポジトリ自身の Claude Code 定義" in integration
+
+
+def test_gh_version_thresholds_are_single_and_correct() -> None:
+    """gh の必要バージョンを 2.94.0 に統一すること(2.95.0 は誤りだった)。
+
+    sub-issues の作成も `--json subIssues` での読み取りも cli/cli v2.94.0 で入っている。
+    2.95.0 と書いていた間、gh 2.94.x の利用者は不要な GraphQL フォールバックへ分岐し、
+    /tasuki:loop-status はフォールバックが無いため進行状況の節ごと落ちていた。
+    """
+    targets = [
+        ROOT / "README.md",
+        ROOT / "docs/OPERATIONS.md",
+        ROOT / "commands/loop.md",
+        ROOT / "commands/loop-init.md",
+        ROOT / "commands/loop-status.md",
+    ]
+    for path in targets:
+        assert "2.95.0" not in path.read_text(), path.name
+    # 訂正の経緯と出典が ROADMAP に残っていること(仕様断定の登録規則)
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text()
+    assert "https://github.com/cli/cli/releases/tag/v2.94.0" in roadmap
+
+
+def test_checks_gates_have_no_labels() -> None:
+    """形式ゲートはラベルを持たないこと(合否は CI の check-run が正)。
+
+    README が識別子 `checks` を載せ「ラベルは識別子から作られる」と書いていたため、
+    存在しない `gate:checks-passed` を読者が探すことになっていた。
+    """
+    readme = (ROOT / "README.md").read_text()
+    assert "| `checks-*` |" in readme
+    assert "形式ゲート(`checks-*`)はラベルを持たない" in readme
+    # 実際にどこにも gate:checks* を作らない / 使わないこと
+    for base in ("commands", "agents", "skills", "docs", "profiles"):
+        for path in (ROOT / base).rglob("*"):
+            if path.is_file() and path.suffix in (".md", ".yaml"):
+                assert "gate:checks" not in path.read_text(), path.name
+
+
+def test_marketplace_manifest_ships_with_the_repo() -> None:
+    """常用導入の手順が、読者に自作を求めないこと。
+
+    README が `.claude-plugin/marketplace.json` を「用意する」と書いていたが
+    リポジトリに無く、クローンした読者は marketplace 登録に進めなかった。
+    """
+    import json
+
+    manifest = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+    assert manifest["name"] == "tasuki"
+    assert manifest["description"]
+    assert [p["name"] for p in manifest["plugins"]] == ["tasuki"]
+    readme = (ROOT / "README.md").read_text()
+    assert "claude plugin marketplace add" in readme
+
+
+def test_ci_validates_both_manifests_strictly() -> None:
+    """自分の CI が、生成物に課しているのと同じ規律を自分にも課すこと。
+
+    警告を素通りさせない(--strict)、供給網を固定する(バージョン固定)、
+    走行時間と重複実行を縛る(timeout / concurrency)。
+    """
+    wf = (ROOT / ".github/workflows/validate.yml").read_text()
+    assert 'claude plugin validate "$manifest" --strict' in wf, "実行行に --strict が無い"
+    assert ".claude-plugin/plugin.json" in wf and ".claude-plugin/marketplace.json" in wf
+    assert re.search(r"@anthropic-ai/claude-code@\d+\.\d+\.\d+", wf), "バージョン未固定"
+    assert "timeout-minutes:" in wf
+    assert "cancel-in-progress: true" in wf
+
+
+def test_external_issue_opt_in_is_described_consistently() -> None:
+    """外部起票の扱いを「使わない」で終わらせず、opt-in の実装と一致させること。
+
+    data-boundary skill と loop.md 冒頭が「外部 issue を受け付ける repo では使わない」と
+    断じる一方、loop.md の起票者チェックは `tasuki:accepted` の opt-in を実装していた。
+    共通規範が最も強い禁止を述べると、読み手は実装済みの経路を禁止機能と解する。
+    """
+    boundary = (ROOT / "skills/data-boundary/SKILL.md").read_text()
+    loop = (ROOT / "commands/loop.md").read_text()
+    init = (ROOT / "commands/loop-init.md").read_text()
+    for text, name in ((boundary, "data-boundary"), (loop, "loop.md"), (init, "loop-init.md")):
+        assert "tasuki:accepted" in text, name
+        assert "外部からの issue を受け付けるリポジトリでは tasuki を使わない" not in text, name
+    # 境界の残る範囲(コメントは opt-in で守れない)を明示していること
+    assert "コメントまで信頼できないリポジトリでは tasuki を使わない" in boundary
+    # 導入時の警告も「導入するな」ではなく opt-in の範囲を伝えること
+    assert "導入しないよう警告し" not in init
+    assert "コメントまで信頼できないリポジトリでは使わないよう警告し" in init
+    assert "コメントまで信頼できないリポジトリでは使わない" in loop
+
+
+def test_verifier_declares_every_input_its_steps_need() -> None:
+    """verifier の入力宣言が、自分の手順が要求する入力を漏らさないこと。
+
+    「入力は実行結果と成功基準・打ち切り条件のみ」と宣言しながら、手順1は PR の
+    ブランチ名を、手順3は子 issue 要件を、統合の子では親 issue 本文を要求していた。
+    宣言だけを読んで動く新規セッションは手順を実行できない。
+    """
+    verifier = (ROOT / "agents/verifier.md").read_text()
+    for token in ("対象 PR のブランチ名", "受け入れ条件", "親 issue 本文"):
+        assert token in verifier, token
+    # 判定基準の版を固定する(worker のブランチ側の写しを読まない)
+    assert "default branch の版を読む" in verifier
+    # 呼び出し側(loop.md)が同じものを渡すこと
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "子 issue の要件(目的、受け入れ条件、成功基準、打ち切り条件)" in loop
+
+
+def test_low_confidence_escalation_matches_the_gate_models() -> None:
+    """low の行き先を「上位モデルで再判定」だけにしないこと。
+
+    受理 / 分割 / 統合は標準が opus であり昇格先が無い。手順書は orchestrator が
+    裁定すると定めているのに、判定者本人が読む定義は再判定だけを書いていた。
+    """
+    for path in ("skills/baton-contract/SKILL.md", "agents/gate-reviewer.md"):
+        text = (ROOT / path).read_text()
+        assert "orchestrator" in text, path
+        assert "最上位" in text, path
+
+
+def test_perspective_references_resolve_to_catalog_names() -> None:
+    """本文が 観点「X」 で引く名前が、GATES.md のカタログに実在すること。
+
+    規約は「観点は名前で参照する(番号では書かない)」だが、参照側が
+    「冪等性と再開可能性」、カタログ側が「冪等性、再開可能性」のように
+    食い違うと、名前で引いてもカタログに当たらない。件数だけを数える
+    テストではこのズレを検出できない。
+    """
+    gates = (ROOT / "docs/GATES.md").read_text()
+    section = gates.split("## レビュー観点カタログ")[1].split("\n## ")[0]
+    names = {
+        line.split("|")[1].strip()
+        for line in section.splitlines()
+        if line.startswith("| ") and "---" not in line and not line.startswith("| 観点 |")
+    }
+    assert len(names) == 25, sorted(names)
+    # 出荷前レビューの観点は別の語彙(正は loop.md の 3c 表)。こちらも名前で引ける
+    loop = (ROOT / "commands/loop.md").read_text()
+    preship = loop.split("| # | 観点 | 見るもの |")[1].split("\n\n")[0]
+    names |= {
+        line.split("|")[2].strip() for line in preship.splitlines() if line.count("|") >= 3
+    } - {"観点", ""}
+    names.add("手順のトレース")  # 手順文書に対する第6観点(CLAUDE.md の関門が定義する)
+    unknown: list[str] = []
+    for path in _WRITING_TARGETS:
+        for lineno, line in _prose_lines(path):
+            for used in re.findall(r"観点「([^」]+)」", line):
+                if used not in names:
+                    unknown.append(f"{path.name}:{lineno}: {used}")
+    assert not unknown, unknown
+
+
+def test_no_unimplemented_actor_in_docs() -> None:
+    """実体の無い主体を停止装置として書かないこと。
+
+    watchdog は docs 4箇所と skill 1箇所に「第二の停止装置」として書かれていたが、
+    commands/ にも agents/ にも実行主体が無かった。実在するのは orchestrator の
+    停滞検知、子 issue の打ち切り条件、stale assignee の回収の3つである。
+    """
+    for path in _WRITING_TARGETS:
+        assert "watchdog" not in path.read_text(), path.name
+    ops = (ROOT / "docs/OPERATIONS.md").read_text()
+    assert "停止した実行の回収" in ops
+    assert "wall-clock の上限は子 issue の打ち切り条件が持ち" in ops
+
+
+def test_procedure_can_actually_be_walked() -> None:
+    """手順のトレース(第6観点)で詰まった操作が、実行できる形で書かれていること。
+
+    シナリオ試走で見つかった「機械的に詰まる」箇所を固定する。
+    git の制約(二重 checkout の拒否、生成物がある worktree の削除拒否)と、
+    gh が返さない欄(author_association)は実測で確かめたものである。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    verifier = (ROOT / "agents/verifier.md").read_text()
+    worker = (ROOT / "agents/worker.md").read_text()
+    init = (ROOT / "commands/loop-init.md").read_text()
+
+    # 二重 checkout を避ける(worker の worktree は変更があるため残っている)
+    checks_local = loop.split("### 2d.")[1].split("### 2e.")[0]
+    for text, name in ((checks_local, "loop.md の 2d"), (verifier, "verifier.md")):
+        assert "--detach" in text, name
+        assert "git worktree remove --force" in text, name
+    # 子ブランチ名の規約(orchestrator が対象を一意に決められる)
+    assert "loop/child-<担当する子 issue 番号>" in worker
+    assert "loop/child-<子 issue 番号>" in loop
+    # gh issue view --json は author_association を返さない
+    assert "--jq .author_association" in loop
+    # 経過時間の判定に使う時刻の出どころ
+    assert "Bash(date:*)" in loop.split("---")[1]
+    assert "開始コメントは、投稿してから自分自身の `createdAt`" in loop
+    assert "冪等の判定は本文の一致ではなく**この識別子の有無と値**で行う" in loop
+    # 統合ブランチの操作場所と後始末
+    assert (
+        "統合ブランチへの git 操作(作成、merge、push)は、すべて専用の一時 worktree の中で行う"
+        in loop
+    )
+    assert "git merge --abort" in loop
+    # 再入点が一意に決まる(2c〜2f はラベルを付けないため)
+    # 再入表は 2d(改変検知)と 2e(verifier)を飛ばさない順序であること
+    reentry = loop.split("#### 再入点の決定(差し戻し中でない子)")[1].split("差し戻し中の子 issue")[
+        0
+    ]
+    assert (
+        "`gate:start-passed` が付いていて、かつ `gate:outcome-passed` が付いていない子だけである"
+        in reentry
+    )
+    assert "2a の予算欄の読み取りだけは必ず行う" in reentry
+    assert "その head コミットに対する" in reentry
+    assert "判定は上から順に行い、最初に当たったものを採る" in reentry
+    assert (
+        reentry.index("2c(実装)")
+        < reentry.index("2d(checks-local)")
+        < reentry.index("2e(内側ループの出口)")
+    )
+    assert "レポートの有無は再入点を決めない" in reentry
+    assert "checks-local 通過は、**判定したコミットの SHA を載せた1行の冪等コメント**" in loop
+    # 再判定ガードは3つの abstraction ゲートすべてにある
+    for label in ("gate:intake-returned", "gate:split-returned", "gate:integration-returned"):
+        assert f"`{label}` が付いている場合" in loop, label
+    assert "`gate:start-passed` が付いていれば判定しない" in loop
+    # 統合ゲート差し戻しからの復帰シグナル
+    assert "承認のシグナルは `loop:replan` の付与と定める" in loop
+    # loop-init が実行できない操作を要求していないこと
+    assert "Bash(gh issue list:*)" in init
+    # 削除の権限はパス前置きまで絞る(SECURITY.md がツール全体の前承認を禁じている)
+    init_tools = init.split("---")[1]  # frontmatter の allowed-tools だけを見る
+    assert "Bash(git rm:*)" in init_tools
+    assert not re.search(
+        r"Bash\(rm[ :)]", init_tools
+    ), "rm はサブコマンド単位に絞れないので許可しない"
+    assert "`tasuki/init` が既に存在する場合は新規作成せず" in init
+    assert "`git add -A` は使わない" in init
+
+
+def test_model_tables_match_the_contract() -> None:
+    """README と DESIGN のモデル配分表が、契約の gates[].model と一致すること。
+
+    手順書からモデル表を剥がしたのと同じ理由(導入先が値を変えると即座に嘘になる)が
+    この2つの写しにも当てはまる。文字列の存在だけを見ると literal のまま緑で残る。
+    """
+    import yaml
+
+    contract = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
+    models = {g["id"]: g["model"] for g in contract["gates"] if g["kind"] == "abstraction"}
+    assert models["intake"] == models["split"] == models["integration"], models
+    expected = {
+        "受理 / 分割 / 統合ゲート": models["intake"],
+        "成果ゲート": models["outcome"],
+        "着手ゲート": models["start"],
+    }
+    tables = {
+        ROOT / "README.md": "| 役割 | 何をするか | モデル |",
+        ROOT / "docs/DESIGN.md": "| 層 | ロール | モデル | 根拠 |",
+    }
+    for path, header in tables.items():
+        text = path.read_text()
+        assert header in text, path.name
+        table = text.split(header)[1].split("\n\n")[0]
+        for label, model in expected.items():
+            line = next((ln for ln in table.splitlines() if label in ln), None)
+            assert line, (path.name, label)
+            # 行全体ではなくモデル欄だけを見る(昇格先が同じ行に載るため)
+            cell = line.split("|")[3].strip()
+            assert cell.lower().startswith(model), (path.name, label, cell)
+
+
+def test_integration_branch_repair_is_not_a_mechanism() -> None:
+    """統合ブランチの自己修復をループに持たせないこと。
+
+    補修を子 issue の器に入れると、着手ゲート、分割ゲートの再判定、再計画の
+    差分分割、差し戻し先の読み替えに読み替え節が要り、読み替え節1つが抽象の
+    漏れ1つになった(実際、粒度の不一致は着手ゲートが必ず差し戻す欠陥として
+    現れた)。実走の例が0件のまま器を固定しない、という判断を守る。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "統合ブランチが直せない状態になったとき(conflict、または checks-local が赤)" in loop
+    assert "**ループは自分で直さず、止めて人間に渡す。**" in loop
+    assert "**自己修復の機構をループに持たせない。**" in loop
+    # 出荷前レビューの所見も同じ扱い(close 済みの子へ差し戻さない)
+    review = loop.split("### 3c-1.")[1].split("### 3c-2.")[0]
+    assert "止めて人間に渡す" in review
+    assert "close 済みの子へ差し戻さない" in review
+    assert "所見をループが自分で直す経路は v1 では持たない" in review
+    # 器の痕跡(読み替えの印と旧名称)がどこにも残っていないこと
+    for path in _WRITING_TARGETS:
+        text = path.read_text()
+        for token in ("via tasuki-loop", "補修の子", "解消の追い子", "解消専用"):
+            assert token not in text, (path.name, token)
+    # worker は merged な PR の上で継続しない(所見の修正が入らない事故の元)
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "merged / closed な PR の上では継続しない" in worker
+    # 判断の経緯が ROADMAP に残っていること
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text()
+    assert "### 統合ブランチの自己修復を持たない理由(v1 の判断)" in roadmap
+    assert "実例が出るまで設計しない" in roadmap

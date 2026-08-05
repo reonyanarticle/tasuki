@@ -9,12 +9,12 @@ plugin の成立条件は、外部の subagent、skill、検査ツールを接�
 | 接続点 | インターフェース | 例 |
 |---|---|---|
 | gate reviewer 差し替え | 契約 YAML の `reviewer:` に subagent 名を指定。入力は前工程出力+契約、出力は verdict JSON([GATES.md](GATES.md)) | 外部コレクションのレビュアー系 agent を着手ゲートに割り当て |
-| worker 差し替え | 契約 YAML の `worker_agent:` に subagent 名を指定(既定 tasuki-worker)。入力は子 issue 本文と統合ブランチ名。義務は実装方針コメント→統合ブランチ base の実装→ self-verify →統合ブランチ向け draft PR(loop:pr)→レポート(参照した skill と委譲した subagent の欄を含む)→掃除。長時間ジョブは PID とログを報告して終了する。出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
+| worker 差し替え | 契約 YAML の `worker_agent:` に subagent 名を指定(既定 tasuki-worker)。入力は子 issue 本文と issue 番号、統合ブランチ名(番号が無いと方針コメントとレポートの投稿先が決まらない)。義務は実装方針コメント→統合ブランチ base の実装→ self-verify →統合ブランチ向け draft PR(loop:pr)→レポート(参照した skill と委譲した subagent の欄を含む)→掃除。長時間ジョブは PID とログを報告して終了する。出力は PR URL +レポート | 特化 worker(データ処理専用等)への置換 |
 | mechanical provider 追加 | コマンド+ SARIF または JUnit XML 出力(非対応ツールは pack の normalizer を挟む) | 任意の linter やスキャナ |
 | skill 参照 | ゲート判定基準は skill として外出し可能。worker は対象リポジトリの skill / CLAUDE.md を通常通り参照 | プロジェクト固有規約の注入 |
 
 接続の実行主体は orchestrator(メインセッション)である。
-worker からプロジェクト subagent へ直接委譲する場合は、導入先で `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` の設定が必要になる([DESIGN.md](DESIGN.md))。
+worker からプロジェクト subagent への直接委譲は、既定のネスト上限の範囲でそのまま行える([DESIGN.md](DESIGN.md))。
 
 ## プロジェクト直下アセットとの統合
 
@@ -29,6 +29,7 @@ worker からプロジェクト subagent へ直接委譲する場合は、導入
 ### 2. 優先順位
 
 名前解決は project > repo override(`.tasuki/`)> language pack > plugin デフォルトの順とする。
+ここでの project は導入先リポジトリ自身の Claude Code 定義(`.claude/agents/`、`.claude/skills/`、`CLAUDE.md`)を指し、repo override は tasuki の契約と providers の上書き(`.tasuki/`)を指す。
 Claude Code のネイティブな衝突解決(プロジェクト定義がグローバルを上書き)に揃える。
 plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切り(ファイル名ではなく `name:` が衝突判定の対象)、プロジェクトの既存 agent と衝突させない。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。

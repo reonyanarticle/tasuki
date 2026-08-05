@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from conftest import ROOT
+from test_docs import _WRITING_TARGETS  # pyright: ignore[reportPrivateUsage]
 
 
 def test_plugin_manifest() -> None:
@@ -14,94 +14,91 @@ def test_plugin_manifest() -> None:
     assert manifest["description"]
 
 
-@pytest.mark.parametrize("profile_name", ["dev_profile", "exp_profile"])
 class TestProfiles:
-    def test_mechanical_providers_exist(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    """唯一の契約(profiles/tasuki.yaml)の整合性。
+
+    かつては複数プロファイルを parametrize で回していたが、器を1つに戻したので
+    fixture を直接引く(プロファイルが再び増えたら parametrize を戻す)。
+    """
+
+    def test_mechanical_providers_exist(self, dev_profile: dict, providers: dict) -> None:
         """mechanical ゲートの provider は、そのプロファイルが使う pack に定義されていること。"""
-        profile = request.getfixturevalue(profile_name)
-        pack_providers = request.getfixturevalue("providers")["providers"]
-        for gate in profile["gates"]:
+        pack_providers = providers["providers"]
+        for gate in dev_profile["gates"]:
             if gate["kind"] == "mechanical":
                 assert gate["provider"] in pack_providers, gate["id"]
 
-    def test_enabled_gates_subset(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_enabled_gates_subset(self, dev_profile: dict) -> None:
         """enabled_gates は定義済みゲート ID の部分集合であること。"""
-        profile = request.getfixturevalue(profile_name)
-        gate_ids = {gate["id"] for gate in profile["gates"]}
-        assert set(profile["enabled_gates"]) <= gate_ids
+        gate_ids = {gate["id"] for gate in dev_profile["gates"]}
+        assert set(dev_profile["enabled_gates"]) <= gate_ids
 
-    def test_phase3_review_fixes(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_phase3_review_fixes(self, dev_profile: dict) -> None:
         """フェーズ3レビュー修正: integration フェーズ、g1 set_signals、分割・前提シグナル。"""
-        profile = request.getfixturevalue(profile_name)
-        names = [ph["name"] for ph in profile["phases"]]
+        names = [ph["name"] for ph in dev_profile["phases"]]
         assert names[-1] == "integration"
-        integration = profile["phases"][-1]
+        integration = dev_profile["phases"][-1]
         assert any("孤児" in s for s in integration["receives"]["too_abstract_signals"])
-        g1 = next(g for g in profile["gates"] if g["id"] == "split")
+        g1 = next(g for g in dev_profile["gates"] if g["id"] == "split")
         assert any("循環" in s for s in g1["set_signals"])
         assert any("親予算" in s for s in g1["set_signals"])
-        second = profile["phases"][1]["receives"]["too_abstract_signals"]
-        assert any("実現可能性" in s for s in second)
+        decomp = next(p for p in dev_profile["phases"] if p["name"] == "decomposition")
+        assert any("実現可能性" in s for s in decomp["receives"]["too_abstract_signals"])
 
-    def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_phase3_gates_enabled(self, dev_profile: dict) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
-        profile = request.getfixturevalue(profile_name)
-        enabled = set(profile["enabled_gates"])
+        enabled = set(dev_profile["enabled_gates"])
         assert {"intake", "split", "start", "outcome", "integration"} <= enabled
 
-    def test_g3_wiring(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_g3_wiring(self, dev_profile: dict) -> None:
         """成果ゲートは門前払いを持ち、report signals が判定基準を契約由来にする。"""
-        profile = request.getfixturevalue(profile_name)
-        g3 = next(g for g in profile["gates"] if g["id"] == "outcome")
+        g3 = next(g for g in dev_profile["gates"] if g["id"] == "outcome")
         assert g3["preflight"] == "report-fields"
-        report = next(p for p in profile["phases"] if p["name"] == "report")
+        report = next(p for p in dev_profile["phases"] if p["name"] == "report")
         signals = report["receives"]["too_abstract_signals"]
         concrete = report["receives"]["too_concrete_signals"]
         assert "再現手順の欠落" in signals
         assert any("期待値の根拠" in s for s in signals)
         assert any("secrets" in s for s in concrete)
-        assert "期待値の根拠" in profile["templates"]["report_required_fields"]
+        assert "期待値の根拠" in dev_profile["templates"]["report_required_fields"]
 
-    def test_security_is_opt_in(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_security_is_opt_in(self, dev_profile: dict) -> None:
         """checks-security は定義されつつ、既定の enabled_gates には入らないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        gate_ids = {gate["id"] for gate in profile["gates"]}
+        gate_ids = {gate["id"] for gate in dev_profile["gates"]}
         assert "checks-security" in gate_ids
-        assert "checks-security" not in profile["enabled_gates"]
+        assert "checks-security" not in dev_profile["enabled_gates"]
 
-    def test_no_dead_models_block(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_no_dead_models_block(self, dev_profile: dict) -> None:
         """どこからも読まれない models ブロックを持たないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        assert "models" not in profile
+        assert "models" not in dev_profile
 
-    def test_criteria_skills_defined(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    def test_criteria_skills_defined(self, dev_profile: dict) -> None:
         """g2 / g3 に criteria_skills キーがあること(橋渡しの接続点)。"""
-        profile = request.getfixturevalue(profile_name)
         for gate_id in ("start", "outcome"):
-            gate = next(g for g in profile["gates"] if g["id"] == gate_id)
+            gate = next(g for g in dev_profile["gates"] if g["id"] == gate_id)
             assert "criteria_skills" in gate, gate_id
 
-    def test_phase_handoff_chain(self, profile_name: str, request: pytest.FixtureRequest) -> None:
-        """phases の hands_off.to / receives.from が実在フェーズを指し、連鎖すること。"""
-        profile = request.getfixturevalue(profile_name)
-        phases = profile["phases"]
-        names = [p["name"] for p in phases]
-        for i, phase in enumerate(phases):
-            if "hands_off" in phase:
-                assert phase["hands_off"]["to"] in names, phase["name"]
-            if "receives" in phase:
-                assert phase["receives"]["from"] == names[i - 1], phase["name"]
+    def test_phases_are_all_referenced_by_gates(self, dev_profile: dict) -> None:
+        """phases は gates[].phase が指すものだけを持つこと(読まれない待ち位置を残さない)。
 
-    def test_templates_required_fields(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+        かつて requirements フェーズはどのゲートからも指されず、hands_off と
+        receives.from も手順書に読み手が無かった(experiment を廃止した根拠と同じ形)。
+        """
+        names = [p["name"] for p in dev_profile["phases"]]
+        assert len(names) == len(set(names)), names
+        targeted = {g["phase"] for g in dev_profile["gates"] if "phase" in g}
+        assert set(names) == targeted, (sorted(names), sorted(targeted))
+        for phase in dev_profile["phases"]:
+            assert set(phase) == {"name", "receives"}, phase["name"]
+            assert set(phase["receives"]) == {
+                "waiting_level",
+                "too_abstract_signals",
+                "too_concrete_signals",
+            }, phase["name"]
+
+    def test_templates_required_fields(self, dev_profile: dict) -> None:
         """門前払いの対象となる必須欄リストが空でないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        templates = profile["templates"]
+        templates = dev_profile["templates"]
         for key in (
             "parent_issue_required_fields",
             "child_issue_required_fields",
@@ -110,18 +107,116 @@ class TestProfiles:
         ):
             assert templates[key], key
 
-    def test_split_criteria_defined(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    def test_split_criteria_defined(self, dev_profile: dict) -> None:
         """分割基準が契約由来であること(decomposer と分割ゲートはここから引く)。
 
         3つ目のプロファイルを試作したとき、「良いタスクの4条件」が agent 定義に literal に
         書かれていたため読み替え節を足す羽目になった。基準の置き場所を契約に固定する。
         """
-        profile = request.getfixturevalue(profile_name)
-        criteria = profile["split_criteria"]
-        assert criteria["good_task_conditions"], profile_name
-        assert criteria["always_separate"], profile_name
+        criteria = dev_profile["split_criteria"]
+        assert criteria["good_task_conditions"]
+        assert criteria["always_separate"]
+
+
+def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None:
+    """実験の規律が、専用プロファイルではなく唯一の契約に載っていること。
+
+    experiment プロファイルを廃止したとき、規律(評価データの分離、統制条件、数字の由来セット)を
+    条件付きシグナルとして唯一の契約へ畳んだ。これが消えると、実験を回したときに
+    データ漏洩と再現不能を止める装置がどこにも無くなる。
+    """
+    assert not (ROOT / "profiles/experiment.yaml").exists()  # 器は1つに戻した
+    phases = {p["name"]: p for p in dev_profile["phases"]}
+    impl = phases["implementation"]["receives"]["too_abstract_signals"]
+    assert any("評価データの分離" in s and "統制条件" in s for s in impl), impl
+    report = phases["report"]["receives"]["too_abstract_signals"]
+    assert any("由来セット" in s for s in report), report
+    # 欄コメント側にも再現の統制条件が残っていること(raw テキストで見る)
+    raw = (ROOT / "profiles/tasuki.yaml").read_text()
+    # 欄コメントそのものを見る(シグナルの値にも同じ語があるため、raw 全文だと空振りする)
+    comment = next(ln for ln in raw.splitlines() if ln.strip().startswith("- 再現手順")).split(
+        "#", 1
+    )[1]
+    assert "seed" in comment and "データ版数" in comment
+    # 測定と測定対象を同じ子に入れない
+    separate = dev_profile["split_criteria"]["always_separate"]
+    assert any("測定と測定対象の変更" in s for s in separate), separate
+    # maker 側の適用条件も、契約の欄名ではなく仕事の性質で書かれていること
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "## 評価や測定を伴うタスクの規律" in worker
+    assert "契約の子 issue 欄に" not in worker  # 存在しない欄を条件にしない
+    # 契約に写した CONTRACTS のサンプルが、新しいシグナルまで一致していること
+    sample = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "評価データの分離(dev/test)と統制条件" in sample
+    assert "由来セット(dev/test)が不明" in sample
+
+
+def test_contract_has_no_unread_keys(dev_profile: dict) -> None:
+    """契約は「今読まれるキー」だけを持つこと(dead config を作らない)。
+
+    experiment 廃止で exit_criteria_fields が死んだのを外したのと同じ理由で、
+    手順書・agent・skill のどこからも読まれないキーを契約に残さない。
+    v2 の予約は ROADMAP に書けば足りる。
+    """
+    readers = "\n".join(
+        p.read_text()
+        for base in ("commands", "agents", "skills")
+        for p in (ROOT / base).rglob("*.md")
+    )
+
+    def keys_of(node: object) -> set[str]:
+        """契約のキーを入れ子も含めて集める(死んだキーが下層に隠れないように)。"""
+        found: set[str] = set()
+        if isinstance(node, dict):
+            for k, v in node.items():  # pyright: ignore[reportUnknownVariableType]
+                found.add(str(k))
+                found |= keys_of(v)
+        elif isinstance(node, list):
+            for item in node:  # pyright: ignore[reportUnknownVariableType]
+                found |= keys_of(item)
+        return found
+
+    # 手順書が別名で引くキーは、その別名を読まれた証拠とする
+    aliases: dict[str, str] = {
+        "phases": "`receives` 定義",
+        "budgets": "max_iterations_per_gate",
+        "receives": "`receives` 定義",
+        "name": "`gates[].phase`",
+        "phase": "`gates[].phase`",
+        "id": "`enabled_gates`",
+        "kind": "`kind: mechanical`",
+        "provider": "その provider が `command` を持つもの",
+        "preflight": "`preflight: template-fields`",
+    }
+    # 欄名そのもの(日本語)はキーではなく値なので対象外
+    for key in sorted(k for k in keys_of(dev_profile) if k.isascii()):
+        alias = aliases.get(key)
+        # 別名を持たないキーは、コード表記(`key` か key:)で引かれていることを求める。
+        # 素の部分文字列一致にすると、無関係な語に含まれて素通りする(profile が
+        # .tasuki/profile.yaml に含まれる等)。
+        hit = alias in readers if alias else (f"`{key}`" in readers or f"{key}:" in readers)
+        assert hit, f"どの手順書からも読まれない契約キー: {key}"
+
+
+def test_repo_override_may_add_required_fields() -> None:
+    """必須欄の追加を repo override の許容範囲として明示していること。
+
+    仕事の型ごとに plugin 側の雛形を増やさない代わりに、導入先が自分の契約へ
+    欄を足せることが逃げ道になる。これが書かれていないと、型ごとの雛形が復活する。
+    """
+    contracts = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "必須欄(`templates`)の追加" in contracts
+    assert "欄の削除は行わない" in contracts
+    # 走行中に欄が増えると既存の子が一斉に差し戻される(反映のタイミングを定める)
+    assert "走行中(open)の親 issue が無いときに反映する" in contracts
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "必須欄(`templates`)の追加" in init
+    # 追加したい欄を棚卸しで採取する手順があること
+    assert "毎回テンプレが問いかけたい欄があるかをユーザーに確認する" in init
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 導入先が足した欄の意味が着手ゲートに届くこと
+    assert "`child_issue_required_fields`(欄コメントを含む" in loop
+    assert "`child_issue_required_fields`" in (ROOT / "skills/gate-review/SKILL.md").read_text()
 
 
 def test_providers_normalizer_exists(providers: dict) -> None:
@@ -148,29 +243,26 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         )
     )
     assert referenced, "契約キーの参照が見つからない"
-    for name in ("development", "experiment"):
-        budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
-        missing = sorted(referenced - set(budgets))
-        assert not missing, (name, missing)
+    budgets = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["budgets"]
+    missing = sorted(referenced - set(budgets))
+    assert not missing, missing
 
 
 def test_gate_phase_resolves_in_every_profile() -> None:
     """abstraction ゲートの phase が、どのプロファイルでも実在するフェーズを指すこと。
 
-    loop.md がフェーズ名をハードコードしていた頃、experiment プロファイルは
-    decomposition と implementation を持たないため受理と分割と着手のゲートが
-    参照先を解決できなかった。同じ壊れ方を防ぐ。
+    loop.md がフェーズ名をハードコードしていた頃、フェーズ名を言い換えた契約では
+    受理と分割と着手のゲートが参照先を解決できなかった。同じ壊れ方を防ぐ。
     """
     import yaml
 
-    for name in ("development", "experiment"):
-        profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
-        phases = {p["name"] for p in profile["phases"]}
-        for gate in profile["gates"]:
-            if gate.get("kind") != "abstraction":
-                continue
-            assert "phase" in gate, (name, gate["id"])
-            assert gate["phase"] in phases, (name, gate["id"], gate["phase"], sorted(phases))
+    profile = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())
+    phases = {p["name"] for p in profile["phases"]}
+    for gate in profile["gates"]:
+        if gate.get("kind") != "abstraction":
+            continue
+        assert "phase" in gate, gate["id"]
+        assert gate["phase"] in phases, (gate["id"], gate["phase"], sorted(phases))
 
 
 def test_loop_does_not_hardcode_phase_names() -> None:
@@ -178,9 +270,7 @@ def test_loop_does_not_hardcode_phase_names() -> None:
     import re
 
     loop = (ROOT / "commands/loop.md").read_text()
-    hardcoded = re.findall(
-        r"(?:decomposition|implementation|experiment-design|execution|analysis) フェーズ", loop
-    )
+    hardcoded = re.findall(r"(?:decomposition|implementation|execution|analysis) フェーズ", loop)
     assert not hardcoded, hardcoded
     assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く
 
@@ -193,12 +283,11 @@ def test_pr_template_carries_traceability() -> None:
     """
     import yaml
 
-    for name in ("development", "experiment"):
-        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
-            "pr_required_fields"
-        ]
-        assert "対応する親要件" in fields, name
-        assert "受け入れ条件の充足" in fields, name
+    fields = yaml.safe_load((ROOT / "profiles/tasuki.yaml").read_text())["templates"][
+        "pr_required_fields"
+    ]
+    assert "対応する親要件" in fields
+    assert "受け入れ条件の充足" in fields
     worker = (ROOT / "agents/worker.md").read_text()
     assert "PR 単体で判断できるようにする" in worker
 
@@ -250,3 +339,130 @@ def test_packs_have_no_empty_pathspec_keys() -> None:
         for key in ("config_tampering", "test_tampering"):
             if key in ci:
                 assert ci[key].get("paths"), (pack, key)
+
+
+def test_gate_fixtures_resolve_against_the_contract(dev_profile: dict) -> None:
+    """LLM fixture が、実契約に対して静的に解決できること。
+
+    tests/test_llm_gates.py は既定でスキップ(LLM を呼ぶため)であり、
+    fixture と契約の対応が検められるのは LLM を実行したときだけだった。
+    ゲート ID やフェーズ名を改名すると fixture が黙って腐るため、
+    LLM を呼ばない静的検査をここに置く。
+    """
+    import yaml
+    from test_llm_gates import _receives_for  # pyright: ignore[reportPrivateUsage]
+
+    # 現在の fixture は start × 3 と outcome × 1 であり、split / integration は未整備
+    # (それらの枝はまだ一度も実行されない)。
+    verdicts = {"PASS", "TOO_ABSTRACT", "TOO_CONCRETE"}
+    # 照合先(親要件や子要件)が無いと孤児判定ができないゲート
+    needs_requirements = {"split", "outcome", "integration"}
+    paths = sorted((ROOT / "tests/fixtures/gate").glob("*.yaml"))
+    assert paths, "fixture が1件も無い"
+    for path in paths:
+        fixture = yaml.safe_load(path.read_text())
+        gate = fixture["gate"]
+        assert gate in dev_profile["enabled_gates"], (path.name, gate)
+        assert fixture["expected_verdict"] in verdicts, path.name
+        assert fixture["input"].strip(), path.name
+        receives = _receives_for(gate)
+        assert receives["waiting_level"], (path.name, gate)
+        if gate in needs_requirements:
+            assert fixture.get("requirements", "").strip(), (path.name, "照合先が無い")
+
+
+def test_override_range_is_listed_in_one_place() -> None:
+    """repo override の範囲は契約冒頭のコメントが正で、写しは1つに限ること。
+
+    かつて同じ6項目が契約、loop-init、skill、CONTRACTS の4箇所にあり、
+    1項目の増減で3箇所を追随させる必要があった(一致を固定するテストも無かった)。
+    説明を置くのは CONTRACTS だけとし、その一致をここで固定する。
+    """
+    contract = (ROOT / "profiles/tasuki.yaml").read_text()
+    header = contract.split("budgets:")[0]
+    items = (
+        "コマンド",
+        "閾値",
+        "待ち位置定義",
+        "reviewer / criteria_skills の割り当て",
+        "enabled_gates",
+    )
+    for item in items:
+        assert item in header, item
+    # 説明の写しは CONTRACTS の1節だけ(ファイル全体で探すと別文脈の同じ語に当たる)
+    doc = (ROOT / "docs/CONTRACTS.md").read_text()
+    section = doc.split("### repo override で変えてよい範囲")[1].split("\n### ")[0]
+    for item in items:
+        assert item in section, item
+    # CONTRACTS 以外のどの文書にも写しを増やさないこと。
+    # 語の並びではなく段落単位の共起で見る(読点を変えた写しも、2行に折り返した写しも拾う)。
+    targets = [
+        p for p in _WRITING_TARGETS if p.name != "CONTRACTS.md" and p.suffix == ".md" and p.exists()
+    ]
+    assert targets
+    for path in targets:
+        text = path.read_text()
+        for para in text.split("\n\n"):
+            assert not ("待ち位置定義" in para and "criteria_skills" in para), (
+                path.name,
+                para[:80],
+            )
+    # 正を指す文は、契約をコピーする側と読む側に残っていること
+    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md"):
+        text = (ROOT / rel).read_text()
+        assert "契約ファイル冒頭のコメント" in text or "profile.yaml` 冒頭のコメント" in text, rel
+
+
+def test_pack_artifacts_cover_provider_outputs(providers: dict) -> None:
+    """provider が書き出すファイルが artifacts に載っていること。
+
+    載っていないと loop-init の .gitignore 検査も worker のコミット前確認も
+    対象にせず、self-verify が生んだ SARIF や JUnit XML が `git add -A` で
+    そのまま入る(ブランチ間で生成物どうしが競合する。E2E で2度起きた形)。
+    """
+    outputs = {p["output_file"] for p in providers["providers"].values() if "output_file" in p}
+    outputs |= set(providers["ci"].get("sarif_file", {}).values())
+    missing = sorted(outputs - set(providers["artifacts"]))
+    assert not missing, missing
+
+
+def test_distributed_python_is_formatted_for_the_default_width() -> None:
+    """導入先へコピーする Python が、black の既定幅(88)でも整形済みであること。
+
+    normalizer は .tasuki/ へコピーされ、導入先の `black --check .` の対象になる
+    (black は `.tasuki/` を既定で除外しない。実測)。このリポジトリの幅は 100 なので、
+    100 で整形すると導入先の既定 88 で恒久的に赤になる。しかも worker は
+    `.tasuki/**` を編集できないため、ループ自身では直せない。
+    """
+    import subprocess
+
+    targets = sorted((ROOT / "packs").rglob("normalizers/*.py"))
+    assert targets
+    for width in ("88", "100"):
+        proc = subprocess.run(
+            ["uv", "run", "black", "--check", "--line-length", width, *map(str, targets)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (width, proc.stderr[-500:])
+    # ruff も .tasuki/ を走査する。black は長いコメントを整形しないので両者は同値でない
+    # (89〜100 字の日本語コメントを1行足すと、black は緑のまま ruff だけが恒久的に赤になる)。
+    proc = subprocess.run(
+        [
+            "uv",
+            "run",
+            "ruff",
+            "check",
+            "--isolated",
+            "--select",
+            "E501",
+            "--line-length",
+            "88",
+            *map(str, targets),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout[-800:]
