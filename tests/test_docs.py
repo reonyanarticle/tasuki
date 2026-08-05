@@ -101,8 +101,7 @@ def test_phase3_full_loop_wiring() -> None:
     assert "全子が統合ブランチへ取り込まれたら進む" in loop
     # base の健全性はレイヤーの前進条件ではなく worker 起動直前の条件で見る
     # (前進条件で書くと、次の run で §1c がグラフを組み直したときに空振りする)
-    base_guard = "統合ブランチが赤の間(未解決の open な補修の子がある間)は、"
-    assert base_guard + "補修の子以外の worker を起動しない" in loop
+    assert "worker を起動する直前に、統合ブランチが赤で止まっていないかを確認する" in loop
     assert "統合ゲート" in loop
     assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
@@ -614,8 +613,8 @@ def test_trace_review_findings_are_fixed() -> None:
     assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
     assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
     # 取り込み後の赤は、専用経路ではなく追い子(実在の子 issue)として通す
-    assert "補修の子として起票し、通常の §2(子ごとのゲート実行)に流す" in loop
-    assert "専用の経路を作らない" in loop
+    assert "定点1と同じ扱いで、止めて人間に渡す" in loop
+    assert "**ループは自分で直さず、止めて人間に渡す。**" in loop
     worker = (ROOT / "agents/worker.md").read_text()
     assert "--base <統合ブランチ>" in worker
     assert "統合ブランチとは限らない" in worker  # worktree base の明示
@@ -1420,41 +1419,32 @@ def test_model_tables_match_the_contract() -> None:
             assert cell.lower().startswith(model), (path.name, label, cell)
 
 
-def test_repair_child_has_an_issuing_rule() -> None:
-    """統合ブランチの補修と出荷前レビューの所見反映が、同じ器に乗っていること。
+def test_integration_branch_repair_is_not_a_mechanism() -> None:
+    """統合ブランチの自己修復をループに持たせないこと。
 
-    close 済みの子へ差し戻すと、worker が merged な PR のブランチに積み、
-    2g の「既に merged」分岐が後始末だけを行って、修正が統合ブランチに
-    一度も入らないまま完了扱いになる(fail-open)。
+    補修を子 issue の器に入れると、着手ゲート、分割ゲートの再判定、再計画の
+    差分分割、差し戻し先の読み替えに読み替え節が要り、読み替え節1つが抽象の
+    漏れ1つになった(実際、粒度の不一致は着手ゲートが必ず差し戻す欠陥として
+    現れた)。実走の例が0件のまま器を固定しない、という判断を守る。
     """
     loop = (ROOT / "commands/loop.md").read_text()
-    assert "補修の子の起票規則" in loop
-    for rule in (
-        "起票するのは orchestrator であり、人間承認は要らない",
-        "統合ブランチの健全性(親要件の派生ではない)",
-        "via tasuki-loop",
-        "同じ解消対象(タイトルで判別する)の open な補修の子が既にあれば起票しない",
-        "本文末尾が `via tasuki-loop` の補修の子は、この LLM 判定を行わない",
-        "本文末尾が `via tasuki-loop` の補修の子は渡さない",  # 再計画の撤回で消されない
-        "補修の子は §1b(分割ゲート)の再判定の対象にしない",
-    ):
-        assert rule in loop, rule
-    # 出荷前レビューの所見も同じ経路へ流す(close 済みの子へ戻さない)
+    assert "統合ブランチが直せない状態になったとき(conflict、または checks-local が赤)" in loop
+    assert "**ループは自分で直さず、止めて人間に渡す。**" in loop
+    assert "**自己修復の機構をループに持たせない。**" in loop
+    # 出荷前レビューの所見も同じ扱い(close 済みの子へ差し戻さない)
     review = loop.split("### 3c-1.")[1].split("### 3c-2.")[0]
-    assert "補修の子として起票し" in review
+    assert "止めて人間に渡す" in review
     assert "close 済みの子へ差し戻さない" in review
-    # worker は merged な PR の上で継続しない
-    worker = (ROOT / "agents/worker.md").read_text()
-    assert "merged / closed な PR の上では継続しない" in worker
-    decomposer = (ROOT / "agents/decomposer.md").read_text()
-    assert (
-        "`via tasuki-loop` の子(統合ブランチの補修)は渡されない。渡された場合も常に維持"
-        in decomposer
-    )
-    # 旧経路(解消専用 worker)と、器の二重の名前(解消の追い子)が残っていないこと
+    assert "所見をループが自分で直す経路は v1 では持たない" in review
+    # 器の痕跡(読み替えの印と旧名称)がどこにも残っていないこと
     for path in _WRITING_TARGETS:
         text = path.read_text()
-        assert "解消専用" not in text, path.name
-        assert "解消の追い子" not in text, path.name  # 追い子は §1d の replan 由来の器の名前
-    # 3c の再入分岐も同じ経路を指すこと(close 済みの子へ差し戻さない)
-    assert "該当する子を特定して worker へ差し戻す" not in loop
+        for token in ("via tasuki-loop", "補修の子", "解消の追い子", "解消専用"):
+            assert token not in text, (path.name, token)
+    # worker は merged な PR の上で継続しない(所見の修正が入らない事故の元)
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "merged / closed な PR の上では継続しない" in worker
+    # 判断の経緯が ROADMAP に残っていること
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text()
+    assert "### 統合ブランチの自己修復を持たない理由(v1 の判断)" in roadmap
+    assert "実例が出るまで設計しない" in roadmap
