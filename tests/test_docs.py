@@ -916,6 +916,24 @@ def test_scan_artifacts_are_ignored() -> None:
     assert "CLAUDE-SECURITY-*/" in ignored
 
 
+def test_distributed_files_have_no_unresolvable_references() -> None:
+    """導入先へコピーされるファイルが、plugin 内のパスを参照しないこと。
+
+    profiles/*.yaml は .tasuki/profile.yaml へ、packs/*/providers.yaml は
+    .tasuki/providers.yaml へ丸ごとコピーされる。導入先に docs/ も profiles/ も
+    存在しないため、そこへの参照は読み手が辿れない
+    (agents / skills / commands に対する同種の検査は別テストが持つ)。
+    """
+    offenders = []
+    targets = [*sorted((ROOT / "profiles").glob("*.yaml")), *sorted((ROOT / "packs").rglob("providers.yaml"))]
+    assert targets, "配布対象のファイルが見つからない"
+    for path in targets:
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(r"(docs|profiles|packs)/[A-Za-z]", line):
+                offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()[:60]}")
+    assert not offenders, offenders
+
+
 def test_final_trace_audit_findings_are_fixed() -> None:
     """最終状態の手順トレース監査の所見が反映されていること。
 

@@ -1,5 +1,5 @@
 # tasuki language pack: python
-# providers.yaml が単一ソースであり、CI workflow(loop-gates.yml)はここからの射影(docs/OPERATIONS.md)。
+# providers.yaml が単一ソースであり、CI workflow(loop-gates.yml)はここからの射影である。
 # worker はプッシュ前に同じコマンドをローカル実行できるが、ゲートとして正となるのは CI の判定。
 # デフォルトのツール選定は lint = Ruff / 整形 = Black / 型 = basedpyright / テスト = pytest。
 # 対象リポジトリは repo override(.tasuki/)でコマンドを変更できる。
@@ -24,7 +24,7 @@ providers:
     output: junit
     output_file: pytest-junit.xml
   security:
-    action: "anthropics/claude-code-security-review"  # GitHub Action として実行(docs/OPERATIONS.md)
+    action: "anthropics/claude-code-security-review"  # GitHub Action として実行(CI 専用。ローカルでは実行しない)
     output: pr-comment
 
 # 実行時の生成物(コミットしてはならないもの)。loop-init が .gitignore を検査し、
