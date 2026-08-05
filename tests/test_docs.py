@@ -925,7 +925,10 @@ def test_distributed_files_have_no_unresolvable_references() -> None:
     (agents / skills / commands に対する同種の検査は別テストが持つ)。
     """
     offenders = []
-    targets = [*sorted((ROOT / "profiles").glob("*.yaml")), *sorted((ROOT / "packs").rglob("providers.yaml"))]
+    targets = [
+        *sorted((ROOT / "profiles").glob("*.yaml")),
+        *sorted((ROOT / "packs").rglob("providers.yaml")),
+    ]
     assert targets, "配布対象のファイルが見つからない"
     for path in targets:
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
