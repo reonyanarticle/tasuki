@@ -11,7 +11,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 
 ## 前提チェック(失敗したら中断して報告)
 
-0. **信頼境界の確認(必須)**:tasuki v1 は issue、PR、コメントの内容をすべて信頼できるリポジトリでのみ使う。対象リポジトリが外部からの issue を受け付ける場合(public リポジトリ等)は、未検証テキストが Bash を持つ worker/verifier に流れるため、v2 のハードニング(作者認証、sandbox)が入るまで導入しないよう警告し、ユーザーの明示確認を得てから続行する
+0. **信頼境界の確認(必須)**:tasuki v1 は issue、PR、コメントの内容を信頼できるリポジトリで使う。外部起票の親は既定でループ対象外であり、maintainer が `tasuki:accepted` を付けたものだけが通る(opt-in)。ただしこの opt-in は親 issue の本文にしか効かない。**issue と PR のコメントは誰でも後から足せるため、コメントまで信頼できないリポジトリでは使わないよう警告し**、ユーザーの明示確認を得てから続行する(未検証テキストが Bash を持つ worker/verifier に流れる。sandbox は v2)
 1. git リポジトリであり、GitHub リモート(origin)があること
 2. `gh auth status` が通ること。Git operations protocol を確認し、**https の場合のみ** token の `workflow` scope を必須とする(OAuth token での HTTPS push は scope が無いと `.github/workflows/` を拒否される。SSH 鍵での push には不要。https で scope が無ければ `gh auth refresh -s workflow` を案内)
 3. `gh --version` を確認する。**sub-issues と issue dependencies の作成**(`--parent` / `--blocked-by` 等)も **`--json subIssues` での読み取り**も 2.94.0 以上で使える(どちらも同じリリースで入った)。未満は `gh api` の GraphQL フォールバックになる(ただし `/tasuki:loop-status` は読み取り専用を保つためフォールバックを持たない)
@@ -252,7 +252,7 @@ jobs:
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
 - **security job を生成するなら、契約の `gates.checks-security.blocking_threshold` 以上の重大度に絞った findings 件数の output 名を、固定した SHA の `action.yml` から解決して埋める**。重大度で絞れない(総件数しか出ない)場合は、閾値を強制できないため security job を生成しない。総件数で `> 0` を判定すると、契約が `high` を指定していても low の指摘でマージが止まり、契約と実装が食い違う。Action は PR コメントを出すだけで exit code を落とさない場合があり、gate step を挟まないと契約の `blocking_threshold` はどこにも強制されず、`notify-success` が緑を報告してしまう(fail-open)。output 名を解決できない場合は security job を生成しない(強制できないゲートを有効化しない)
 - **security Action はコミット SHA に固定**する(生成時に `gh api` でリリースの SHA を解決)。ブランチ、タグ参照は差し替え可能で supply-chain リスクになる。**解決した参照が 40 桁の hex SHA でなければ workflow を生成せず中断する**(`@main` 等のプレースホルダのまま出荷しない)
-- `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点「実行環境の隔離と権限最小化」)
+- `CLAUDE_API_KEY` secret が未設定なら、設定手順を伝える(secrets は CI 環境にのみ置く、観点「実行環境の隔離、権限最小化」)
 - security-review Action はプロンプトインジェクション対策がないため、信頼できる PR(自リポジトリの worker 生成 PR)のみを対象とする。fork からの PR には secrets が渡らず security job は失敗する。外部コントリビューションを受けるリポジトリでは workflow 実行に承認を必須とするよう案内する
 - **branch protection の提案**：required status checks を default branch に設定するかユーザーに確認する。対象は実際に生成した job に合わせる(言語 pack の既定は lint / format / typecheck / test に tampering を加えたもの。security はオプトイン時のみ加える。生成していない job を required にすると check が永遠に報告されず全 PR がマージ不能になる)。未設定の場合、CI の判定はマージを強制しない(orchestrator の読み取りと人間の目視だけになる)
 

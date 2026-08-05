@@ -9,8 +9,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
 2. **プロジェクト資産の棚卸し**：`.claude/agents/`、`.claude/skills/`、CLAUDE.md、導入済み plugin を走査し、ゲート / provider への接続候補を提案する([INTEGRATION.md](INTEGRATION.md))。ループ系 plugin の併用を検出したら警告する
 3. 契約プロファイル雛形の配置(`development`)+ repo override(`.tasuki/`。必須欄の追加を含む)
 4. issue / PR テンプレート生成([CONTRACTS.md](CONTRACTS.md))。worker のコミット規約は Conventional Commits(`<type>: <summary>`)とし、PR は draft で開いて方向性を早期確認する(子 PR は checks-ci 全緑の後に orchestrator が ready 化して統合ブランチへ取り込む)
-5. **既存ゲートと外部レビューツールの棚卸し**:導入先の hooks と branch protection(PR 作成や push を検査するもの)を検出し、ループの PR 作成とマージが塞がれないかを確かめて通し方を記録する。出荷前レビューに使う外部 plugin の導入状況も検出し、未導入なら案内する
-6. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
+5. **CI workflow 生成**：providers.yaml から `loop-gates.yml` を生成する
    - SARIF を出す provider はそのままアップロードし、出せない provider は pack の `normalizer` で SARIF 化してからアップロードする
    - `output: exit-code` の provider(整形チェック等)は exit code だけで判定する
    - test job は JUnit XML を出力する
@@ -33,7 +32,7 @@ providers.yaml が単一ソースであり、CI workflow、orchestrator のロ�
 
 security-review Action の制約は4つある(採用時に README とドキュメントで確認した)。
 
-- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離と権限最小化」)
+- `claude-api-key` secret が必須。secrets は CI 環境にのみ置く(観点「実行環境の隔離、権限最小化」)
 - この Action は Claude API を直接呼ぶため、Claude Code の契約とは別の API 課金になる(ループ本体の orchestrator / reviewer / worker はユーザーの Claude Code セッションで動き、API キーを使わない)。このため **security job はオプトイン**とし、既定では生成しない。`/tasuki:loop-init` で選択した場合のみ job を生成し `enabled_gates` に `checks-security` を追加する(条件スキップによる見かけの成功は作らない)
 - 出力は PR インラインコメントと JSON 成果物で、SARIF 非対応。形式ゲートの判定には action outputs の findings 件数を使う
 - Action の参照はコミット SHA に固定する(ブランチやタグの参照は差し替え可能で supply-chain リスクになる)

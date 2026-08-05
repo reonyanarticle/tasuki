@@ -25,9 +25,10 @@ tasuki は、AI エージェント間のタスク受け渡しを抽象度ゲー�
 実装が固まったら、PR を作る前に次を通す。
 順序に意味がある(機械が落とせるものを先に落とし、人間とレビューの時間を後段に使う)。
 
-1. **CI と同じ検査をすべて緑にする**(validate.yml が回すのと同じ順)。`uv run ruff check .`、`uv run black --check .`、`uv run basedpyright`、`uv run pytest -q`、`claude plugin validate .`
+1. **CI と同じ検査をすべて緑にする**(validate.yml が回すのと同じ順)。`uv run ruff check .`、`uv run black --check .`、`uv run basedpyright`、`uv run pytest -q`、`claude plugin validate .claude-plugin/plugin.json --strict`、`claude plugin validate .claude-plugin/marketplace.json --strict`
    - **出力を `/dev/null` へ捨てない。** `&&` で連ねて出力を握りつぶすと、途中の失敗で連鎖が止まったことに気づかず「緑」と誤認する(実際に起きた。ruff の失敗を見落として push し、CI で落ちた)
-   - `claude plugin validate .` は「plugin ルートの CLAUDE.md はコンテキストに載らない」と警告するが、これは意図どおりである(このファイルは tasuki 自体の開発用であり、利用者向けの知識は skills/ に置く)
+   - **`claude plugin validate .` は使わない。** marketplace.json がある以上、パス指定は marketplace だけを検証して plugin 側を素通りさせる(手元だけ無条件に緑になる)。CI と同じく2つの manifest を明示して渡す
+   - `plugin.json` を明示指定したときだけ「plugin ルートの CLAUDE.md はコンテキストに載らない」と警告が出る。これは意図どおりであり(このファイルは tasuki 自体の開発用であり、利用者向けの知識は skills/ に置く)、`--strict` での既知の警告はこれ1件だけである(CI も同じ文字列で除外している)
 2. **5観点レビューを、観点ごとに独立の subagent(新規セッション)で回す。** 一度に全部を渡さず、1観点ずつに分ける(/code-review が使える環境では観点指定の /code-review でもよい)。観点は [commands/loop.md](commands/loop.md) の「3c. 出荷前レビュー」の表を正とする(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)。表をここに写さない(二重管理を避ける)
 3. **手順文書(commands/、agents/、skills/)に触れる変更は、第6観点「手順のトレース」も回す。** 定義: この手順書だけを渡された新規セッションのつもりで手順を頭から文字どおり歩き、(a) 機械的に詰まる操作(API が拒否する、入力の出どころが無い、対象が一意に決まらない)と、(b) セッション間と時間軸の穴(クラッシュ後の再入で復元できない状態、並行実行で同じ操作が2回走る、時間経過と他規則の干渉)だけを探す。5観点が実走まで見逃した欠陥(ready 化漏れ、統合ブランチ名の未受け渡し等)をこの観点の試走が事前検出した実績による。コード diff には適用しない(そちらは5観点で足りる)
 4. **所見をそのまま信じない。** 対象コードを読み、再現条件を確かめ、実在するものだけ直す(どのツリーに対して走ったかを最初に確認する。古いブランチや worktree に対する所見が混ざる)

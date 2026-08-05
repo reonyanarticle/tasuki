@@ -4,6 +4,9 @@
 
 ## プロファイル YAML
 
+**正は [profiles/development.yaml](../profiles/development.yaml) であり、以下は読むための写しである。**
+欄コメントの文言までは一致させない(構造= 必須欄、ゲート ID、モデル、`enabled_gates`、`split_criteria` の一致はテストが固定する)。
+
 ```yaml
 # profiles/development.yaml
 budgets:
@@ -64,7 +67,7 @@ templates:                        # issue テンプレの必須欄(着手ゲー�
 # 分割基準(decomposer と分割ゲートが従う。プロファイルごとの基準の違いを契約が持ち、手順書と agent 定義に写さない)
 split_criteria:
   good_task_conditions: [単独でマージして壊れない, テストを同梱できる, 単独で revert できる, 一読で理解できる]
-  always_separate: [リファクタリングと機能追加, 測定と測定対象の変更(実験と基盤変更), ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove), 相互に依存しない機能同士]
+  always_separate: [リファクタリングと機能追加, 測定と測定対象の変更(実験と基盤変更。同じ子で両方を動かすと、差が手法由来か環境由来か切り分けられない), ライブラリ更新と機能開発, 性能改善と機能開発, データ移行と機能開発, feature flag の各段階(add → enable → remove。未完成の機能でレイヤー実行を止めないため、deploy と release は feature flag で分離する), 相互に依存しない機能同士]
 
 gates:
   - id: intake
@@ -142,7 +145,7 @@ preship_review:                   # 出荷前レビュー(loop.md 3c)のコス�
 **足した欄には意味を欄コメントとして1行書く**(decomposer とゲートは欄の意味を欄コメントから引くため、コメントの無い欄は門前払いの空チェックにしか効かない)。
 欄の削除は行わない(ゲートの判定材料が消える)。
 **必須欄の追加は、走行中(open)の親 issue が無いときに反映する**(門前払いは現在レイヤーの子を毎 run 検めるため、走行中に欄が増えると既存の子が一斉に差し戻される)。この制約は契約の変更全般に当てはまる(run は開始時に読んだ契約で最後まで走る)。
-**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の experiment 廃止の記録)。
+**仕事の型ごとに plugin 側の雛形を増やさないのは、型がリポジトリ単位ではなく issue 単位の性質だからである**(経緯は [ROADMAP.md](ROADMAP.md) の「v1.4: experiment プロファイルの廃止(1契約への一本化)」)。
 
 ### language pack の providers.yaml
 
@@ -179,17 +182,18 @@ providers:
 
 契約スキーマのうち `templates:`、`enabled_gates:`、`criteria_skills:`、`set_signals:`、`phase:`、`preship_review:`、`stale_assignment_minutes:`、`worker_agent:`、`split_criteria:` は実装時の追加である。
 `templates:` は必須欄をテンプレ生成と門前払いの両方から参照させるため(単一ソース原則の実装)、`enabled_gates:` は段階導入のため、`criteria_skills:` はゲート判定基準に導入先プロジェクトの skill を加えるため、`set_signals:` は分割ゲートの集合レベル基準(循環、孤児、親予算整合)を契約由来にするために足した。`phase:` は各ゲートが検める受け渡し先を契約から引くために足した(フェーズ名を手順書に直接書くと、導入先がフェーズを言い換えたときに解決できなくなる)。
-`split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は ROADMAP.md の撤回の記録に残す)。
+`split_criteria:` と欄コメントは、分割基準と欄の意味を契約由来にするために足した(3つ目のプロファイルを試作したとき、プロファイル固有の欄名と判定基準が skill と agent 定義に literal に書かれていたため、プロファイルを1つ足すたびに全レイヤーへ「読み替え節」を足す羽目になった。非契約レイヤーはプロファイル名で分岐せず、契約のキーの有無で分岐する。経緯は [ROADMAP.md](ROADMAP.md) の「v1.3: 調査プロファイル(research)の試作と撤回」に残す)。
 
 ## issue テンプレート仕様
 
-契約 YAML から `/tasuki:loop-init` が生成する。
+必須欄の単一ソースは契約 YAML である。
+`/tasuki:loop-init` がファイルとして生成するのは親 issue / 子 issue / 子 PR の3つで、レポートと親 PR の承認コメントはテンプレートを持たず、実行時に契約から組み立てる(レポートは `tasuki:loop-report` skill、承認コメントは loop.md の 3c-2)。
 
 | テンプレ | 必須欄 |
 |---|---|
 | 親 issue | 背景 / 目的 / 価値 / 予算(コスト上限) / 完了の定義 |
 | 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations)(導入先が repo override で欄を足してよい) |
-| レポート | 要件 ID ⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
+| レポート | 要件⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | 子 PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
 | 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue(loop.md の 3c-2 が投稿する) |
 

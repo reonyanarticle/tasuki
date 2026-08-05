@@ -36,11 +36,18 @@ jobs:
           set -u
           known='CLAUDE.md at the plugin root is not loaded as project context'
           for manifest in .claude-plugin/plugin.json .claude-plugin/marketplace.json; do
-            out="$(claude plugin validate "$manifest" --strict 2>&1)" || true
+            out="$(claude plugin validate "$manifest" --strict 2>&1)" && rc=0 || rc=$?
             printf '%s\n' "$out"
-            unexpected="$(printf '%s\n' "$out" | grep '❯' | grep -vF "$known" || true)"
+            findings="$(printf '%s\n' "$out" | grep '❯' || true)"
+            unexpected="$(printf '%s\n' "$findings" | grep -vF "$known" || true)"
             if [ -n "$unexpected" ]; then
               printf '::error::%s に既知以外の指摘がある:\n%s\n' "$manifest" "$unexpected"
+              exit 1
+            fi
+            # 指摘が1件も出ずに失敗したときは、検証に到達せず落ちている
+            # (フラグの改名、コマンドの廃止、クラッシュ)。緑にしない。
+            if [ "$rc" -ne 0 ] && [ -z "$findings" ]; then
+              printf '::error::%s: claude plugin validate が検証に到達せず終了した(exit %s)\n' "$manifest" "$rc"
               exit 1
             fi
           done

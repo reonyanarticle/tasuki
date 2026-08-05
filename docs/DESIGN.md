@@ -89,7 +89,7 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | 成果物 | ブランチと PR |
 | 判断原則の変更履歴 | 契約ファイルへの PR |
 
-状態が GitHub に外部化されているため、クラッシュや中断のあともラベルと issue コメントから復元して途中再開できる(冪等性の要件はレビュー観点「冪等性と再開可能性」)。
+状態が GitHub に外部化されているため、クラッシュや中断のあともラベルと issue コメントから復元して途中再開できる(冪等性の要件はレビュー観点「冪等性、再開可能性」)。
 
 ## ロール定義
 
@@ -99,7 +99,7 @@ tasuki の agent 同士のネスト(worker が verifier を呼ぶ等)は行わ�
 | decomposer | 親 issue →子 issue の分割案作成 | 親 issue のみ | 分割ゲートの被検査者 |
 | gate-reviewer | 契約照合、3値判定、質問の型付け。読み取り専用ツールのみ | 前工程出力+契約のみ(作業コンテキスト非共有) | 受理から統合までの全ゲート |
 | worker | worktree 作成→実装/実験→ self-verify → PR 作成→報告→掃除。worker : worktree = 1 : 1 | 担当子 issue のみ | 形式ゲートの被検査者 |
-| verifier | 成功基準と打ち切り条件の判定(maker と別コンテキスト) | 実行結果+基準のみ | 内側ループの出口 |
+| verifier | 成功基準と打ち切り条件の判定(maker と別コンテキスト) | 実行結果+ PR ブランチ名+子 issue の要件(統合の子では親 issue 本文も) | 内側ループの出口 |
 | 人間 | 最終マージ、axis-question の承認、エスカレーション受け | — | 最終ゲート |
 
 gate-reviewer が maker の作業コンテキストを共有しない点は要件である。
@@ -114,7 +114,7 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 次レイヤーへの前進は、前レイヤーの全子が**統合ブランチ**へ取り込まれてからとする。
 合流点は統合ブランチの更新であり、人間のマージを待たない。
 **人間がマージするのは親 PR(統合ブランチ → default branch)の1回だけ**であり、default branch への反映は常に人間の手を経る。
-合流点(§3a)は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
+合流点([commands/loop.md](../commands/loop.md) の §3a(レイヤーの合流))は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
 deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
 
 ```mermaid
@@ -246,7 +246,7 @@ orchestrator のモデルはメインセッションのモデルそのもので�
 
 ### エスカレーション規則(非対称ルール)
 
-1. verdict に `confidence: high | low` を必須化する。**low の PASS は破棄して `escalate_to` の上位モデルで再判定** する。low の REJECT はそのまま差し戻してよい(誤 REJECT は安いため)
+1. verdict に `confidence: high | low` を必須化する。**low の PASS は破棄して `escalate_to` の上位モデルで再判定** する。low の REJECT はそのまま差し戻してよい(誤 REJECT は安いため)。`escalate_to` を持たないゲート(標準が opus の受理 / 分割 / 統合)は昇格先が無いため、下位モデルへ降格せず規則3の orchestrator 裁定へ回す
 2. 同一ゲートで差し戻しが2回連続した場合も上位モデルへ昇格する(小型モデルの判定基準自体のズレを検出)
 3. エスカレーション連鎖の終点は `haiku → sonnet → opus → Fable 裁定 → 人間`。差し戻し上限超過時、Fable が状況を要約し「契約の不備 / タスクの筋の悪さ / モデル能力の限界」を切り分けてから triage inbox に渡す(人間の判断コスト削減)
 

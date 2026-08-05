@@ -341,6 +341,8 @@ def test_gate_fixtures_resolve_against_the_contract(dev_profile: dict) -> None:
     import yaml
     from test_llm_gates import _receives_for  # pyright: ignore[reportPrivateUsage]
 
+    # 現在の fixture は start × 3 と outcome × 1 であり、split / integration は未整備
+    # (それらの枝はまだ一度も実行されない)。
     verdicts = {"PASS", "TOO_ABSTRACT", "TOO_CONCRETE"}
     # 照合先(親要件や子要件)が無いと孤児判定ができないゲート
     needs_requirements = {"split", "outcome", "integration"}

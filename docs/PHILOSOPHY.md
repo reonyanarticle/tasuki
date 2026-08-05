@@ -118,8 +118,8 @@ tasuki(襷)の名前は駅伝に由来し、構成要素は次の対応で読み
 
 | 先行例 | 借りた考え方 |
 |---|---|
-| Ralph Wiggum ループ | 状態のファイル外部化、毎サイクル新規コンテキスト、反復上限(completion promise は「着手ゲートで事前定義した完了条件を verifier が判定する」形に置き換え) |
-| OpenHands | 追記専用イベントログ、停滞検知(StuckDetector)。サンドボックス実行は v2 予約 |
-| Claude Code `/goal` | maker と分離した停止判定(v1 は別コンテキスト、同一モデル。reviewer 差し替えで別モデル化できる) |
-| C3 / claude-code-conductor | 餌ファイル契約、門前払い、質問の宛先設計 |
-| Findy Library | コンテキスト境界での役割分割、Lead-Worker、タスク分割条件 |
+| [Ralph Wiggum ループ](https://ghuntley.com/ralph/) | 状態のファイル外部化、毎サイクル新規コンテキスト、反復上限(completion promise は「着手ゲートで事前定義した完了条件を verifier が判定する」形に置き換え) |
+| [OpenHands](https://github.com/OpenHands/OpenHands) | 追記専用イベントログ、停滞検知(`openhands/controller/stuck.py`)。サンドボックス実行は v2 予約 |
+| [Claude Code `/goal`](https://code.claude.com/docs/en/goal) | maker と分離した停止判定(v1 は別コンテキスト、同一モデル。reviewer 差し替えで別モデル化できる) |
+| C3 / claude-code-conductor | 餌ファイル契約、門前払い、質問の宛先設計(一次情報の URL を特定できていない。確かめられるまで根拠として扱わない) |
+| [Findy Library](https://lib.findy.co.jp/development/code-review.md) | コンテキスト境界での役割分割、Lead-Worker、タスク分割条件 |

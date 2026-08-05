@@ -362,6 +362,8 @@ def test_diagrams_are_conditional_and_renderable() -> None:
     ノード ID は行頭にだけ現れるとは限らない(`A --> B["..."]` の B のように
     矢印やラベルの後ろにも書ける)。行頭起点で拾うと flowchart の1行目しか
     検査されないため、行内も走査する。
+    形状の括弧を持たないノード(`A --> B` の B)も ID なので、矢印の直後の
+    トークンは括弧の有無に関わらず拾う。
     """
     import re
 
@@ -372,16 +374,25 @@ def test_diagrams_are_conditional_and_renderable() -> None:
     # 行頭 / 空白 / 矢印の先 / ラベル区切り(`|`)/ 連結(`&`)の直後に来る、
     # 形状の開き括弧(`[` `(` `{`)を伴うトークンをノード ID とみなす
     node = re.compile(r"(?:^|[\s|&>])([^\s\[\](){}|>]+)[\[({]")
+    arrow = re.compile(r"-{2,}>|-\.-+>|={2,}>|-{3,}|~{3,}")
     for path in (ROOT / "README.md", ROOT / "docs/DESIGN.md"):
         for block in re.findall(r"```mermaid\n(.*?)```", path.read_text(), re.S):
             assert "accTitle:" in block and "accDescr:" in block, path.name
             # ノード ID に日本語を使わない(ID は ASCII、表示ラベルのみ日本語)
             ids: list[str] = []
-            for line in block.splitlines():
-                if directive.match(line):
+            for raw in block.splitlines():
+                if directive.match(raw):
                     continue
-                ids += node.findall(re.sub(r'"[^"]*"', '""', line))  # 引用ラベルは除く
-            bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
+                line = re.sub(r'"[^"]*"', '""', raw)  # 引用ラベルは除く
+                ids += node.findall(line)
+                # 矢印の直後は必ずノード。ラベル(`|...|`)を落としてから先頭語を見る
+                for seg in arrow.split(re.sub(r"\|[^|]*\|", " ", line))[1:]:
+                    head = seg.split()
+                    if head:
+                        # `:::class` と stateDiagram の遷移ラベル(`: 説明`)を落とす
+                        token = head[0].split(":")[0]
+                        ids.append(re.split(r"[\[({]", token)[0])
+            bad = [i for i in ids if i and not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
             assert not bad, (path.name, bad)
             if block.lstrip().startswith("flowchart"):
                 assert len(set(ids)) >= 2, (path.name, "flowchart のノードを拾えていない")
@@ -729,14 +740,32 @@ def test_security_reflects_implemented_hardening() -> None:
 
 
 def test_contracts_sample_matches_profiles() -> None:
-    """CONTRACTS.md の契約サンプルが実プロファイルの判定シグナルからずれないこと。
+    """CONTRACTS.md の契約サンプルが実プロファイルからずれないこと。
 
-    サンプルは正典を名乗るため、profiles/ の変更(承認サイズ、但し書き)を写し損ねると
-    導入先が古いスキーマを正として上書きしてしまう。
+    正は profiles/development.yaml であり CONTRACTS のコードブロックは写しである。
+    文字列の抜き取りだけでは欄名の1文字違いを見逃す(実際、レポートの欄名が
+    「要件 ID ⇔結果の対応表」のまま残り、門前払いの完全一致に落ちる形になっていた)。
+    構造を読んで突き合わせる。
     """
-    sample = (ROOT / "docs/CONTRACTS.md").read_text()
-    assert "完了の定義が1回のレビューで判断できる範囲を超えている" in sample
-    assert "要件でありここに含めない" in sample
+    import yaml
+
+    sample_text = (ROOT / "docs/CONTRACTS.md").read_text()
+    assert "**正は [profiles/development.yaml](../profiles/development.yaml) であり" in sample_text
+    block = sample_text.split("## プロファイル YAML")[1].split("```yaml")[1].split("```")[0]
+    sample = yaml.safe_load(block)
+    real = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())
+
+    assert sample["templates"] == real["templates"], "必須欄がずれている"
+    assert sample["enabled_gates"] == real["enabled_gates"]
+    assert sample["split_criteria"] == real["split_criteria"]
+    assert [g["id"] for g in sample["gates"]] == [g["id"] for g in real["gates"]]
+    assert [g.get("model") for g in sample["gates"]] == [g.get("model") for g in real["gates"]]
+    assert [p["name"] for p in sample["phases"]] == [p["name"] for p in real["phases"]]
+    for s_phase, r_phase in zip(sample["phases"], real["phases"], strict=True):
+        assert s_phase.get("receives") == r_phase.get("receives"), s_phase["name"]
+    # テンプレート仕様の表も、契約の実欄名で書くこと(門前払いは完全一致で数える)
+    for field in real["templates"]["report_required_fields"]:
+        assert field in sample_text, field
 
 
 def test_loop_init_ships_via_bootstrap_pr() -> None:
@@ -1007,9 +1036,10 @@ def test_gate_inputs_and_label_cleanup_are_complete() -> None:
     assert "`gate:split-returned` が付いている場合は" in loop
     assert "`gate:integration-passed` が無ければ" in loop
     # run を壊した種類の修正(実走で詰まった経路)
-    assert "gh repo view --json defaultBranchRef` で解決する" in loop  # default branch 名
+    default_branch = "default branch 名は `gh repo view --json defaultBranchRef` で解決する。"
+    assert default_branch + "main を仮定しない" in loop
     # 契約を run 中に再読み出ししない
-    assert "§0.1(前提と状態復元)で default branch から読んだものを使う" in loop
+    assert "§0.1(契約と providers の読み出し)で default branch から読んだものを使う" in loop
     assert "ブートストラップ PR が未マージである" in loop  # loop-init の再実行を案内しない
     # ゲートを無効にした契約でも門前払いのラベルは片付く
     assert "`outcome` の有効無効に関わらず" in loop
@@ -1193,11 +1223,15 @@ def test_external_issue_opt_in_is_described_consistently() -> None:
     """
     boundary = (ROOT / "skills/data-boundary/SKILL.md").read_text()
     loop = (ROOT / "commands/loop.md").read_text()
-    for text, name in ((boundary, "data-boundary"), (loop, "loop.md")):
+    init = (ROOT / "commands/loop-init.md").read_text()
+    for text, name in ((boundary, "data-boundary"), (loop, "loop.md"), (init, "loop-init.md")):
         assert "tasuki:accepted" in text, name
         assert "外部からの issue を受け付けるリポジトリでは tasuki を使わない" not in text, name
     # 境界の残る範囲(コメントは opt-in で守れない)を明示していること
-    assert "コメント" in boundary
+    assert "コメントまで信頼できないリポジトリでは tasuki を使わない" in boundary
+    # 導入時の警告も「導入するな」ではなく opt-in の範囲を伝えること
+    assert "導入しないよう警告し" not in init
+    assert "コメントまで信頼できないリポジトリでは使わないよう警告し" in init
     assert "コメントまで信頼できないリポジトリでは使わない" in loop
 
 
@@ -1228,3 +1262,35 @@ def test_low_confidence_escalation_matches_the_gate_models() -> None:
         text = (ROOT / path).read_text()
         assert "orchestrator" in text, path
         assert "最上位" in text, path
+
+
+def test_perspective_references_resolve_to_catalog_names() -> None:
+    """本文が 観点「X」 で引く名前が、GATES.md のカタログに実在すること。
+
+    規約は「観点は名前で参照する(番号では書かない)」だが、参照側が
+    「冪等性と再開可能性」、カタログ側が「冪等性、再開可能性」のように
+    食い違うと、名前で引いてもカタログに当たらない。件数だけを数える
+    テストではこのズレを検出できない。
+    """
+    gates = (ROOT / "docs/GATES.md").read_text()
+    section = gates.split("## レビュー観点カタログ")[1].split("\n## ")[0]
+    names = {
+        line.split("|")[1].strip()
+        for line in section.splitlines()
+        if line.startswith("| ") and "---" not in line and not line.startswith("| 観点 |")
+    }
+    assert len(names) == 25, sorted(names)
+    # 出荷前レビューの観点は別の語彙(正は loop.md の 3c 表)。こちらも名前で引ける
+    loop = (ROOT / "commands/loop.md").read_text()
+    preship = loop.split("| # | 観点 | 見るもの |")[1].split("\n\n")[0]
+    names |= {
+        line.split("|")[2].strip() for line in preship.splitlines() if line.count("|") >= 3
+    } - {"観点", ""}
+    names.add("手順のトレース")  # 手順文書に対する第6観点(CLAUDE.md の関門が定義する)
+    unknown: list[str] = []
+    for path in _WRITING_TARGETS:
+        for lineno, line in _prose_lines(path):
+            for used in re.findall(r"観点「([^」]+)」", line):
+                if used not in names:
+                    unknown.append(f"{path.name}:{lineno}: {used}")
+    assert not unknown, unknown

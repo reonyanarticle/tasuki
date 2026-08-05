@@ -346,6 +346,8 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 7. plugin からの CI workflow ファイル生成。GitHub Apps / Actions の権限(`workflows` 書き込み権限が必要な点)
 8. **subagent のネスト**。既定の階層上限と、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` が上限を上げるのか下げるのか(https://code.claude.com/docs/en/sub-agents)
 9. **Agent 起動時の `model` 指定**と agent 定義の `model` の優先順位(同上)
+10. **`claude plugin validate` の対象解決**。marketplace manifest を同梱したリポジトリでパスを渡すと marketplace だけを検証し、plugin manifest を検証しない(両方を明示指定する必要がある)。`--strict` の有無と出力形式(指摘行の書式)もここに含む(https://code.claude.com/docs/en/plugins)
+11. **CI が固定している `@anthropic-ai/claude-code` のバージョン**。上げるときは `--strict` が存在すること、指摘行の書式が変わっていないこと、上の項目10の対象解決が変わっていないことを確かめてから上げる(固定しないと供給網が緩み、上げないと新しい検証規則が効かない)
 
 ### 検証結果(確認した時点のもの。仕様は動くため、依存する記述を書くたびに現行仕様と突き合わせる)
 
