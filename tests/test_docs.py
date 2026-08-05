@@ -1308,3 +1308,48 @@ def test_no_unimplemented_actor_in_docs() -> None:
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
     assert "停止した実行の回収" in ops
     assert "wall-clock の上限は子 issue の打ち切り条件が持ち" in ops
+
+
+def test_procedure_can_actually_be_walked() -> None:
+    """手順のトレース(第6観点)で詰まった操作が、実行できる形で書かれていること。
+
+    シナリオ試走で見つかった「機械的に詰まる」箇所を固定する。
+    git の制約(二重 checkout の拒否、生成物がある worktree の削除拒否)と、
+    gh が返さない欄(author_association)は実測で確かめたものである。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    verifier = (ROOT / "agents/verifier.md").read_text()
+    worker = (ROOT / "agents/worker.md").read_text()
+    init = (ROOT / "commands/loop-init.md").read_text()
+
+    # 二重 checkout を避ける(worker の worktree は変更があるため残っている)
+    for text, name in ((loop, "loop.md"), (verifier, "verifier.md")):
+        assert "--detach" in text, name
+        assert "git worktree remove --force" in text, name
+    # 子ブランチ名の規約(orchestrator が対象を一意に決められる)
+    assert "loop/child-<担当する子 issue 番号>" in worker
+    assert "loop/child-<子 issue 番号>" in loop
+    # gh issue view --json は author_association を返さない
+    assert "--jq .author_association" in loop
+    # 経過時間の判定に使う時刻の出どころ
+    assert "Bash(date:*)" in loop.split("---")[1]
+    assert "run 識別子はこの開始コメントの `createdAt`" in loop
+    # 統合ブランチの操作場所と後始末
+    assert (
+        "統合ブランチへの git 操作(作成、merge、push)は、すべて専用の一時 worktree の中で行う"
+        in loop
+    )
+    assert "git merge --abort" in loop
+    # 再入点が一意に決まる(2c〜2f はラベルを付けないため)
+    assert "差し戻し中でない子の再入点は、次の順に見て最初に当たったものとする" in loop
+    assert "checks-local 通過は、**判定したコミットの SHA を載せた1行の冪等コメント**" in loop
+    # 再判定ガードは3つの abstraction ゲートすべてにある
+    for label in ("gate:intake-returned", "gate:split-returned", "gate:integration-returned"):
+        assert f"`{label}` が付いている場合" in loop, label
+    assert "`gate:start-passed` が付いていれば判定しない" in loop
+    # 統合ゲート差し戻しからの復帰シグナル
+    assert "承認のシグナルは `loop:replan` の付与と定める" in loop
+    # loop-init が実行できない操作を要求していないこと
+    assert "Bash(rm:*)" in init and "Bash(gh issue list:*)" in init
+    assert "`tasuki/init` が既に存在する場合は新規作成せず" in init
+    assert "`git add -A` は使わない" in init

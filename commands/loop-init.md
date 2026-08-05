@@ -1,7 +1,7 @@
 ---
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(gh issue list:*), Bash(rm:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -45,9 +45,9 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 **既に `.tasuki/` がある場合は、上書きの前に次の4つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
 
 1. 既存契約の repo override(必須欄の追加、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、`enabled_gates`)を**採取して控える**(新しい契約はこの後のコピーで生まれるため、この時点では書き込み先が無い。**コピーの後で控えを再適用する**)
-2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
+2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(`rm` の対象は `.tasuki/` の中に限る。残すと改変検知の対象からも外れた無監視の残置物になる)
 3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
-4. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
+4. 走行中の親 issue があれば、完走または close まで待つよう案内する(判定基準は「open かつ `gate:split-passed` を持つ親」とする。`gh issue list --state open --label gate:split-passed` で数える。run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
 
 `${CLAUDE_PLUGIN_ROOT}/profiles/development.yaml` を `.tasuki/profile.yaml` にコピーする(契約プロファイルは1つであり、選択は無い)。
 以後このリポジトリでの契約の正は `.tasuki/profile.yaml` である。**上書きしてよい範囲の正は、契約ファイル冒頭のコメントが定める**(必須欄(`templates`)の追加を含む。規則が契約と一緒に導入先へ運ばれる形にしてある)。
@@ -56,7 +56,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 あわせて pack に `normalizers/` があれば `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/normalizers/` から `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
 **選んだ pack の `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/providers.yaml` を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
 
-**最後に、上の手順1で控えた repo override を `.tasuki/profile.yaml` と `.tasuki/providers.yaml` へ再適用する**(採取 → コピー → 再適用の3段目。テンプレート生成より前に行う。後回しにすると、導入先が足した必須欄がテンプレから抜けたまま生成され、次の run の門前払いで全子が差し戻される)。
+**最後に、この節の1で控えた repo override を `.tasuki/profile.yaml` と `.tasuki/providers.yaml` へ再適用する**(採取 → コピー → 再適用の3段目。テンプレート生成より前に行う。後回しにすると、導入先が足した必須欄がテンプレから抜けたまま生成され、次の run の門前払いで全子が差し戻される)。
 
 ### 4. issue / PR テンプレートの生成
 
@@ -246,7 +246,7 @@ jobs:
 - **pathspec のリストは各要素をシングルクォートで囲んで展開する。** 囲まないとシェルが glob 展開し、削除済みファイルが pathspec から落ちてテスト削除の検知が静かに効かなくなる
 - **`<...>` は生成時に展開するプレースホルダである。** `<providers.*>` は pack の `providers`、`<pack.ci.*>` は pack の `ci` から読む。テンプレートに言語固有のコマンドを直接書かない(core を言語非依存に保ち、2言語目を pack の追加だけで通すため)
 
-- **生成後に必ず YAML パースで検証する**(`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
+- **生成後に必ず YAML パースで検証する**(YAML パーサを持つ手段で行う。python なら `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/loop-gates.yml'))"`。パーサが用意できない環境では、検証できなかったことを完了報告に明記する。ImportError を「workflow が壊れている」と取り違えない)。パースに失敗した workflow は GitHub 上で 0 job の failure になり、原因が分かりにくい(E2E で実例あり。`run:` の1行スカラーに `: ` を含めると壊れるため、コロンを含むコマンドはブロックスカラー `|` で書く)
 - **paths-ignore は使わない**。ドキュメントのみの PR でも全 job を走らせる。job を丸ごとスキップすると check-run が1件も作られず、orchestrator の形式ゲート判定が「失敗なし=通過」に倒れる fail-open になるため(速度は依存キャッシュと並列 job で確保する。観点「フィードバック速度」)
 - **checkout は全 job で `persist-credentials: false`**。既定値 true は GITHUB_TOKEN を .git/config に残し、PR 由来のコード(ビルドフックや、import 時に実行されるテスト設定)から読めてしまう
 - **permissions は workflow 既定を `{}` にし、job ごとに最小付与**。PR のコードを実行する job(lint / format / typecheck / test)には `pull-requests: write` を与えない。`security-events: write` は SARIF アップロードに必要な最小権限として lint / typecheck にのみ与える
@@ -295,6 +295,9 @@ jobs:
 ## 完了報告
 
 **生成物はブートストラップ用ブランチ(`tasuki/init`)にコミットして push し、default branch への PR を1件開く。**
+**`tasuki/init` が既に存在する場合は新規作成せず、そのブランチへ checkout して更新する**(再初期化では前回のブランチが残っている。`git checkout -b` は失敗する)。
+**コミット対象は、この初期化で生成したパスだけに限る**(`.tasuki/`、`.github/ISSUE_TEMPLATE/`、`.github/pull_request_template.md`、`.github/workflows/loop-gates.yml`、lockfile)。`git add -A` は使わない(利用者の無関係な作業中の変更を巻き込む)。
+**push と PR 作成が終わったら、元のブランチへ戻す**(利用者の作業ツリーを `tasuki/init` に置いたまま終わらない)。
 default branch へ直接 push しない。
 生成物(契約、CI workflow、テンプレート)はガバナンスの制定であり、人間承認を経て default branch に入る。承認の形はループ本体と同型である(機械はコミットと push と PR 作成まで、反映は人間のマージだけ)。
 最後に、PR の URL と、未完了の手動作業(**ブートストラップ PR のレビューとマージ**、secret 設定、branch protection、fixture の採用)を分けて報告する。
