@@ -1414,3 +1414,32 @@ def test_model_tables_match_the_contract() -> None:
             # 行全体ではなくモデル欄だけを見る(昇格先が同じ行に載るため)
             cell = line.split("|")[3].strip()
             assert cell.lower().startswith(model), (path.name, label, cell)
+
+
+def test_repair_child_has_an_issuing_rule() -> None:
+    """統合ブランチの補修と出荷前レビューの所見反映が、同じ器に乗っていること。
+
+    close 済みの子へ差し戻すと、worker が merged な PR のブランチに積み、
+    2g の「既に merged」分岐が後始末だけを行って、修正が統合ブランチに
+    一度も入らないまま完了扱いになる(fail-open)。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "補修の子の起票規則" in loop
+    for rule in (
+        "起票するのは orchestrator であり、人間承認は要らない",
+        "統合ブランチの健全性(親要件の派生ではない)",
+        "via tasuki-loop",
+        "同じ解消対象の open な補修の子が既にあれば起票しない",
+        "補修の子は §1b(分割ゲート)の再判定の対象にしない",
+    ):
+        assert rule in loop, rule
+    # 出荷前レビューの所見も同じ経路へ流す(close 済みの子へ戻さない)
+    review = loop.split("### 3c-1.")[1].split("### 3c-2.")[0]
+    assert "補修の子として起票し" in review
+    assert "close 済みの子へ差し戻さない" in review
+    # worker は merged な PR の上で継続しない
+    worker = (ROOT / "agents/worker.md").read_text()
+    assert "merged / closed な PR の上では継続しない" in worker
+    # docs 側にも旧経路(解消専用 worker)が残っていないこと
+    for path in _WRITING_TARGETS:
+        assert "解消専用" not in path.read_text(), path.name

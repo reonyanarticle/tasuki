@@ -142,7 +142,7 @@ claude-security スキャン(7観点)を実施し、信頼境界の設計上の�
 アジャイル運用の難所分析で特定した2つのギャップを閉じた。
 
 - **再計画(loop:replan)**:走行中の親要件変更の正式経路。人間が親本文を編集して `loop:replan` を付けると、実行中の worker を走り切らせてから、受理ゲート再判定と decomposer の差分分割(維持 / 改訂 / 追加 / 撤回、取り込み済みへの波及は追い子)で計画を作り直す(loop.md §1d)
-- **default branch の定点取り込み**:ループ外の開発(hotfix 等)との共存。run 開始時(任意)、レイヤー合流時、3c 入場前(必須)の3定点で default branch を統合ブランチへ merge し、conflict と赤は解消専用 worker で 2d 相当に通す。3c は merge-base が default 先端と一致するまで入れない(承認する差分とマージ結果を一致させる)。多親並走(v2)の前提部品でもある
+- **default branch の定点取り込み**:ループ外の開発(hotfix 等)との共存。run 開始時(任意)、レイヤー合流時、3c 入場前(必須)の3定点で default branch を統合ブランチへ merge し、conflict と赤は補修の子(子 issue)として起票し、通常の子と同じ §2 の経路で通す。3c は merge-base が default 先端と一致するまで入れない(承認する差分とマージ結果を一致させる)。多親並走(v2)の前提部品でもある
 - 3c の承認コメントに「やらなかったこと」の親 issue 下書きを添える(起票は人間)
 - 出荷前レビューを人間起動から orchestrator の subagent 自動実行へ変更し、規模は契約の preship_review(full / scaled / manual)で制御する
 - レポート必須欄に「参照した skill と委譲した subagent」を追加(成果の前提を辿る)
