@@ -44,7 +44,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 
 **既に `.tasuki/` がある場合は、上書きの前に次の4つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
 
-1. 既存契約の repo override(必須欄の追加、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)を**採取して控える**(新しい契約はこの後のコピーで生まれるため、この時点では書き込み先が無い。**コピーの後で控えを再適用する**)
+1. 既存契約の repo override(必須欄の追加、コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、`enabled_gates`)を**採取して控える**(新しい契約はこの後のコピーで生まれるため、この時点では書き込み先が無い。**コピーの後で控えを再適用する**)
 2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(残すと改変検知の対象からも外れた無監視の残置物になる)
 3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
 4. 走行中(open)の親 issue があれば、完走または close まで待つよう案内する(run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
@@ -55,6 +55,8 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 欄を減らすことはしない(ゲートの判定材料が消える)。
 あわせて pack に `normalizers/` があれば `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/normalizers/` から `.tasuki/normalizers/` にコピーする(CI から実行するため。checks-local は exit code で判定し、normalizer を実行しない)。
 **選んだ pack の `${CLAUDE_PLUGIN_ROOT}/packs/<pack>/providers.yaml` を丸ごと `.tasuki/providers.yaml` へ書き出す**(`providers` だけでなく `ci`(改変検知の pathspec と added_line_pattern、setup、lockfile 等)と `artifacts` を含む。plugin の `packs/<pack>/providers.yaml` は導入先リポジトリに存在しないため、checks-local が「default branch の信頼された版から読む」対象をここに作る。checks-local の改変検知はこのファイルの `ci` から pathspec を引く)。
+
+**最後に、上の手順1で控えた repo override を `.tasuki/profile.yaml` と `.tasuki/providers.yaml` へ再適用する**(採取 → コピー → 再適用の3段目。テンプレート生成より前に行う。後回しにすると、導入先が足した必須欄がテンプレから抜けたまま生成され、次の run の門前払いで全子が差し戻される)。
 
 ### 4. issue / PR テンプレートの生成
 

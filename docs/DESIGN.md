@@ -21,7 +21,7 @@ language pack(v1: python)
 └── normalizer(SARIF 非対応ツールの出力変換)
 
 repo override(プロジェクト固有)
-└── 上書き(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て)と、必須欄の追加
+└── 上書き(コマンド、閾値、待ち位置定義、reviewer / criteria_skills、enabled_gates)と、必須欄の追加
 ```
 
 core の findings 判定器は SARIF / JUnit XML を正とし、ツール固有の出力形式は pack の normalizer が吸収する。

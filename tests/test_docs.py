@@ -980,7 +980,7 @@ def test_gate_inputs_and_label_cleanup_are_complete() -> None:
     # 回収モードの worker に PID とログパスを渡す
     assert "worker が報告した PID とログパスと完了の判定条件" in loop
     # decomposer への差し戻しでも契約の抜粋を渡す
-    assert "§1a(分割の入手)と同じ契約の抜粋" in loop
+    assert "verdict + §1a(分割の入手)と同じ契約の抜粋" in loop  # §1b 固有(§1d にも同名の句がある)
     # ゲートを無効にした契約でもラベルを外す
     assert "`intake` の有効無効に関わらず" in loop
     assert "`start` の有効無効に関わらず" in loop
@@ -989,6 +989,19 @@ def test_gate_inputs_and_label_cleanup_are_complete() -> None:
     # 再判定のガード(同じ状態で opus を呼び直さない)
     assert "`gate:split-returned` が付いている場合は" in loop
     assert "`gate:integration-passed` が無ければ" in loop
+    # run を壊した種類の修正(実走で詰まった経路)
+    assert "gh repo view --json defaultBranchRef` で解決する" in loop  # default branch 名
+    # 契約を run 中に再読み出ししない
+    assert "§0.1(前提と状態復元)で default branch から読んだものを使う" in loop
+    assert "ブートストラップ PR が未マージである" in loop  # loop-init の再実行を案内しない
+    # ゲートを無効にした契約でも門前払いのラベルは片付く
+    assert "`outcome` の有効無効に関わらず" in loop
+    # 無効にしたゲートの LLM 判定は走らせない(2b と対称)
+    assert "`outcome` が無ければ、ここから先の LLM 判定は行わない" in loop
+    # replan は統合ゲートの通過も解除する
+    assert "`gate:integration-passed` を外し" in loop
+    # 漂流で戻すときは着手ゲートの通過を解除する
+    assert "**`gate:start-passed` を外してから**着手ゲート相当の再照合" in loop
 
 
 def test_subagent_nesting_claims_match_current_spec() -> None:
