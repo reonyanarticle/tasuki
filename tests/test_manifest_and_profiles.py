@@ -446,3 +446,23 @@ def test_distributed_python_is_formatted_for_the_default_width() -> None:
             text=True,
         )
         assert proc.returncode == 0, (width, proc.stderr[-500:])
+    # ruff も .tasuki/ を走査する。black は長いコメントを整形しないので両者は同値でない
+    # (89〜100 字の日本語コメントを1行足すと、black は緑のまま ruff だけが恒久的に赤になる)。
+    proc = subprocess.run(
+        [
+            "uv",
+            "run",
+            "ruff",
+            "check",
+            "--isolated",
+            "--select",
+            "E501",
+            "--line-length",
+            "88",
+            *map(str, targets),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout[-800:]

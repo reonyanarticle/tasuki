@@ -609,7 +609,9 @@ def test_trace_review_findings_are_fixed() -> None:
     assert "着手も回収もしない" in loop  # 人間の手動 assign との判別
     assert "後着に譲って run を終了する" in loop  # 二重起動の競合緩和
     assert "orchestrator(メインセッション)が裁定する" in loop  # opus の low PASS を降格させない
-    assert "解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR" in loop  # 取り込み後の赤
+    # 取り込み後の赤は、専用経路ではなく追い子(実在の子 issue)として通す
+    assert "解消を追い子として起票し、通常の §2(子ごとのゲート実行)に流す" in loop
+    assert "専用の経路を作らない" in loop
     worker = (ROOT / "agents/worker.md").read_text()
     assert "--base <統合ブランチ>" in worker
     assert "統合ブランチとは限らない" in worker  # worktree base の明示
@@ -1210,7 +1212,7 @@ def test_ci_validates_both_manifests_strictly() -> None:
     走行時間と重複実行を縛る(timeout / concurrency)。
     """
     wf = (ROOT / ".github/workflows/validate.yml").read_text()
-    assert "--strict" in wf
+    assert 'claude plugin validate "$manifest" --strict' in wf, "実行行に --strict が無い"
     assert ".claude-plugin/plugin.json" in wf and ".claude-plugin/marketplace.json" in wf
     assert re.search(r"@anthropic-ai/claude-code@\d+\.\d+\.\d+", wf), "バージョン未固定"
     assert "timeout-minutes:" in wf

@@ -130,7 +130,7 @@ worker が実行中の間は取り込まない(実装の足元の base を動か
 - **子が1件、またはレイヤーが1つ**:§3a(レイヤーの合流)は前レイヤーが無いので待ち合わせが発生しない。その子が ready 化されたら、そのまま人間のマージ待ちとして報告する
 - **依存がまったく無い**:全子が L1 に入る。WIP 上限の範囲で並行に処理する
 - **全子 issue がマージ済み**:降りゲート(受理と分割)は遡及適用せず、統合ゲートだけを判定する(§0.10(受理ゲート))
-- **子が0件のまま分割ゲートが PASS した**:分割案が空である。分割の欠陥として **`gate:split-passed` を外し**、`loop:triage` を付けて停止する(空の分割で先へ進まない。`gate:split-passed` を残すと、人間が triage を外しても §1b(分割ゲート)のガードで新しい分割案が判定されない)
+- **子が0件のまま分割ゲートが PASS した**:分割案が空である。分割の欠陥として **`gate:split-passed` を外し**、**分割案が空であることを親 issue に冪等にコメントしてから**(§1a(分割の入手)のガードが triage の由来をコメント履歴で判別するため、由来を書かないと判別材料が無い)`loop:triage` を付けて停止する(空の分割で先へ進まない。`gate:split-passed` を残すと、人間が triage を外しても §1b(分割ゲート)のガードで新しい分割案が判定されない)
 
 ### 1d. 再計画(loop:replan、要件変更の正式経路)
 
@@ -144,7 +144,7 @@ worker が実行中の間は取り込まない(実装の足元の base を動か
 1. 親の `gate:intake-passed` と `gate:split-passed` と `gate:integration-passed` を外し(統合ゲートを外さないと、新しい親要件に対する孤児の検査を飛ばして 3c(出荷前レビュー)へ行く)、§0.10(受理ゲート)を新本文で再判定する(新しいスコープに対する予算と承認サイズはここで検まる)。差し戻しなら通常どおり `loop:triage` で止まる(`loop:replan` は外さず、人間の修正後に再入する)
 2. PASS したら decomposer へ**差分分割モード**で委譲する。**ただし親に `gate:integration-returned` が付いている場合(統合ゲートの差し戻しからの再入)は、decomposer を呼び直さず、§3b(統合ゲート)が親に残した最新の提案コメントの差分分割案をそのまま適用する**(人間はその提案を読んで `loop:replan` を付けている。呼び直すと承認した内容と違う子が起票される)。呼び直す場合に渡すのは、新しい親本文、旧分割案 YAML(最新の分割ゲート PASS verdict の `<details>` から読む。**人間起票で分割案の添付が無い場合は、現在の子 issue 群の本文一覧を旧分割案の代わりに渡す**)、子 issue の決着状態一覧(統合ブランチへ取り込み済みか、未取り込みか。未取り込みは実行前、差し戻し中、triage 停止中を含む)と、§1a(分割の入手)と同じ契約の抜粋のみ。返る差分分割案は子ごとに「維持 / 改訂 / 追加 / 撤回」を宣言し、取り込み済みの子に波及する変更は**追い子**(取り込み済み成果を前提に適応する新しい子)として表現する(統合ブランチに入った成果は巻き戻さない。revert ではなく前進で適応する)
 3. 差分分割案の適用後の全子集合を、§1b(分割ゲート)が通常どおり集合として再判定する(依存の循環、孤児、予算整合)
-4. PASS したら orchestrator が適用する。**維持**は何もしない。**改訂**(未取り込みの子)は本文を更新して `gate:start-passed` と `gate:outcome-passed` と `gate:outcome-returned` を外す(着手ゲートから通り直す。`gate:outcome-passed` を残すと、次の再入で 2g へ入り改訂前の実装が取り込まれる)。**追加**と**追い子**は §1b(分割ゲート)の PASS 経路どおり起票する(起票の冪等判定は open の子だけと突き合わせる。撤回済みの closed の子と同タイトルでも、replan による追加は正当な新しい子である)。**撤回**(要件縮小で不要になった未取り込みの子)は「replan により撤回」とコメントして close し、**その子の open な子 PR があれば同じ理由でコメントして close する**(残すと親 PR からの導線と `/tasuki:loop-status` の一覧を汚す。改訂の子は既存 PR の上で継続する)(完了コメントの無い人間 close =不採用と区別するため、撤回コメントを必ず残す)
+4. PASS したら orchestrator が適用する。**維持**は何もしない。**改訂**(未取り込みの子)は本文を更新して `gate:start-passed` と `gate:outcome-passed` と `gate:outcome-returned` と、**その子に付いたゲート由来の `loop:triage`** を外す(triage を残すと、上限超過で止まっていた子が要件を直しても着手されない)(着手ゲートから通り直す。`gate:outcome-passed` を残すと、次の再入で 2g へ入り改訂前の実装が取り込まれる)。**追加**と**追い子**は §1b(分割ゲート)の PASS 経路どおり起票する(起票の冪等判定は open の子だけと突き合わせる。撤回済みの closed の子と同タイトルでも、replan による追加は正当な新しい子である)。**撤回**(要件縮小で不要になった未取り込みの子)は「replan により撤回」とコメントして close し、**その子の open な子 PR があれば同じ理由でコメントして close する**(残すと親 PR からの導線と `/tasuki:loop-status` の一覧を汚す。改訂の子は既存 PR の上で継続する)(完了コメントの無い人間 close =不採用と区別するため、撤回コメントを必ず残す)
 5. `loop:replan` と、統合ゲートの差し戻しで付いた `loop:triage` を外し、レイヤー計画(§1c(依存グラフとレイヤー))を作り直して通常の実行に戻る。計画コメントには何が変わったか(改訂 / 追加 / 撤回 / 追い子の一覧)を1行ずつ残す。**親 PR 本文の `Closes #<番号>` 列挙も、適用後の子集合に更新する**(取り込み時に子を close するので実害は小さいが、保険として置いた列挙が新しい子に効かなくなる)
 
 再計画の受理ゲートと分割ゲートの反復も `max_iterations_per_gate` に計上する(超過で `loop:triage`)。
@@ -233,6 +233,8 @@ reviewer へ委譲する。
 - 同一ゲートで差し戻し2連続 → 次回判定を `escalate_to` のモデルへ昇格する(`escalate_to` が無ければ昇格先は無く、上と同じく orchestrator が裁定する)
 - 差し戻しが `max_iterations_per_gate` を超過 → 停止。状況を要約し「契約の不備 / タスクの筋の悪さ / モデル能力の限界」を切り分けたコメントを**子 issue** に残し、**子に** `loop:triage` を付ける(親には1行の要約だけを残す。理由は子を開いた人間に見えなければならない)
 
+**差し戻しは `return_to` によらず `gate:start-returned` を付ける**(2f(成果ゲート)が `gate:outcome-returned` を付けるのと同じ扱い。付けないと、§2(子ごとのゲート実行)の再入分岐が「未編集ならスキップして起票者待ちを維持する」に当たらず、本文が直らないまま run のたびに reviewer を呼び直す)。
+
 **差し戻し先の読み替え**：`return_to: decomposer` の差し戻しは、子 issue の由来で宛先を分ける。本文末尾に `via tasuki-decomposer` がある子は新規の decomposer セッションへ(子 issue 本文の修正案を作らせ、orchestrator が issue を更新する)。人間起票の子は起票者宛に読み替え、verdict コメントで mention し `loop:triage` を付けて修正待ちにする。
 
 **質問のルーティング**：
@@ -261,7 +263,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 
 反復中の合否は orchestrator がローカルで即時判定する(検査を受け手の近くに置き、CI の往復を待たない。観点「フィードバック速度」)。
 
-1. **対象 PR の head ブランチ**(子 issue 由来なら `loop/child-<子 issue 番号>`、統合ブランチの解消 worker が作った PR ならその head)を `git fetch origin <head>` してから、**`git worktree add --detach <一時パス> origin/<head>`** で一時 worktree を作る(worker の worktree は使わない。**`--detach` と remote-tracking ref が要件である**。ブランチ名をそのまま渡すと、worker の worktree に checkout されたままのブランチを二重に checkout することになり git が拒否する。worker の worktree は変更があるため自動掃除されず、§5(終了報告)まで残っている)
+1. **対象 PR の head ブランチ**(`loop/child-<子 issue 番号>`。解消の追い子も子 issue として起票するので同じ規約になる)を `git fetch origin <head>` してから、**`git worktree add --detach <一時パス> origin/<head>`** で一時 worktree を作る(worker の worktree は使わない。**`--detach` と remote-tracking ref が要件である**。ブランチ名をそのまま渡すと、worker の worktree に checkout されたままのブランチを二重に checkout することになり git が拒否する。worker の worktree は変更があるため自動掃除されず、§5(終了報告)まで残っている)
 2. **改変検知を先に行う**(provider のコマンドを実行する前に済ませる)。**base は統合ブランチをこの手順で取得し直して使う**(`git fetch origin <統合ブランチ>` してから `origin/<統合ブランチ>...HEAD`。ローカルの remote-tracking ref を信用しない。CI 側と同じ理由)。**検知に使う pathspec と added_line_pattern は、契約と pack の定義を default branch 版から読んで得る**(読み出しの規則は次の手順3と同じ。値が空リストのキー、またはキー自体が無いブロックは使わない。`git diff -- ` は pathspec が空だと全ファイルを対象にするため)。テスト改変検知(base との diff に対する削除、skip/xfail、設定変更のチェック。CI テンプレートと同じ基準)と、ガバナンスファイル(`.tasuki/**`、`.github/workflows/loop-gates.yml`)の改変検知を行う。いずれか該当したら、provider を実行せずに差し戻す(worker.md の禁止範囲と一致させる。他の workflow の変更は通常のタスクとして許容する)。**順序に意味がある**: 先に provider(テスト実行等)を実行すると、その過程で読み込まれる PR 側のコード(テストランナーの設定ファイル等)が base ref や PATH を書き換えて、後続の改変検知そのものを無効化できる
 3. 契約の `enabled_gates` にあるゲートのうち **`kind: mechanical` で、かつその provider が `command` を持つもの**を実行し、exit code で合否を読む(言語 pack なら lint / format / typecheck / test。ゲート ID の綴りではなく `kind` で判別する。`action` だけを持つ provider(外部 Action)は CI 専用でありローカルでは実行しない。実行対象が無ければ、この 2d は手順2の改変検知だけを行って次へ進む)。**このコマンドは言語 pack が決めるため、core の `allowed-tools` には書けない。** 導入先で `/tasuki:loop-init` が pack のコマンドに対応する権限の追加を提案する。付与が無い場合は実行のたびに確認を求められ、自走が止まる(worker の自己申告は使わない)。**契約と providers は §0.1(契約と providers の読み出し)で default branch から読んだものを使う**(run の途中で読み直さない)。checks-local が実行するのは providers の宣言済みコマンドだけであり、リポジトリ内のスクリプトを直接実行する検査は持たない(v1 の pack の normalizer は CI だけが実行する。子ブランチ側の写しのスクリプトを実行すると、改変検知の前に改変済みスクリプトが走るためである)。worker のブランチが `.tasuki/**` や providers を書き換えていたら、それ自体を差し戻し理由とする(worker が自分を判定する契約を書き換えられないようにする)
 4. 一時 worktree を **`git worktree remove --force`** で削除する(provider の実行が生成物(SARIF、JUnit XML、キャッシュ)を残すため、`--force` が無いと git が削除を拒否する)
@@ -279,7 +281,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。
 
 まず verifier の `drift_check` を確認する。
-**`drift_check: drifting` なら、status の値に関わらず** 作業が元要件からずれているため、**`gate:start-passed` を外してから**着手ゲート相当の再照合(2b(着手ゲート))に戻す(観点「目的漂流の検知」)。ラベルを残したまま戻すと、2b の「`gate:start-passed` が付いていれば判定しない」ガードに吸われて再照合が空振りする。
+**`drift_check: drifting` なら、status の値に関わらず** 作業が元要件からずれているため、**`gate:start-passed` を外してから**着手ゲート相当の再照合(2b(着手ゲート))に戻す(観点「目的漂流の検知」)。**この往復は内側ループの有効上限に計上する**(2b は子 issue 本文を見るゲートなので、漂流しているのが実装であればほぼ必ず PASS する。計上しないと「漂流 → 2b PASS → 新規 worker → また漂流」がどのカウンタにも載らない。超過で `loop:triage`)。ラベルを残したまま戻すと、2b の「`gate:start-passed` が付いていれば判定しない」ガードに吸われて再照合が空振りする。
 
 `drift_check: aligned` の場合、`status` で分岐する。
 
@@ -334,7 +336,7 @@ PASS したら `gate:outcome-passed` を付け、ラベルを片付けて(共通
 - **`cancelled` の job がある** → 失敗として扱わない。反復中の push で `concurrency` が旧 run を打ち切った結果であることが多いため、最新コミットの run を確認し直す。最新コミットに対する完了 run が無ければ `gh run rerun` で1回だけ走らせ直し、それでも `cancelled` が残る場合は `loop:triage`(打ち切られた run を差し戻し理由にすると、欠陥が無いまま `max_iterations_per_gate` を溶かす)
 - **`skipped` の job がある** → **PASS とみなさない**(fail-closed)。`skipped` は concurrency の打ち切りでは発生せず、`if:` 条件や `needs` の不成立で job が実行されなかったことを意味する。形式ゲートを一度も通っていない実装を出荷判定に通さない。workflow の条件を確認し、解決できなければ `loop:triage`
 - **失敗した job がある** → checks-local と CI の食い違い(環境差、secrets 依存のテスト等)として findings を抽出し、新規 worker セッションへ差し戻す(内側ループ上限に計上)。**実装コミットが変わったら `gate:outcome-passed` を外し**、2d から通り直す(古いレポートの PASS で新しい実装を取り込まない)
-- **全 job 成功** → **orchestrator が子 PR を ready 化してから統合ブランチへマージする**。**子 PR が既に merged なら、マージを試みずに残りの後始末(完了コメント、`loop:in-progress` の除去、子 issue の close)だけを冪等に行う**(マージ後 close 前に落ちた run の再入。merged な PR に `gh pr merge` を出すと失敗し、§0.5(gh の失敗)の規則でどの run も同じ位置で止まる)。マージが conflict で拒否された場合(並行の子が同じファイルを先に取り込んだ)は、統合ブランチを子ブランチへ取り込み直して解消する新規 worker セッションへ差し戻し、`gate:outcome-passed` を外して 2d から通し直す(反復は内側ループ上限に計上する)(worker は draft で作る規約のため、ready 化しないと GitHub がマージを拒否する。これは default branch への反映ではないため、ループが行ってよい)。取り込み時、その子で使った worker セッション数(反復の実測)を計画コメントの行に記録する(予算の執行を自己申告でなく orchestrator が数える)。子 issue に完了コメントを残し、`loop:in-progress` を外し、**子 issue を close する**(子の役目=要件と議論の置き場は取り込みで終わる。open のまま残すと一覧を汚す)。親 PR の `Closes` 列挙は保険として残す(既に閉じていれば無害、close し損ねがあれば拾う)
+- **全 job 成功** → **orchestrator が子 PR を ready 化してから統合ブランチへマージする**。**子 PR が既に merged なら、マージを試みずに残りの後始末(完了コメント、`loop:in-progress` の除去、子 issue の close)だけを冪等に行う**(マージ後 close 前に落ちた run の再入。merged な PR に `gh pr merge` を出すと失敗し、§0.5(gh の失敗)の規則でどの run も同じ位置で止まる)。マージが conflict で拒否された場合(並行の子が同じファイルを先に取り込んだ)は、統合ブランチを子ブランチへ取り込み直して解消する新規 worker セッションへ差し戻し、`gate:outcome-passed` を外して 2d から通し直す(反復は内側ループ上限に計上する)(worker は draft で作る規約のため、ready 化しないと GitHub がマージを拒否する。これは default branch への反映ではないため、ループが行ってよい)。取り込み時、その子で使った worker セッション数(反復の実測)を計画コメントの行に記録する(予算の執行を自己申告でなく orchestrator が数える)。子 issue に完了コメントを残し、`loop:in-progress` と **assignee** を外し、**子 issue を close する**(assignee を残すと、後始末の途中で落ちた run の再入が stale 回収の経過時間(既定60分)まで待たされる)(子の役目=要件と議論の置き場は取り込みで終わる。open のまま残すと一覧を汚す)。親 PR の `Closes` 列挙は保険として残す(既に閉じていれば無害、close し損ねがあれば拾う)
 
 **人間は子 PR をマージしない。** 子 PR は統合ブランチへの下請けの取り込みであり、人間の最終判断は親 PR(§3c(出荷前レビュー))の1回に集約する。子 PR は閉じずに merged のまま残り、親 PR から辿れる。
 
@@ -352,15 +354,16 @@ PASS したら `gate:outcome-passed` を付け、ラベルを片付けて(共通
 **default branch の取り込み(定点1)。**
 次レイヤーへ進む前に、default branch が統合ブランチの merge-base より進んでいないかを確認する。
 進んでいれば、**§1c(依存グラフとレイヤー)と同じ一時 worktree の中で** `git merge` で default branch を統合ブランチへ取り込み、**`git push origin loop/parent-<親番号>` まで行う**(push しないと次レイヤーの worker が origin から古い統合ブランチを取る)。rebase はしない(子 PR が参照するコミットを書き換えないため)。
-**merge が conflict したら、その場で `git merge --abort` して作業ツリーを元に戻してから**、下の解消専用 worker へ回す(コンフリクト状態の worktree を残すと、次の run の checks-local が解決できない状態から始まる)。
+**merge が conflict したら、その場で `git merge --abort` して作業ツリーを元に戻してから**、下の解消の追い子へ回す(コンフリクト状態の worktree を残すと、次の run の checks-local が解決できない状態から始まる)。
 ループ外の開発(hotfix 等)はこの定点で合流し、hotfix 側に特別な経路は要らない(人間は普通に default branch へマージしてよい)。
-取り込み後は統合ブランチ上で checks-local を再実行し、conflict または赤になったら、解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR を作らせ、2d 相当で通す(反復は `max_iterations_per_gate`、超過で `loop:triage`)。
-このとき 2d のテスト改変検知は、default branch 側から来た変更(merge の相手側のコミット由来)を差し戻し理由にしない(hotfix が正当に変更したテストを worker の改変と誤認しない)。解消 worker 自身が持ち込んだ変更だけを検知の対象とする。
+取り込み後は統合ブランチ上で checks-local を再実行し、conflict または赤になったら、**解消の作業を「追い子」として子 issue に起票してから**通常の §2(子ごとのゲート実行)に流す(§1d(再計画)の追い子と同じ器を使う。タイトルに解消対象を書き、受け入れ条件は「統合ブランチ上で checks-local が緑になること」とする)。
+**専用の経路を作らない**(worker は担当する子 issue の番号を必須の入力に取り、ブランチ名も `loop/child-<番号>` の規約で決まる。issue の無い委譲は入力不足で空回りし、反復の計上先も、再入時に PR を再発見する手がかりも無くなる)。
+このとき 2d のテスト改変検知は、default branch 側から来た変更(merge の相手側のコミット由来)を差し戻し理由にしない(hotfix が正当に変更したテストを worker の改変と誤認しない)。解消の追い子自身が持ち込んだ変更だけを検知の対象とする。
 
 **次レイヤーへは、現在レイヤーの全子が統合ブランチへ取り込まれたら進む。**
 合流点は統合ブランチの更新であり、人間のマージを待たない(人間の判断は親 PR の1回に集約されている)。
 1件取り込むごとに、統合ブランチ上で checks-local を再実行する(古い base への判定のまま重ねない)。
-取り込み後に赤になった場合、その子の PR は既にマージ済みで子 issue も close 済みのため、2d には戻せない。**定点1と同じ扱いで、解消専用の worker セッション(新規)に統合ブランチ向けの修正 PR を作らせて 2d 相当で通す**(子 issue は close のまま)。
+取り込み後に赤になった場合、その子の PR は既にマージ済みで子 issue も close 済みのため、2d には戻せない。**定点1と同じ扱いで、解消を追い子として起票し、通常の §2(子ごとのゲート実行)に流す**(元の子 issue は close のまま)。
 次レイヤーの worker は、更新された統合ブランチから worktree を作る。
 
 ### 3b. 統合ゲート

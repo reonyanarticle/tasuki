@@ -24,6 +24,7 @@ providers.yaml と契約プロファイルが単一ソースであり、以下�
 **plugin 側のファイル(`profiles/`、`packs/`)は必ず `${CLAUDE_PLUGIN_ROOT}` からの絶対パスで読む**(カレントは導入先リポジトリであり、そこにこれらは存在しない)。
 まず、各 pack の `detect` に挙がったファイルが存在すれば、その pack を選択する。
 どの pack の `detect` にも一致しなければ、同梱されている pack の一覧を伝えて中断する(2言語目は pack を1枚追加するだけで対応する。core に言語名を書かない)。
+**pack の `ci.setup` が前提する管理ツールを、対象リポジトリが実際に使っているかを確認する**(pack の `detect` はファイルの有無しか見ないため、同じファイルを使う別の管理ツール(poetry 等)にも一致する)。違っていれば、`ci.setup` と `ci.lockfile` と各 provider のコマンド前置きを差し替える repo override を手順3で提案する(確認せずに進むと、生成した CI の全 job が依存解決で落ち、導入直後に最も気づきにくい形で失敗する)。
 pack の `providers` が使うツールが dev 依存にあるか確認し、なければ pack の流儀で追加を提案する。
 pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成してコミット対象に含める(`ci.setup` の依存解決は lockfile が無いと全 job が即失敗するため必須。`lockfile: null` の pack では何もしない)。
 
