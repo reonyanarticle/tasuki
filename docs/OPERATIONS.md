@@ -18,7 +18,7 @@ CI は plugin が **作ることを前提** とする(既存 CI は前提にし�
    - security job は `anthropics/claude-code-security-review` Action(PR コメント形式)
    - 依存キャッシュと並列 job をデフォルトで焼き込み、PR ゲートを5〜10分以内に保つ(観点「フィードバック速度」)。paths-ignore は使わない(job を丸ごとスキップすると check-run が作られず、形式ゲート判定が fail-open になるため)
    - 通知は失敗だけでなく成功も送る(沈黙が「成功」か「通知経路の故障」か区別できないため)
-7. ラベル作成(`gate:*` 系)、sub-issues / issue dependencies の利用確認(作成は `gh` v2.94.0 以上、`--json subIssues` での読み取りは v2.95.0 以上。満たさない側は `gh api` フォールバック)
+7. ラベル作成(`gate:*`、`loop:*`、`tasuki:*`)、sub-issues / issue dependencies の利用確認(作成は `gh` v2.94.0 以上、`--json subIssues` での読み取りは v2.95.0 以上。満たさない側は `gh api` フォールバック)
 8. `max_iterations` 等バジェットのデフォルト設定と、判定例(fixture)の下書き生成
 9. **生成物をブートストラップ用ブランチ(`tasuki/init`)へコミットして push し、default branch への PR を1件開く。** default branch へ直接 push しない。生成物はガバナンスの制定であり、人間がレビューしてマージすることで入る(反映の形はループ本体と同型で、機械は PR 作成まで)
 

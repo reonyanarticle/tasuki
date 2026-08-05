@@ -916,6 +916,9 @@ def test_scan_artifacts_are_ignored() -> None:
     assert "CLAUDE-SECURITY-*/" in ignored
 
 
+_PLUGIN_PATH = re.compile(r"(docs|profiles|packs|commands|agents|skills)/[A-Za-z]")
+
+
 def test_distributed_files_have_no_unresolvable_references() -> None:
     """導入先へコピーされるファイルが、plugin 内のパスを参照しないこと。
 
@@ -928,11 +931,12 @@ def test_distributed_files_have_no_unresolvable_references() -> None:
     targets = [
         *sorted((ROOT / "profiles").glob("*.yaml")),
         *sorted((ROOT / "packs").rglob("providers.yaml")),
+        *sorted((ROOT / "packs").rglob("normalizers/*.py")),  # これも .tasuki/ へコピーされる
     ]
     assert targets, "配布対象のファイルが見つからない"
     for path in targets:
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
-            if re.search(r"(docs|profiles|packs)/[A-Za-z]", line):
+            if re.search(_PLUGIN_PATH, line):
                 offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()[:60]}")
     assert not offenders, offenders
 
@@ -950,7 +954,7 @@ def test_final_trace_audit_findings_are_fixed() -> None:
     # 予算欄の読み取りは門前払いの有無に依らず走らせる(有効上限の出どころ)
     assert "予算欄の読み取りは、上の空チェックを行うかどうかに関わらず必ず行う" in loop
     # 門前払いの差し戻しも verdict 同型(再入の基準時刻と委譲の入力になる)
-    assert "このコメントも verdict と同型で残す" in loop
+    assert "`tasuki:gate-review` skill の verdict スキーマで残す" in loop
     # 人間起票の親に replan が付いた場合の代替入力
     assert "現在の子 issue 群の本文一覧を旧分割案の代わりに渡す" in loop
     init = (ROOT / "commands/loop-init.md").read_text()
@@ -960,6 +964,31 @@ def test_final_trace_audit_findings_are_fixed() -> None:
     # 契約ファイルのコメントは導入先へコピーされるため、plugin の docs パスを指さない
     contract = (ROOT / "profiles/development.yaml").read_text()
     assert "docs/CONTRACTS.md" not in contract
+
+
+def test_gate_inputs_and_label_cleanup_are_complete() -> None:
+    """委譲の渡し物とラベルの後始末に穴が無いこと。
+
+    受け手が使うと宣言しているものを渡し手が渡していない、付けたラベルを外す手順が
+    ゲート無効時に走らない、といった穴は run を止めるか triage を汚す。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    # 統合ゲートにも契約を渡す(gate-reviewer は契約ファイルを自力で読めない)
+    assert "契約の `gates.integration.phase` が指すフェーズの `receives` 定義" in loop
+    # 出荷前レビューは AC / SC を照合するので子 issue の欄が要る
+    assert "各子 issue の受け入れ条件と成功基準の欄" in loop
+    # 回収モードの worker に PID とログパスを渡す
+    assert "worker が報告した PID とログパスと完了の判定条件" in loop
+    # decomposer への差し戻しでも契約の抜粋を渡す
+    assert "§1a(分割の入手)と同じ契約の抜粋" in loop
+    # ゲートを無効にした契約でもラベルを外す
+    assert "`intake` の有効無効に関わらず" in loop
+    assert "`start` の有効無効に関わらず" in loop
+    # 成果ゲートの門前払いは outcome 無効でも通る経路を持つ
+    assert "含まれない場合も **2f の門前払い(機械チェック)だけを行ってから**" in loop
+    # 再判定のガード(同じ状態で opus を呼び直さない)
+    assert "`gate:split-returned` が付いている場合は" in loop
+    assert "`gate:integration-passed` が無ければ" in loop
 
 
 def test_subagent_nesting_claims_match_current_spec() -> None:

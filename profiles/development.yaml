@@ -15,13 +15,15 @@ budgets:
   max_iterations_per_gate: 3      # 超過で人間にエスカレーション
   max_inner_loop: 5               # verifier の打ち切り上限デフォルト
   wip_limit_prs: 3                # 人間のマージ待ちの ready 親 PR の上限。超過で新規 worker 起動を停止
-  stale_assignment_minutes: 60   # 停止した実行が残した assignee を回収するまでの経過時間
+  stale_assignment_minutes: 60   # 停止した実行が残した assignee を回収するまでの経過時間(出荷前レビューの沈黙検知にも使う)
 
 # モデルは agent 定義に固定されている(worker と verifier と decomposer = sonnet)。gate-reviewer のモデルは orchestrator が起動ごとに指定する。
 # reviewer の差し替えは gates[].reviewer に導入先プロジェクトの agent 名を指定する。
 
 worker_agent: tasuki-worker       # maker の差し替えキー(導入先の repo override で上書きできる)
 
+# フェーズの連鎖。hands_off と receives.from は宣言であり、ゲートの受け渡し先の解決は
+# gates[].phase が行う(手順書はこの2キーを読まない)。
 phases:
   - name: requirements            # 親 issue
     hands_off:
@@ -135,14 +137,14 @@ gates:
   - id: checks-lint
     kind: mechanical
     provider: lint                # pack の providers.yaml を参照
-    blocking_threshold: error     # SARIF level
+    blocking_threshold: error     # SARIF level(CI の SARIF 可視化の閾値。ローカル判定は exit code)
   - id: checks-format
     kind: mechanical
     provider: format              # exit-code 判定(コマンドは pack の providers が定める)
   - id: checks-typecheck
     kind: mechanical
     provider: typecheck
-    blocking_threshold: error
+    blocking_threshold: error     # CI の typecheck gate が pack の blocking_count で数える閾値
   - id: checks-test
     kind: mechanical
     provider: test                # JUnit XML: failures == 0

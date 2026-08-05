@@ -1,6 +1,6 @@
 """basedpyright の JSON 出力を SARIF 2.1.0 に変換する normalizer。
 
-core の findings 判定器は SARIF / JUnit XML のみを読む(docs/DESIGN.md)。
+core の findings 判定器は SARIF / JUnit XML のみを読む。
 basedpyright は SARIF を直接出力できないため、CI 上でこのスクリプトを挟んで変換する。
 変換に成功する限り終了コードは 0(ゲート判定は SARIF / summary を読む側が行う)。
 入力が壊れている場合も SARIF を空 results で書き出し、CI の後段(upload-sarif)を

@@ -92,7 +92,7 @@ fixture は回帰テストの初期データを兼ねる。
 ## repo override(.tasuki/)
 
 プロジェクト固有の上書きは対象リポジトリの `.tasuki/` に置き、plugin の profiles/ は編集しない。
-上書きできるのはコマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当てのみ。
+上書きしてよい範囲の正は契約ファイル冒頭のコメントが定める(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、必須欄(`templates`)の追加)。
 名前解決は project > repo override > language pack > plugin デフォルトの順。
 
 ## 契約変更(axis-question)の手順

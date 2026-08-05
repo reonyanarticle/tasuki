@@ -176,7 +176,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     accTitle: 子 issue 1件の内側の経路
-    accDescr: 門前払いと着手ゲートを通ると worker が実装し、checks-local、verifier、成果ゲート、CI を経て統合ブランチへ取り込まれる。形式と成果と CI の差し戻しは worker へ、レポートの書き方の不足はレポート再出力へ戻る。差し戻しは点線で示す。
+    accDescr: 門前払いと着手ゲートを通ると worker が実装し、checks-local、verifier、成果ゲート、CI を経て統合ブランチへ取り込まれる。形式と成果と CI の差し戻しは worker へ、レポートの書き方の不足はレポート再出力へ戻り、verifier の打ち切り(abort)は triage で止まる。差し戻しは点線で示す。
     classDef gate fill:#8250df,stroke:#6639ba,color:#fff
     classDef work fill:#bf8700,stroke:#9a6700,color:#fff
 
@@ -186,7 +186,8 @@ flowchart TD
     CL -->|緑| V["§2e verifier(SC 照合 + drift 検査)"]:::work
     CL -.->|赤| W
     V -->|met| G3{"§2f 成果ゲート<br/>sonnet → opus"}:::gate
-    V -.->|continue / abort| W
+    V -.->|continue| W
+    V -.->|abort| TRI["loop:triage(人間の裁定待ち)"]:::work
     G3 -->|PASS| CI["§2g checks-ci(fail-closed)"]:::work
     G3 -.->|書き方| RPT["レポートのみ再出力"]:::work
     RPT -.-> G3

@@ -32,7 +32,7 @@ providers:
 artifacts: ["__pycache__/", "*.pyc", ".pytest_cache/", ".ruff_cache/"]
 
 # CI workflow(loop-gates.yml)を組み立てるための言語固有の部品。
-# core(commands/loop-init.md)は job の骨格と fail-closed 規則だけを持ち、
+# core の初期化コマンドは job の骨格と fail-closed 規則だけを持ち、
 # 言語に依存する具体はここから読んで埋める(core を言語非依存に保つため)。
 ci:
   # 全 job 共通の前処理(ランタイム準備と依存解決)
