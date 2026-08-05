@@ -358,3 +358,31 @@ def test_gate_fixtures_resolve_against_the_contract(dev_profile: dict) -> None:
         assert receives["waiting_level"], (path.name, gate)
         if gate in needs_requirements:
             assert fixture.get("requirements", "").strip(), (path.name, "照合先が無い")
+
+
+def test_override_range_is_listed_in_one_place() -> None:
+    """repo override の範囲は契約冒頭のコメントが正で、写しは1つに限ること。
+
+    かつて同じ6項目が契約、loop-init、skill、CONTRACTS の4箇所にあり、
+    1項目の増減で3箇所を追随させる必要があった(一致を固定するテストも無かった)。
+    説明を置くのは CONTRACTS だけとし、その一致をここで固定する。
+    """
+    contract = (ROOT / "profiles/development.yaml").read_text()
+    header = contract.split("budgets:")[0]
+    items = (
+        "コマンド",
+        "閾値",
+        "待ち位置定義",
+        "reviewer / criteria_skills の割り当て",
+        "enabled_gates",
+    )
+    for item in items:
+        assert item in header, item
+    contracts_doc = (ROOT / "docs/CONTRACTS.md").read_text()
+    for item in items:
+        assert item in contracts_doc, item
+    # 手順書と skill は列挙せず、正を指すだけであること
+    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md"):
+        text = (ROOT / rel).read_text()
+        assert "契約ファイル冒頭のコメント" in text or "profile.yaml` 冒頭のコメント" in text, rel
+        assert "待ち位置定義、reviewer / criteria_skills の割り当て" not in text, rel

@@ -324,7 +324,8 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 2. 子 PR の自動マージを CI に移す(`gh pr merge` が組織の permission ポリシーで ask になる環境向け。loop:pr ラベル+ checks 緑+ base が `loop/*` の PR だけを対象にした automerge job を loop-init が生成する)
 3. 起票支援(/tasuki:draft)の事前審査に、蓄積した判定例(fixture)を目盛りとして渡す
 4. 条件付きシグナルの成果ゲートでの実走検証(評価を伴う子を実装から取り込みまで通し、report フェーズのシグナルが効くかを見る)
-5. 導入先の `.tasuki/fixtures/` を回す runner(v1 は fixture の形式と手作業の較正手順だけを持ち、読む実体は tasuki 自身のリポジトリの `tests/test_llm_gates.py` にしかない。導入先で契約を変えたときの回帰を自動で検めたい)
+5. `criteria_skills` を1例通す(導入先の skill を判定基準に混ぜる形は、契約に器だけがあり実例が0件である。0例のまま器を増やさないための順序として、次の器を足す前にここを1例にする)
+6. 導入先の `.tasuki/fixtures/` を回す runner(v1 は fixture の形式と手作業の較正手順だけを持ち、読む実体は tasuki 自身のリポジトリの `tests/test_llm_gates.py` にしかない。導入先で契約を変えたときの回帰を自動で検めたい)
 
 ## 未決事項
 

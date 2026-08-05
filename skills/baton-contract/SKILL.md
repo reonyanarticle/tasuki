@@ -92,7 +92,7 @@ model: sonnet
 ## repo override(.tasuki/)
 
 プロジェクト固有の上書きは対象リポジトリの `.tasuki/` に置き、plugin の profiles/ は編集しない。
-上書きしてよい範囲の正は契約ファイル冒頭のコメントが定める(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、必須欄(`templates`)の追加、`enabled_gates`)。
+上書きしてよい範囲の正は契約ファイル冒頭のコメントが定める(ここに写さない。契約と一緒に導入先へ運ばれるので、読み手は必ず現物を持っている)。
 名前解決は project(導入先自身の `.claude/` 定義)> repo override(`.tasuki/`)> language pack > plugin デフォルトの順。
 
 ## 契約変更(axis-question)の手順
