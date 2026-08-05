@@ -759,7 +759,8 @@ def test_contracts_sample_matches_profiles() -> None:
     assert sample["enabled_gates"] == real["enabled_gates"]
     assert sample["split_criteria"] == real["split_criteria"]
     assert [g["id"] for g in sample["gates"]] == [g["id"] for g in real["gates"]]
-    assert [g.get("model") for g in sample["gates"]] == [g.get("model") for g in real["gates"]]
+    for key in ("model", "kind", "phase", "escalate_to", "preflight", "provider"):
+        assert [g.get(key) for g in sample["gates"]] == [g.get(key) for g in real["gates"]], key
     assert [p["name"] for p in sample["phases"]] == [p["name"] for p in real["phases"]]
     for s_phase, r_phase in zip(sample["phases"], real["phases"], strict=True):
         assert s_phase.get("receives") == r_phase.get("receives"), s_phase["name"]
@@ -1347,7 +1348,13 @@ def test_procedure_can_actually_be_walked() -> None:
     reentry = loop.split("#### 再入点の決定(差し戻し中でない子)")[1].split("差し戻し中の子 issue")[
         0
     ]
-    assert "`gate:start-passed` が付いている子だけである" in reentry
+    assert (
+        "`gate:start-passed` が付いていて、かつ `gate:outcome-passed` が付いていない子だけである"
+        in reentry
+    )
+    assert "2a の予算欄の読み取りだけは必ず行う" in reentry
+    assert "その head コミットに対する" in reentry
+    assert "判定は上から順に行い、最初に当たったものを採る" in reentry
     assert (
         reentry.index("2c(実装)")
         < reentry.index("2d(checks-local)")
@@ -1364,7 +1371,11 @@ def test_procedure_can_actually_be_walked() -> None:
     # loop-init が実行できない操作を要求していないこと
     assert "Bash(gh issue list:*)" in init
     # 削除の権限はパス前置きまで絞る(SECURITY.md がツール全体の前承認を禁じている)
-    assert "Bash(rm -rf .tasuki/:*)" in init and "Bash(rm:*)" not in init
+    init_tools = init.split("---")[1]  # frontmatter の allowed-tools だけを見る
+    assert "Bash(git rm:*)" in init_tools
+    assert not re.search(
+        r"Bash\(rm[ :)]", init_tools
+    ), "rm はサブコマンド単位に絞れないので許可しない"
     assert "`tasuki/init` が既に存在する場合は新規作成せず" in init
     assert "`git add -A` は使わない" in init
 
@@ -1396,4 +1407,6 @@ def test_model_tables_match_the_contract() -> None:
         for label, model in expected.items():
             line = next((ln for ln in table.splitlines() if label in ln), None)
             assert line, (path.name, label)
-            assert model.capitalize() in line or model in line, (path.name, label, line)
+            # 行全体ではなくモデル欄だけを見る(昇格先が同じ行に載るため)
+            cell = line.split("|")[3].strip()
+            assert cell.lower().startswith(model), (path.name, label, cell)

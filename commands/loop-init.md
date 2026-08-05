@@ -1,7 +1,7 @@
 ---
 description: tasuki のブートストラップ。言語検出、プロジェクト資産の棚卸し、契約プロファイル配置、issue / PR テンプレ生成、CI workflow 生成、ラベル作成を行う
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(gh issue list:*), Bash(rm -rf .tasuki/:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(gh --version), Bash(gh auth status:*), Bash(gh label:*), Bash(gh repo view:*), Bash(gh api:*), Bash(gh pr create:*), Bash(gh issue list:*), Bash(git rm:*), Bash(git rev-parse:*), Bash(git remote:*), Bash(git status:*), Bash(git log:*), Bash(git config:*), Bash(python3:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(uv *)
 ---
 
 # /tasuki:loop-init
@@ -45,7 +45,7 @@ pack の `ci.lockfile` が非 null で、そのファイルが無ければ生成
 **既に `.tasuki/` がある場合は、上書きの前に次の4つを行う**(このコマンドは初期化であり、既存の調整を黙って捨てない)。
 
 1. 既存契約の repo override(**範囲の正は `.tasuki/profile.yaml` 冒頭のコメント**。そこに挙がっている項目のうち、既定と違う値になっているものすべて)を**採取して控える**(新しい契約はこの後のコピーで生まれるため、この時点では書き込み先が無い。**コピーの後で控えを再適用する**)
-2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を削除する(`rm` の対象は `.tasuki/` の中に限る。残すと改変検知の対象からも外れた無監視の残置物になる)
+2. 新しい pack に無い `.tasuki/` 配下の旧 pack 生成物を `git rm -r .tasuki/<名前>` で削除する(残すと改変検知の対象からも外れた無監視の残置物になる)。**`rm` は使わない**(絞り方はサブコマンド単位とする規則があり、`Bash(rm ...)` は引数で絞ろうとしても前置き一致で `.tasuki/` の外まで通してしまう。`git rm` は追跡下のファイルにしか効かず、リポジトリの外にも届かない)。追跡されていない残置物があれば、一覧で示して削除を人間に依頼する
 3. 生成し直す workflow から消える job が branch protection の required checks に残っていれば、除去を提案する(残ると check が永遠に報告されず全 PR がマージ不能になる)
 4. 走行中の親 issue があれば、完走または close まで待つよう案内する(判定基準は「open かつ `gate:split-passed` を持つ親」とする。`gh issue list --state open --label gate:split-passed` で数える。run は開始時に読んだ契約で最後まで走るため、途中で必須欄が増えると次の run で現在レイヤーの子が一斉に差し戻される)
 
@@ -259,7 +259,7 @@ jobs:
 ### 5b. 既存ゲートと外部レビューツールの棚卸し
 
 - **導入先の hooks と branch protection を検出する**(pre-push、PR 作成を検査する hook 等)。ループの PR 作成とマージがそれらに塞がれないかを確かめ、通し方(必要な事前コマンドや marker の更新)を契約の近くに記録する(親 PR 作成が導入先の PR ゲートに塞がれる事故が実地で起きた。hook はコマンド実行前に検査するため、「marker 更新+ PR 作成」を1コマンドに書くと通らない)
-- **出荷前レビューに使う外部 plugin(/code-review、claude-security 等)の導入状況を検出する**。未導入なら導入コマンド(marketplace add)を案内する(未導入でもループは動くが、3c の出荷前レビューの網羅が下がることを伝える)
+- **出荷前レビューに使う外部 plugin(/code-review、claude-security 等)の導入状況を検出する**。未導入なら導入コマンド(marketplace add)を案内する(未導入でもループは動く(3c の出荷前レビューは orchestrator が自前の subagent で回す)。人間が任意で回せるレビューの選択肢が減るだけであることを伝える)
 
 ### 6. ラベル作成
 

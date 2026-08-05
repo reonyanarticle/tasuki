@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from conftest import ROOT
+from test_docs import _WRITING_TARGETS  # pyright: ignore[reportPrivateUsage]
 
 
 def test_plugin_manifest() -> None:
@@ -389,10 +390,20 @@ def test_override_range_is_listed_in_one_place() -> None:
     section = doc.split("### repo override で変えてよい範囲")[1].split("\n### ")[0]
     for item in items:
         assert item in section, item
-    # 手順書 / skill / DESIGN は列挙せず、正を指すだけであること。
-    # 語の並びではなく共起で見る(読点や助詞を変えた写しを素通りさせない)。
-    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md", "docs/DESIGN.md"):
+    # CONTRACTS 以外のどの文書にも写しを増やさないこと。
+    # 語の並びではなく段落単位の共起で見る(読点を変えた写しも、2行に折り返した写しも拾う)。
+    targets = [
+        p for p in _WRITING_TARGETS if p.name != "CONTRACTS.md" and p.suffix == ".md" and p.exists()
+    ]
+    assert targets
+    for path in targets:
+        text = path.read_text()
+        for para in text.split("\n\n"):
+            assert not ("待ち位置定義" in para and "criteria_skills" in para), (
+                path.name,
+                para[:80],
+            )
+    # 正を指す文は、契約をコピーする側と読む側に残っていること
+    for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md"):
         text = (ROOT / rel).read_text()
         assert "契約ファイル冒頭のコメント" in text or "profile.yaml` 冒頭のコメント" in text, rel
-        for line in text.splitlines():
-            assert not ("待ち位置定義" in line and "criteria_skills" in line), (rel, line)
