@@ -98,7 +98,11 @@ def test_phase3_full_loop_wiring() -> None:
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
     assert "循環を検出したらエラー" in loop
-    assert "全子が統合ブランチへ取り込まれ、かつ統合ブランチが緑になってから進む" in loop
+    assert "全子が統合ブランチへ取り込まれたら進む" in loop
+    # base の健全性はレイヤーの前進条件ではなく worker 起動直前の条件で見る
+    # (前進条件で書くと、次の run で §1c がグラフを組み直したときに空振りする)
+    base_guard = "統合ブランチが赤の間(未解決の open な補修の子がある間)は、"
+    assert base_guard + "補修の子以外の worker を起動しない" in loop
     assert "統合ゲート" in loop
     assert "親 issue の close も人間が行う" in loop
     # レビュー修正: 遡及適用禁止、分割案の永続化、マージごとの CI 再確認、不採用クローズ
@@ -1431,6 +1435,7 @@ def test_repair_child_has_an_issuing_rule() -> None:
         "via tasuki-loop",
         "同じ解消対象(タイトルで判別する)の open な補修の子が既にあれば起票しない",
         "本文末尾が `via tasuki-loop` の補修の子は、この LLM 判定を行わない",
+        "本文末尾が `via tasuki-loop` の補修の子は渡さない",  # 再計画の撤回で消されない
         "補修の子は §1b(分割ゲート)の再判定の対象にしない",
     ):
         assert rule in loop, rule
@@ -1441,6 +1446,11 @@ def test_repair_child_has_an_issuing_rule() -> None:
     # worker は merged な PR の上で継続しない
     worker = (ROOT / "agents/worker.md").read_text()
     assert "merged / closed な PR の上では継続しない" in worker
+    decomposer = (ROOT / "agents/decomposer.md").read_text()
+    assert (
+        "`via tasuki-loop` の子(統合ブランチの補修)は渡されない。渡された場合も常に維持"
+        in decomposer
+    )
     # 旧経路(解消専用 worker)と、器の二重の名前(解消の追い子)が残っていないこと
     for path in _WRITING_TARGETS:
         text = path.read_text()

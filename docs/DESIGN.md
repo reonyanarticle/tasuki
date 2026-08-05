@@ -112,6 +112,7 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 依存の循環はエラーとして検出し、報告して停止する。
 
 次レイヤーへの前進は、前レイヤーの全子が**統合ブランチ**へ取り込まれてからとする。
+統合ブランチが赤の間は、それを直す補修の子以外の worker を起動しない(手順の正は [commands/loop.md](../commands/loop.md))。
 合流点は統合ブランチの更新であり、人間のマージを待たない。
 **人間がマージするのは親 PR(統合ブランチ → default branch)の1回だけ**であり、default branch への反映は常に人間の手を経る。
 合流点([commands/loop.md](../commands/loop.md) の §3a(レイヤーの合流))は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
