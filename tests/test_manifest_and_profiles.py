@@ -133,7 +133,11 @@ def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None
     assert any("由来セット" in s for s in report), report
     # 欄コメント側にも再現の統制条件が残っていること(raw テキストで見る)
     raw = (ROOT / "profiles/tasuki.yaml").read_text()
-    assert "seed" in raw and "データ版数" in raw
+    # 欄コメントそのものを見る(シグナルの値にも同じ語があるため、raw 全文だと空振りする)
+    comment = next(ln for ln in raw.splitlines() if ln.strip().startswith("- 再現手順")).split(
+        "#", 1
+    )[1]
+    assert "seed" in comment and "データ版数" in comment
     # 測定と測定対象を同じ子に入れない
     separate = dev_profile["split_criteria"]["always_separate"]
     assert any("測定と測定対象の変更" in s for s in separate), separate
@@ -407,3 +411,38 @@ def test_override_range_is_listed_in_one_place() -> None:
     for rel in ("commands/loop-init.md", "skills/baton-contract/SKILL.md"):
         text = (ROOT / rel).read_text()
         assert "契約ファイル冒頭のコメント" in text or "profile.yaml` 冒頭のコメント" in text, rel
+
+
+def test_pack_artifacts_cover_provider_outputs(providers: dict) -> None:
+    """provider が書き出すファイルが artifacts に載っていること。
+
+    載っていないと loop-init の .gitignore 検査も worker のコミット前確認も
+    対象にせず、self-verify が生んだ SARIF や JUnit XML が `git add -A` で
+    そのまま入る(ブランチ間で生成物どうしが競合する。E2E で2度起きた形)。
+    """
+    outputs = {p["output_file"] for p in providers["providers"].values() if "output_file" in p}
+    outputs |= set(providers["ci"].get("sarif_file", {}).values())
+    missing = sorted(outputs - set(providers["artifacts"]))
+    assert not missing, missing
+
+
+def test_distributed_python_is_formatted_for_the_default_width() -> None:
+    """導入先へコピーする Python が、black の既定幅(88)でも整形済みであること。
+
+    normalizer は .tasuki/ へコピーされ、導入先の `black --check .` の対象になる
+    (black は `.tasuki/` を既定で除外しない。実測)。このリポジトリの幅は 100 なので、
+    100 で整形すると導入先の既定 88 で恒久的に赤になる。しかも worker は
+    `.tasuki/**` を編集できないため、ループ自身では直せない。
+    """
+    import subprocess
+
+    targets = sorted((ROOT / "packs").rglob("normalizers/*.py"))
+    assert targets
+    for width in ("88", "100"):
+        proc = subprocess.run(
+            ["uv", "run", "black", "--check", "--line-length", width, *map(str, targets)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (width, proc.stderr[-500:])

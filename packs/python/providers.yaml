@@ -3,7 +3,10 @@
 # worker はプッシュ前に同じコマンドをローカル実行できるが、ゲートとして正となるのは CI の判定。
 # デフォルトのツール選定は lint = Ruff / 整形 = Black / 型 = basedpyright / テスト = pytest。
 # 対象リポジトリは repo override(.tasuki/)でコマンドを変更できる。
-# 前提: 対象リポジトリの dev 依存に ruff / black / basedpyright / pytest があること(/tasuki:loop-init が確認する)。
+# 前提: 対象リポジトリが uv 管理であること(全 provider が `uv run` を前置し、ci.setup が
+# `uv sync --frozen`、ci.lockfile が uv.lock のため)。detect の pyproject.toml は poetry 等にも
+# 一致するので、uv でない導入先は repo override で `uv run ` 前置と ci.setup を差し替える。
+# あわせて dev 依存に ruff / black / basedpyright / pytest があること(/tasuki:loop-init が確認する)。
 detect: ["pyproject.toml"]
 
 providers:
@@ -29,7 +32,9 @@ providers:
 
 # 実行時の生成物(コミットしてはならないもの)。loop-init が .gitignore を検査し、
 # worker がコミット前に除外を確認する。
-artifacts: ["__pycache__/", "*.pyc", ".pytest_cache/", ".ruff_cache/"]
+artifacts:
+  ["__pycache__/", "*.pyc", ".pytest_cache/", ".ruff_cache/",
+   "ruff.sarif", "basedpyright.json", "basedpyright.sarif", "pytest-junit.xml"]
 
 # CI workflow(loop-gates.yml)を組み立てるための言語固有の部品。
 # core の初期化コマンドは job の骨格と fail-closed 規則だけを持ち、

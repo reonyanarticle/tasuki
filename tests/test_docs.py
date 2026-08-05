@@ -283,16 +283,17 @@ def test_readme_explains_gate_symbols() -> None:
     # 記号ではなく名前で説明していること(識別子は英語で別列に置く)
     r = (ROOT / "README.md").read_text()
     assert "## ゲートの一覧" in r
-    for symbol, name in (
-        ("受理ゲート", "受理"),
-        ("分割ゲート", "分割"),
-        ("着手ゲート", "着手"),
-        ("形式ゲート", "形式"),
-        ("成果ゲート", "成果"),
-        ("統合ゲート", "統合"),
+    for name, ident in (
+        ("受理ゲート", "intake"),
+        ("分割ゲート", "split"),
+        ("着手ゲート", "start"),
+        ("形式ゲート", "checks-*"),
+        ("成果ゲート", "outcome"),
+        ("統合ゲート", "integration"),
     ):
-        assert f"**{symbol}**" in r, symbol
-        assert name in r, name
+        row = next((ln for ln in r.splitlines() if f"**{name}**" in ln), None)
+        assert row, name
+        assert f"`{ident}`" in row, (name, ident)  # 識別子は英語で別列に置く
     # 説明が、記号を最初に使う「処理の流れ」より前にあること
     assert r.index("## ゲートの一覧") < r.index("## 処理の流れ")
 
@@ -1139,7 +1140,8 @@ def test_name_resolution_order_agrees_across_documents() -> None:
         line = next(ln for ln in text.splitlines() if ln.startswith("名前解決は"))
         assert order in line, path
         assert (
-            line.index("repo override")
+            line.index(order)
+            < line.index("repo override")
             < line.index("language pack")
             < line.index("plugin デフォルト")
         ), path

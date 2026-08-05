@@ -66,6 +66,8 @@ def _results_from_diagnostics(diagnostics: list[dict], root: Path) -> list[dict]
         start = raw_start if isinstance(raw_start, dict) else {}
         severity = diag.get("severity")
         message = diag.get("message")
+        text = message.strip() if isinstance(message, str) else ""
+        uri = _relative_uri(diag.get("file"), root)
         results.append(
             {
                 "ruleId": diag.get("rule") or "basedpyright",
@@ -74,11 +76,11 @@ def _results_from_diagnostics(diagnostics: list[dict], root: Path) -> list[dict]
                     if isinstance(severity, str)
                     else _DEFAULT_LEVEL
                 ),
-                "message": {"text": message.strip() if isinstance(message, str) else ""},
+                "message": {"text": text},
                 "locations": [
                     {
                         "physicalLocation": {
-                            "artifactLocation": {"uri": _relative_uri(diag.get("file"), root)},
+                            "artifactLocation": {"uri": uri},
                             "region": {
                                 # pyright の行・桁は 0 始まり、SARIF は 1 始まり
                                 "startLine": _int_or_zero(start.get("line")) + 1,

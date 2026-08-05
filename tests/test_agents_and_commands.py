@@ -65,9 +65,10 @@ def test_reviewer_is_single_agent_with_per_call_model() -> None:
     # ゲートのモデルは契約から引く(手順書に既定値を写さない)
     for gate in ("intake", "split", "outcome", "integration"):
         assert f"`gates.{gate}.model`" in loop, gate
-    assert "haiku" not in loop and "opus" not in loop
+    low = loop.lower()  # 地の文は大文字始まりで書くので綴りに依存しない形で見る
+    assert "haiku" not in low and "opus" not in low
     # sonnet は出荷前レビューの subagent(契約が持たない値)にだけ残る
-    assert loop.count("sonnet") == 1
+    assert low.count("sonnet") == 1
     # ゲート別の判定基準は skill が単一の正であること
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "## ゲート別の特記事項" in skill
@@ -101,12 +102,12 @@ def test_labels_used_are_created() -> None:
     """
     import re
 
+    # 作成リストの節だけを見る(全文だと別文脈の言及で緑になる)
     init_text = (ROOT / "commands/loop-init.md").read_text()
+    init_text = init_text.split("### 6. ラベル作成")[1].split("\n### ")[0]
     used: set[str] = set()
     for path in (ROOT / "commands/loop.md", ROOT / "commands/loop-status.md"):
         used |= set(re.findall(r"`(gate:[a-z-]+|loop:[a-z-]+)`", path.read_text()))
-    # ワイルドカード表記は集合ではないので除く
-    used = {label for label in used if "*" not in label}
     missing = sorted(label for label in used if label not in init_text)
     assert not missing, missing
 
