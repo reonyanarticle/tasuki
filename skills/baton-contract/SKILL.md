@@ -47,7 +47,7 @@ too_*_signals が個々の出力を検査するのに対し、`gates.split.set_s
 ## 予算欄
 
 親 issue にはコスト上限、子 issue には `max_iterations` を必須で書く。
-予算はゲートの照合対象であると同時に、watchdog と orchestrator の停止判断の入力になる。
+予算はゲートの照合対象であると同時に、orchestrator の停止判断(内側ループの有効上限)の入力になる。
 
 ## 初期 fixture の手書き(運用開始前に必須)
 

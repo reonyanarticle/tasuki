@@ -1294,3 +1294,17 @@ def test_perspective_references_resolve_to_catalog_names() -> None:
                 if used not in names:
                     unknown.append(f"{path.name}:{lineno}: {used}")
     assert not unknown, unknown
+
+
+def test_no_unimplemented_actor_in_docs() -> None:
+    """実体の無い主体を停止装置として書かないこと。
+
+    watchdog は docs 4箇所と skill 1箇所に「第二の停止装置」として書かれていたが、
+    commands/ にも agents/ にも実行主体が無かった。実在するのは orchestrator の
+    停滞検知、子 issue の打ち切り条件、stale assignee の回収の3つである。
+    """
+    for path in _WRITING_TARGETS:
+        assert "watchdog" not in path.read_text(), path.name
+    ops = (ROOT / "docs/OPERATIONS.md").read_text()
+    assert "停止した実行の回収" in ops
+    assert "wall-clock の上限は子 issue の打ち切り条件が持ち" in ops
