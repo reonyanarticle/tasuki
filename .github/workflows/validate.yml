@@ -5,9 +5,13 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -20,5 +24,23 @@ jobs:
       - run: uv run pytest -q
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: npm install -g @anthropic-ai/claude-code
-      - run: claude plugin validate .   # manifest と構造の公式検証(LLM は呼ばない)
+      # バージョンを固定する(生成物に SHA 固定を課している以上、自分の供給網も固定する)
+      - run: npm install -g @anthropic-ai/claude-code@2.1.222
+      # manifest と構造の公式検証(LLM は呼ばない)。
+      # marketplace.json があると `validate .` は marketplace だけを検証するため、両方を明示的に渡す。
+      # --strict は未知フィールドとメタデータ欠落を落とすために使う(警告の fail-open を残さない)。
+      # plugin ルートの CLAUDE.md 警告だけは既知として除外する
+      # (これは tasuki を開発するためのガイドであり配布物ではない。skill には移せない)。
+      - name: claude plugin validate
+        run: |
+          set -u
+          known='CLAUDE.md at the plugin root is not loaded as project context'
+          for manifest in .claude-plugin/plugin.json .claude-plugin/marketplace.json; do
+            out="$(claude plugin validate "$manifest" --strict 2>&1)" || true
+            printf '%s\n' "$out"
+            unexpected="$(printf '%s\n' "$out" | grep '❯' | grep -vF "$known" || true)"
+            if [ -n "$unexpected" ]; then
+              printf '::error::%s に既知以外の指摘がある:\n%s\n' "$manifest" "$unexpected"
+              exit 1
+            fi
+          done

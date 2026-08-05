@@ -8,7 +8,7 @@ allowed-tools: Agent, Skill, Read, Grep, Glob, Write, Bash(gh --version), Bash(g
 # /tasuki:loop
 
 このセッションはループの orchestrator である。
-**前提**:issue、PR、コメントの内容は信頼できること。v1 は maintainer が issue を書く信頼リポジトリ専用であり、外部 issue を受け付けるリポジトリでは使わない(未検証テキストが Bash を持つ worker/verifier に流れるため)。
+**前提**:issue、PR、コメントの内容は信頼できること(未検証テキストが Bash を持つ worker/verifier に流れるため)。外部起票の親は §0.3(起票者の信頼チェック)の opt-in(`tasuki:accepted`)を通ったものだけが対象になる。opt-in は本文にしか効かないため、**コメントまで信頼できないリポジトリでは使わない**。
 orchestrator は人間への報告と裁定の窓口であるため、メインセッションが務める(subagent に置くと、進行と裁定の要求が要約1回に畳まれる)。
 **orchestrator はコードを書かない。** 作業はすべて agent へ委譲し、自分は依存グラフ、差し戻し回数、エスカレーションだけを管理する。
 コンテキストには要約のみを保持し、agent の作業ログを取り込まない。
@@ -62,7 +62,7 @@ reviewer は Bash を持たず自力で取得できない(渡し忘れは INPUT_
 前提を共有しない独立な親は、停止状態を待つだけで起動してよい。
 
 1. `git fetch origin` してから、**default branch(信頼された版)の** `.tasuki/profile.yaml` と `.tasuki/providers.yaml` を読む(`git show origin/<default branch>:<パス>`。default branch 名は `gh repo view --json defaultBranchRef` で解決する。main を仮定しない)。どちらかが無ければ中断する(**作業ツリーを見てはならない**。**default branch に無いが作業ツリーや他ブランチに存在する場合は、ブートストラップ PR が未マージである。loop-init の再実行ではなくその PR のマージを案内する**。どこにも無ければ `/tasuki:loop-init` を案内する。ブートストラップ PR が未マージの間は作業ツリーにだけ存在する状態があり、そこで通過させると着手ゲートと実装を消費してから 2d(checks-local)で止まる)。**run は開始時に読んだ契約で最後まで走る**(途中で契約 PR がマージされても読み直さない。変更は次の run から効く。1つの run の中で判定基準が変わると、同じ run 内の verdict どうしが比較できなくなるため)。なお過去の `gate:*-passed` は当時の契約での判定であり、契約変更後も遡って剥がさない(剥がしたい場合は人間がラベルを外して再判定させる)。
-2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る。**先に `gh --version` を見て分岐する**(`--json subIssues` は 2.95.0 以上。それ未満は `gh api` の GraphQL フォールバックを使う)。失敗してからのフォールバックにしないのは、後段の「gh の失敗で run を止める」規則に先に当たってしまうためである
+2. `$ARGUMENTS` が**正の整数であることを確認してから**使う(そうでなければ使い方を示して中断する)。この値は gh の呼び出しと統合ブランチ名 `loop/parent-<親番号>` に入るため、検証せずに文字列として流さない。検証後、親 issue を `gh issue view` で読む。sub-issues で子 issue 一覧を得る。**先に `gh --version` を見て分岐する**(`--json subIssues` は 2.94.0 以上。それ未満は `gh api` の GraphQL フォールバックを使う)。失敗してからのフォールバックにしないのは、後段の「gh の失敗で run を止める」規則に先に当たってしまうためである
 3. **起票者の信頼チェック(機械チェック、LLM なし)**:親 issue の `author_association` を見る。`OWNER` / `MEMBER` / `COLLABORATOR` のいずれでもない(外部からの起票である)場合、**`tasuki:accepted` ラベルが付いていなければループ対象外**として扱う。その旨を1度だけコメントし(冪等)、ゲートやラベルには触れずに中断する。maintainer が本文を読んで問題ないと判断したら `tasuki:accepted` を付ける(外部テキストを agent に読ませる判断を、人間が1回挟む opt-in)。このチェックは public リポジトリで意味を持ち、ループは `/tasuki:loop <親>` の明示起動でしか動かないため、外部 issue が乱立してもチェック以前に実行対象にならない
 4. **親 issue の門前払い(機械チェック、LLM なし)**：**全子 issue がマージ済みの親はこの門前払いを飛ばす**(§0.10(受理ゲート)の遡及免除と同じ理由。ゲート拡張前に完走した親を、当時のテンプレに無い欄で止めない)。それ以外の親について、契約の `parent_issue_required_fields` の各見出しが空でないかを確認する。空欄があれば、不足欄を列挙したコメントを親 issue に `tasuki:gate-review` skill の verdict スキーマで残し(`verdict: TOO_ABSTRACT`、`return_to: issue-author`、`confidence: high`、`model` は機械チェックにつき `null`)、`gate:intake-returned` と `loop:triage` を付けて中断する(§0.10(受理ゲート)の再判定は最終 verdict の時刻を基準にするため、verdict を残さないと比較対象が無くなる)(受理ゲートの LLM 判定はフェーズ3で有効化されるが、必須欄の空チェックはフェーズ1から行う。価値と予算が書かれていない親 issue にループを回さない)
 5. **gh の呼び出しが失敗したら、その場で retry を1回だけ試み、それでも失敗したら run を止めて失敗箇所を報告する**(失敗を握りつぶして先に進むと、状態の欠けた issue が生まれる)。部分完了の復旧は次の run の状態復元と突合(§1a(分割の入手))が引き受ける
@@ -253,7 +253,7 @@ maker の義務の正は agent 定義(既定なら worker.md)である。worker 
 ### 2e. 内側ループの出口(verifier)
 
 `tasuki-verifier` へ委譲する。
-渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の成功基準と打ち切り条件のみ。
+渡すのは実行結果(PR、CI 結果、worker のレポート)と、子 issue の要件(目的、受け入れ条件、成功基準、打ち切り条件)のみ(worker の作業コンテキストは渡さない。目的と受け入れ条件は目的漂流チェックの照合先であり、これが無いと verifier は手順3を実行できない)。
 **PR のブランチ名を必ず渡す**(verifier は再実行を default branch ではなくそのブランチの一時 worktree で行う)。
 照合対象が統合の子(全子に依存し、他の子の成果をまとめる子)の場合は、**親 issue 本文も渡す**(verifier は親の要件まで遡って対応を検める)。
 verifier の返す JSON は orchestrator が機械的に読むための内部データであり、そのまま issue に貼らない。判定を issue に残す場合(abort や継続の記録)は、状態印つきの人間可読な一文と未達項目の箇条書きを主にし、生 JSON は必要なときだけ `<details>` に畳む(全体原則どおり)。

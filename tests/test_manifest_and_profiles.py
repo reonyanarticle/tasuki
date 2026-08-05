@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from conftest import ROOT
 
 
@@ -14,81 +13,73 @@ def test_plugin_manifest() -> None:
     assert manifest["description"]
 
 
-@pytest.mark.parametrize("profile_name", ["dev_profile"])
 class TestProfiles:
-    def test_mechanical_providers_exist(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    """唯一の契約(profiles/development.yaml)の整合性。
+
+    かつては複数プロファイルを parametrize で回していたが、器を1つに戻したので
+    fixture を直接引く(プロファイルが再び増えたら parametrize を戻す)。
+    """
+
+    def test_mechanical_providers_exist(self, dev_profile: dict, providers: dict) -> None:
         """mechanical ゲートの provider は、そのプロファイルが使う pack に定義されていること。"""
-        profile = request.getfixturevalue(profile_name)
-        pack_providers = request.getfixturevalue("providers")["providers"]
-        for gate in profile["gates"]:
+        pack_providers = providers["providers"]
+        for gate in dev_profile["gates"]:
             if gate["kind"] == "mechanical":
                 assert gate["provider"] in pack_providers, gate["id"]
 
-    def test_enabled_gates_subset(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_enabled_gates_subset(self, dev_profile: dict) -> None:
         """enabled_gates は定義済みゲート ID の部分集合であること。"""
-        profile = request.getfixturevalue(profile_name)
-        gate_ids = {gate["id"] for gate in profile["gates"]}
-        assert set(profile["enabled_gates"]) <= gate_ids
+        gate_ids = {gate["id"] for gate in dev_profile["gates"]}
+        assert set(dev_profile["enabled_gates"]) <= gate_ids
 
-    def test_phase3_review_fixes(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_phase3_review_fixes(self, dev_profile: dict) -> None:
         """フェーズ3レビュー修正: integration フェーズ、g1 set_signals、分割・前提シグナル。"""
-        profile = request.getfixturevalue(profile_name)
-        names = [ph["name"] for ph in profile["phases"]]
+        names = [ph["name"] for ph in dev_profile["phases"]]
         assert names[-1] == "integration"
-        integration = profile["phases"][-1]
+        integration = dev_profile["phases"][-1]
         assert any("孤児" in s for s in integration["receives"]["too_abstract_signals"])
-        g1 = next(g for g in profile["gates"] if g["id"] == "split")
+        g1 = next(g for g in dev_profile["gates"] if g["id"] == "split")
         assert any("循環" in s for s in g1["set_signals"])
         assert any("親予算" in s for s in g1["set_signals"])
-        second = profile["phases"][1]["receives"]["too_abstract_signals"]
+        second = dev_profile["phases"][1]["receives"]["too_abstract_signals"]
         assert any("実現可能性" in s for s in second)
 
-    def test_phase3_gates_enabled(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_phase3_gates_enabled(self, dev_profile: dict) -> None:
         """フェーズ3: 全 abstraction ゲートが有効であること(ROADMAP の段階導入)。"""
-        profile = request.getfixturevalue(profile_name)
-        enabled = set(profile["enabled_gates"])
+        enabled = set(dev_profile["enabled_gates"])
         assert {"intake", "split", "start", "outcome", "integration"} <= enabled
 
-    def test_g3_wiring(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_g3_wiring(self, dev_profile: dict) -> None:
         """成果ゲートは門前払いを持ち、report signals が判定基準を契約由来にする。"""
-        profile = request.getfixturevalue(profile_name)
-        g3 = next(g for g in profile["gates"] if g["id"] == "outcome")
+        g3 = next(g for g in dev_profile["gates"] if g["id"] == "outcome")
         assert g3["preflight"] == "report-fields"
-        report = next(p for p in profile["phases"] if p["name"] == "report")
+        report = next(p for p in dev_profile["phases"] if p["name"] == "report")
         signals = report["receives"]["too_abstract_signals"]
         concrete = report["receives"]["too_concrete_signals"]
         assert "再現手順の欠落" in signals
         assert any("期待値の根拠" in s for s in signals)
         assert any("secrets" in s for s in concrete)
-        assert "期待値の根拠" in profile["templates"]["report_required_fields"]
+        assert "期待値の根拠" in dev_profile["templates"]["report_required_fields"]
 
-    def test_security_is_opt_in(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_security_is_opt_in(self, dev_profile: dict) -> None:
         """checks-security は定義されつつ、既定の enabled_gates には入らないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        gate_ids = {gate["id"] for gate in profile["gates"]}
+        gate_ids = {gate["id"] for gate in dev_profile["gates"]}
         assert "checks-security" in gate_ids
-        assert "checks-security" not in profile["enabled_gates"]
+        assert "checks-security" not in dev_profile["enabled_gates"]
 
-    def test_no_dead_models_block(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_no_dead_models_block(self, dev_profile: dict) -> None:
         """どこからも読まれない models ブロックを持たないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        assert "models" not in profile
+        assert "models" not in dev_profile
 
-    def test_criteria_skills_defined(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    def test_criteria_skills_defined(self, dev_profile: dict) -> None:
         """g2 / g3 に criteria_skills キーがあること(橋渡しの接続点)。"""
-        profile = request.getfixturevalue(profile_name)
         for gate_id in ("start", "outcome"):
-            gate = next(g for g in profile["gates"] if g["id"] == gate_id)
+            gate = next(g for g in dev_profile["gates"] if g["id"] == gate_id)
             assert "criteria_skills" in gate, gate_id
 
-    def test_phase_handoff_chain(self, profile_name: str, request: pytest.FixtureRequest) -> None:
+    def test_phase_handoff_chain(self, dev_profile: dict) -> None:
         """phases の hands_off.to / receives.from が実在フェーズを指し、連鎖すること。"""
-        profile = request.getfixturevalue(profile_name)
-        phases = profile["phases"]
+        phases = dev_profile["phases"]
         names = [p["name"] for p in phases]
         for i, phase in enumerate(phases):
             if "hands_off" in phase:
@@ -96,12 +87,9 @@ class TestProfiles:
             if "receives" in phase:
                 assert phase["receives"]["from"] == names[i - 1], phase["name"]
 
-    def test_templates_required_fields(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    def test_templates_required_fields(self, dev_profile: dict) -> None:
         """門前払いの対象となる必須欄リストが空でないこと。"""
-        profile = request.getfixturevalue(profile_name)
-        templates = profile["templates"]
+        templates = dev_profile["templates"]
         for key in (
             "parent_issue_required_fields",
             "child_issue_required_fields",
@@ -110,18 +98,15 @@ class TestProfiles:
         ):
             assert templates[key], key
 
-    def test_split_criteria_defined(
-        self, profile_name: str, request: pytest.FixtureRequest
-    ) -> None:
+    def test_split_criteria_defined(self, dev_profile: dict) -> None:
         """分割基準が契約由来であること(decomposer と分割ゲートはここから引く)。
 
         3つ目のプロファイルを試作したとき、「良いタスクの4条件」が agent 定義に literal に
         書かれていたため読み替え節を足す羽目になった。基準の置き場所を契約に固定する。
         """
-        profile = request.getfixturevalue(profile_name)
-        criteria = profile["split_criteria"]
-        assert criteria["good_task_conditions"], profile_name
-        assert criteria["always_separate"], profile_name
+        criteria = dev_profile["split_criteria"]
+        assert criteria["good_task_conditions"]
+        assert criteria["always_separate"]
 
 
 def test_single_profile_carries_evaluation_discipline(dev_profile: dict) -> None:
@@ -189,9 +174,8 @@ def test_contract_has_no_unread_keys(dev_profile: dict) -> None:
         "phase": "`gates[].phase`",
         "id": "`enabled_gates`",
         "kind": "`kind: mechanical`",
-        "provider": "provider",
+        "provider": "その provider が `command` を持つもの",
         "preflight": "`preflight: template-fields`",
-        "with": "`ci.setup`",
     }
     # 欄名そのもの(日本語)はキーではなく値なので対象外
     for key in sorted(k for k in keys_of(dev_profile) if k.isascii()):
@@ -248,10 +232,9 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
         )
     )
     assert referenced, "契約キーの参照が見つからない"
-    for name in ("development",):
-        budgets = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["budgets"]
-        missing = sorted(referenced - set(budgets))
-        assert not missing, (name, missing)
+    budgets = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["budgets"]
+    missing = sorted(referenced - set(budgets))
+    assert not missing, missing
 
 
 def test_gate_phase_resolves_in_every_profile() -> None:
@@ -262,14 +245,13 @@ def test_gate_phase_resolves_in_every_profile() -> None:
     """
     import yaml
 
-    for name in ("development",):
-        profile = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())
-        phases = {p["name"] for p in profile["phases"]}
-        for gate in profile["gates"]:
-            if gate.get("kind") != "abstraction":
-                continue
-            assert "phase" in gate, (name, gate["id"])
-            assert gate["phase"] in phases, (name, gate["id"], gate["phase"], sorted(phases))
+    profile = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())
+    phases = {p["name"] for p in profile["phases"]}
+    for gate in profile["gates"]:
+        if gate.get("kind") != "abstraction":
+            continue
+        assert "phase" in gate, gate["id"]
+        assert gate["phase"] in phases, (gate["id"], gate["phase"], sorted(phases))
 
 
 def test_loop_does_not_hardcode_phase_names() -> None:
@@ -290,12 +272,11 @@ def test_pr_template_carries_traceability() -> None:
     """
     import yaml
 
-    for name in ("development",):
-        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
-            "pr_required_fields"
-        ]
-        assert "対応する親要件" in fields, name
-        assert "受け入れ条件の充足" in fields, name
+    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+        "pr_required_fields"
+    ]
+    assert "対応する親要件" in fields
+    assert "受け入れ条件の充足" in fields
     worker = (ROOT / "agents/worker.md").read_text()
     assert "PR 単体で判断できるようにする" in worker
 
@@ -347,3 +328,31 @@ def test_packs_have_no_empty_pathspec_keys() -> None:
         for key in ("config_tampering", "test_tampering"):
             if key in ci:
                 assert ci[key].get("paths"), (pack, key)
+
+
+def test_gate_fixtures_resolve_against_the_contract(dev_profile: dict) -> None:
+    """LLM fixture が、実契約に対して静的に解決できること。
+
+    tests/test_llm_gates.py は既定でスキップ(LLM を呼ぶため)であり、
+    fixture と契約の対応が検められるのは LLM を実行したときだけだった。
+    ゲート ID やフェーズ名を改名すると fixture が黙って腐るため、
+    LLM を呼ばない静的検査をここに置く。
+    """
+    import yaml
+    from test_llm_gates import _receives_for  # pyright: ignore[reportPrivateUsage]
+
+    verdicts = {"PASS", "TOO_ABSTRACT", "TOO_CONCRETE"}
+    # 照合先(親要件や子要件)が無いと孤児判定ができないゲート
+    needs_requirements = {"split", "outcome", "integration"}
+    paths = sorted((ROOT / "tests/fixtures/gate").glob("*.yaml"))
+    assert paths, "fixture が1件も無い"
+    for path in paths:
+        fixture = yaml.safe_load(path.read_text())
+        gate = fixture["gate"]
+        assert gate in dev_profile["enabled_gates"], (path.name, gate)
+        assert fixture["expected_verdict"] in verdicts, path.name
+        assert fixture["input"].strip(), path.name
+        receives = _receives_for(gate)
+        assert receives["waiting_level"], (path.name, gate)
+        if gate in needs_requirements:
+            assert fixture.get("requirements", "").strip(), (path.name, "照合先が無い")

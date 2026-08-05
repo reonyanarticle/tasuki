@@ -43,11 +43,12 @@ GitHub issue 駆動の自律ループ(実装と検証)の各フェーズのつ�
 | **受理ゲート** | 親 issue を書いた直後 | やりたいことが、分割できる粒度まで書けているか(背景、目的、価値、予算、完了の定義) | 起票者 | `intake` |
 | **分割ゲート** | 親を子 issue へ割ったとき | 分割の集合として妥当か(依存が循環していないか、取りこぼした親要件がないか、予算に収まるか) | 分割役 | `split` |
 | **着手ゲート** | 子 issue に着手する直前 | 実装役がそのまま着手できる粒度か(受け入れ条件と打ち切り条件があるか、実装方式を決めつけていないか) | 起票者または分割役 | `start` |
-| **形式ゲート** | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 | `checks` |
+| **形式ゲート** | 実装のたび | lint、整形、型、テストが通るか(機械判定のみ。人の解釈を挟まない) | 実装役 | `checks-*` |
 | **成果ゲート** | 実装が終わったとき | 報告が読める形か(要件と結果の対応表があるか、生ログを貼っていないか) | 実装役 | `outcome` |
 | **統合ゲート** | 全子が統合ブランチへ取り込まれた後 | 親の完了の定義を満たしたか(どの子にも拾われなかった要件が残っていないか) | 起票者 | `integration` |
 
-ラベルは識別子から作られる(`gate:intake-passed`、`gate:start-returned` のように付く)。
+ラベルは**抽象度ゲートの**識別子から作られる(`gate:intake-passed`、`gate:start-returned` のように付く)。
+形式ゲート(`checks-*`)はラベルを持たない(合否は CI の check-run が正であり、issue のラベルに写さない)。
 
 **どのゲートも「良し悪し」ではなく「抽象度のズレ」だけを見る。**
 コードの良否は形式ゲート(機械判定)と人間のレビューが受け持ち、ゲートは受け渡しの位置だけを検める。
@@ -107,7 +108,7 @@ flowchart TD
 ## 前提
 
 - git リポジトリと GitHub リモート
-- `gh` CLI(sub-issues / issue dependencies を使うため v2.94.0 以上を推奨。未満は `gh api` フォールバック)
+- `gh` CLI(sub-issues / issue dependencies の作成と読み取りに v2.94.0 以上を推奨。未満は `gh api` フォールバック。ただし `/tasuki:loop-status` の進行状況表示はフォールバックを持たない)
 - Python プロジェクト(`pyproject.toml`)と `uv`
 - CI は plugin が生成する(既存 CI は前提にしない)
 
@@ -120,8 +121,13 @@ Claude Code に plugin として読み込む。
 claude --plugin-dir /path/to/tasuki
 ```
 
-常用する場合は `.claude-plugin/marketplace.json` を用意し、`/plugin marketplace add <パス>` で登録する。
-読み込めたら `/plugin` の一覧に tasuki が出る。
+常用する場合は marketplace として登録する(このリポジトリは `.claude-plugin/marketplace.json` を同梱している)。
+
+```bash
+claude plugin marketplace add /path/to/tasuki
+```
+
+登録したら `/plugin` の一覧に tasuki が出る。
 
 ## 使い方
 

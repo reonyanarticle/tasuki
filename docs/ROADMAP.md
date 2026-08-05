@@ -324,6 +324,7 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 2. 子 PR の自動マージを CI に移す(`gh pr merge` が組織の permission ポリシーで ask になる環境向け。loop:pr ラベル+ checks 緑+ base が `loop/*` の PR だけを対象にした automerge job を loop-init が生成する)
 3. 起票支援(/tasuki:draft)の事前審査に、蓄積した判定例(fixture)を目盛りとして渡す
 4. 条件付きシグナルの成果ゲートでの実走検証(評価を伴う子を実装から取り込みまで通し、report フェーズのシグナルが効くかを見る)
+5. 導入先の `.tasuki/fixtures/` を回す runner(v1 は fixture の形式と手作業の較正手順だけを持ち、読む実体は tasuki 自身のリポジトリの `tests/test_llm_gates.py` にしかない。導入先で契約を変えたときの回帰を自動で検めたい)
 
 ## 未決事項
 
@@ -353,7 +354,7 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools:` で絞る。**絞り方はサブコマンド単位とする**(`Bash(gh issue:*)` のような形。`Bash(gh *)` のようなツール全体の前承認は使わない。理由と規則は [SECURITY.md](SECURITY.md) が正)
 5. **差異あり**：組み込みスラッシュコマンドは `claude -p` から呼べない。対応として形式ゲートの security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
-6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。それ未満は `gh api` フォールバック
+6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。**`gh issue view --json subIssues` での読み取りも同じ v2.94.0 で入っている**(当初「読み取りは v2.95.0 以上」と書いていたが誤りだった。v2.94.0 のリリースノートが Issues 2.0 対応を掲げ、同タグの `pkg/cmd/issue/view/view.go` が `subIssues` を JSON 欄に列挙している。出典: https://github.com/cli/cli/releases/tag/v2.94.0)。それ未満は `gh api` フォールバック
 7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
 
 **設計への反映**：orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。

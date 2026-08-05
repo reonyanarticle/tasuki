@@ -121,7 +121,7 @@ def test_no_runtime_unresolvable_docs_references() -> None:
 def test_verifier_status_contract() -> None:
     """verifier の status 列挙と loop.md の分岐が一致すること(drifting は status ではない)。"""
     verifier_text = (ROOT / "agents/verifier.md").read_text()
-    assert '"met | continue | abort | waiting"' in verifier_text.replace("status", "status")
+    assert '"met | continue | abort | waiting"' in verifier_text
     loop_text = (ROOT / "commands/loop.md").read_text()
     assert "drift_check" in loop_text, "loop.md は drift_check を先に判定する"
 
@@ -152,9 +152,7 @@ def test_worker_records_plan_before_implementing() -> None:
         assert item in text, item
     # 方針の記録が実装より前の手順であること
     assert text.index("実装方針の記録") < text.index("2. **実装 / 実験**")
-    # 設計上の位置づけが docs に残っていること
-    gates = (ROOT / "docs/GATES.md").read_text()
-    assert "### 実装方針をどこに置くか" in gates
+    # docs 側の位置づけ(GATES.md の節)は test_docs.py が検める(重複させない)
 
 
 def test_loop_pr_label_goes_on_the_pr() -> None:

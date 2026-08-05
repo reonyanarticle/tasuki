@@ -29,6 +29,7 @@ worker からプロジェクト subagent への直接委譲は、既定のネス
 ### 2. 優先順位
 
 名前解決は project > repo override(`.tasuki/`)> language pack > plugin デフォルトの順とする。
+ここでの project は導入先リポジトリ自身の Claude Code 定義(`.claude/agents/`、`.claude/skills/`、`CLAUDE.md`)を指し、repo override は tasuki の契約と providers の上書き(`.tasuki/`)を指す。
 Claude Code のネイティブな衝突解決(プロジェクト定義がグローバルを上書き)に揃える。
 plugin 側の agent は `name:` フィールドに `tasuki-` 接頭辞を付けて名前空間を切り(ファイル名ではなく `name:` が衝突判定の対象)、プロジェクトの既存 agent と衝突させない。
 コマンドは plugin 名で自動的に名前空間化される(`/tasuki:loop-init`)。

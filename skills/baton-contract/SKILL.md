@@ -27,7 +27,7 @@ description: tasuki の契約(プロファイル YAML の waiting_level / too_*_
 - 悪い例: 「曖昧」「詳細すぎる」(何を見れば該当と分かるかが書かれていない)
 
 シグナルは網羅ではなく頻出パターンの列挙でよい。
-シグナルにない不一致を gate-reviewer が検知した場合は `confidence: low` になり、上位モデルで再判定される。
+シグナルにない不一致を gate-reviewer が検知した場合は `confidence: low` になり、上位モデルで再判定されるか、既に最上位モデルのゲート(受理 / 分割 / 統合)では orchestrator が裁定する。
 同じ low 判定が繰り返されるなら、そのパターンをシグナルに追加する契約 PR を出す(観点「知識還流」)。
 
 ## set_signals の書き方(分割ゲート固有)
@@ -86,14 +86,14 @@ labeled_by: (人間の名前)
 model: sonnet
 ```
 
-gate-reviewer に fixture を判定させ、一致するまで契約(シグナル)側か fixture 側のどちらが正かを判断して直す(初期較正の目安は着手ゲートの5件で4/5以上、それ以外のゲートは件数が少ないため全一致)。
-fixture は回帰テストの初期データを兼ねる。
+較正は人間が手で回す。fixture 1件ずつを gate-reviewer に判定させ、一致するまで契約(シグナル)側か fixture 側のどちらが正かを判断して直す(初期較正の目安は着手ゲートの5件で4/5以上、それ以外のゲートは件数が少ないため全一致)。
+**導入先には自動 runner が届かない**(v1 の tasuki は `.tasuki/fixtures/` を読む手順もコマンドも持たない)。この形式で書いておくのは、契約を変えたときに人間が同じ手順を繰り返せるようにするためであり、fixture を自動で回す runner は v2 の課題である。
 
 ## repo override(.tasuki/)
 
 プロジェクト固有の上書きは対象リポジトリの `.tasuki/` に置き、plugin の profiles/ は編集しない。
 上書きしてよい範囲の正は契約ファイル冒頭のコメントが定める(コマンド、閾値、待ち位置定義、reviewer / criteria_skills の割り当て、必須欄(`templates`)の追加、`enabled_gates`)。
-名前解決は project > repo override > language pack > plugin デフォルトの順。
+名前解決は project(導入先自身の `.claude/` 定義)> repo override(`.tasuki/`)> language pack > plugin デフォルトの順。
 
 ## 契約変更(axis-question)の手順
 

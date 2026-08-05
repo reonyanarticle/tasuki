@@ -357,16 +357,34 @@ def test_operations_documents_preship_review_and_output_rules() -> None:
 
 
 def test_diagrams_are_conditional_and_renderable() -> None:
-    """図は構造がある箇所にだけ置き、識別子は ASCII、代替テキストを持つこと。"""
+    """図は構造がある箇所にだけ置き、識別子は ASCII、代替テキストを持つこと。
+
+    ノード ID は行頭にだけ現れるとは限らない(`A --> B["..."]` の B のように
+    矢印やラベルの後ろにも書ける)。行頭起点で拾うと flowchart の1行目しか
+    検査されないため、行内も走査する。
+    """
     import re
 
+    # 図の指示行はノード宣言ではない(accDescr の日本語が ID と誤検出される)
+    directive = re.compile(
+        r"^\s*(accTitle|accDescr|%%|style|classDef|class\s|click|linkStyle|direction)"
+    )
+    # 行頭 / 空白 / 矢印の先 / ラベル区切り(`|`)/ 連結(`&`)の直後に来る、
+    # 形状の開き括弧(`[` `(` `{`)を伴うトークンをノード ID とみなす
+    node = re.compile(r"(?:^|[\s|&>])([^\s\[\](){}|>]+)[\[({]")
     for path in (ROOT / "README.md", ROOT / "docs/DESIGN.md"):
         for block in re.findall(r"```mermaid\n(.*?)```", path.read_text(), re.S):
             assert "accTitle:" in block and "accDescr:" in block, path.name
             # ノード ID に日本語を使わない(ID は ASCII、表示ラベルのみ日本語)
-            ids = re.findall(r"^\s*([^\s\[{(]+)[\[{(]", block, re.M)
+            ids: list[str] = []
+            for line in block.splitlines():
+                if directive.match(line):
+                    continue
+                ids += node.findall(re.sub(r'"[^"]*"', '""', line))  # 引用ラベルは除く
             bad = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9_-]+", i)]
             assert not bad, (path.name, bad)
+            if block.lstrip().startswith("flowchart"):
+                assert len(set(ids)) >= 2, (path.name, "flowchart のノードを拾えていない")
 
 
 def test_common_gate_rules_are_single_source() -> None:
@@ -787,12 +805,11 @@ def test_parent_pr_is_designed_for_approval() -> None:
     """親 PR が「コードを読まずに何を承認するか分かる」道具として設計されていること。"""
     import yaml
 
-    for name in ("development",):
-        fields = yaml.safe_load((ROOT / f"profiles/{name}.yaml").read_text())["templates"][
-            "parent_pr_required_fields"
-        ]
-        for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
-            assert f in fields, (name, f)
+    fields = yaml.safe_load((ROOT / "profiles/development.yaml").read_text())["templates"][
+        "parent_pr_required_fields"
+    ]
+    for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
+        assert f in fields, f
     loop = (ROOT / "commands/loop.md").read_text()
     # 裁量の決定を実装方針から親 PR へ集約する規則
     assert "承認してほしい判断" in loop
@@ -1060,13 +1077,12 @@ def test_report_fields_carry_meaning_comments() -> None:
     """
     import yaml
 
-    for name in ("development",):
-        text = (ROOT / f"profiles/{name}.yaml").read_text()
-        fields = yaml.safe_load(text)["templates"]["report_required_fields"]
-        for field in fields:
-            lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
-            assert lines, (name, field)
-            assert any("#" in ln for ln in lines), (name, field, "欄コメントが無い")
+    text = (ROOT / "profiles/development.yaml").read_text()
+    fields = yaml.safe_load(text)["templates"]["report_required_fields"]
+    for field in fields:
+        lines = [ln for ln in text.splitlines() if ln.strip().startswith(f"- {field}")]
+        assert lines, field
+        assert any("#" in ln for ln in lines), (field, "欄コメントが無い")
 
 
 def test_mechanical_preflight_survives_gate_removal() -> None:
@@ -1075,3 +1091,140 @@ def test_mechanical_preflight_survives_gate_removal() -> None:
     assert "`enabled_gates` に `start` が無くても走らせる" in loop
     assert "`preflight: template-fields` を持つ契約で走る" in loop  # 有無は契約から引く
     assert "人間が起票した子" in loop  # 分割ゲートを通っていない子は LLM 判定へ
+
+
+def test_name_resolution_order_agrees_across_documents() -> None:
+    """名前解決の順序を書く2箇所(skill と INTEGRATION)が一致すること。
+
+    skill は agent が実行時に読み、INTEGRATION は設計の正である。
+    導入先から docs/ を辿れないため skill 側に写しを置いているので、
+    ズレないことを機械で固定する(規約「同じ事実を2つの文書に書かない」の例外扱い)。
+    """
+    order = "project"
+    for path, text in (
+        ("skills/baton-contract/SKILL.md", (ROOT / "skills/baton-contract/SKILL.md").read_text()),
+        ("docs/INTEGRATION.md", (ROOT / "docs/INTEGRATION.md").read_text()),
+    ):
+        line = next(ln for ln in text.splitlines() if ln.startswith("名前解決は"))
+        assert order in line, path
+        assert (
+            line.index("repo override")
+            < line.index("language pack")
+            < line.index("plugin デフォルト")
+        ), path
+    # project 層の実体が INTEGRATION に定義されていること(「project とは何か」が読める)
+    integration = (ROOT / "docs/INTEGRATION.md").read_text()
+    assert "ここでの project は導入先リポジトリ自身の Claude Code 定義" in integration
+
+
+def test_gh_version_thresholds_are_single_and_correct() -> None:
+    """gh の必要バージョンを 2.94.0 に統一すること(2.95.0 は誤りだった)。
+
+    sub-issues の作成も `--json subIssues` での読み取りも cli/cli v2.94.0 で入っている。
+    2.95.0 と書いていた間、gh 2.94.x の利用者は不要な GraphQL フォールバックへ分岐し、
+    /tasuki:loop-status はフォールバックが無いため進行状況の節ごと落ちていた。
+    """
+    targets = [
+        ROOT / "README.md",
+        ROOT / "docs/OPERATIONS.md",
+        ROOT / "commands/loop.md",
+        ROOT / "commands/loop-init.md",
+        ROOT / "commands/loop-status.md",
+    ]
+    for path in targets:
+        assert "2.95.0" not in path.read_text(), path.name
+    # 訂正の経緯と出典が ROADMAP に残っていること(仕様断定の登録規則)
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text()
+    assert "https://github.com/cli/cli/releases/tag/v2.94.0" in roadmap
+
+
+def test_checks_gates_have_no_labels() -> None:
+    """形式ゲートはラベルを持たないこと(合否は CI の check-run が正)。
+
+    README が識別子 `checks` を載せ「ラベルは識別子から作られる」と書いていたため、
+    存在しない `gate:checks-passed` を読者が探すことになっていた。
+    """
+    readme = (ROOT / "README.md").read_text()
+    assert "| `checks-*` |" in readme
+    assert "形式ゲート(`checks-*`)はラベルを持たない" in readme
+    # 実際にどこにも gate:checks* を作らない / 使わないこと
+    for base in ("commands", "agents", "skills", "docs", "profiles"):
+        for path in (ROOT / base).rglob("*"):
+            if path.is_file() and path.suffix in (".md", ".yaml"):
+                assert "gate:checks" not in path.read_text(), path.name
+
+
+def test_marketplace_manifest_ships_with_the_repo() -> None:
+    """常用導入の手順が、読者に自作を求めないこと。
+
+    README が `.claude-plugin/marketplace.json` を「用意する」と書いていたが
+    リポジトリに無く、クローンした読者は marketplace 登録に進めなかった。
+    """
+    import json
+
+    manifest = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+    assert manifest["name"] == "tasuki"
+    assert manifest["description"]
+    assert [p["name"] for p in manifest["plugins"]] == ["tasuki"]
+    readme = (ROOT / "README.md").read_text()
+    assert "claude plugin marketplace add" in readme
+
+
+def test_ci_validates_both_manifests_strictly() -> None:
+    """自分の CI が、生成物に課しているのと同じ規律を自分にも課すこと。
+
+    警告を素通りさせない(--strict)、供給網を固定する(バージョン固定)、
+    走行時間と重複実行を縛る(timeout / concurrency)。
+    """
+    wf = (ROOT / ".github/workflows/validate.yml").read_text()
+    assert "--strict" in wf
+    assert ".claude-plugin/plugin.json" in wf and ".claude-plugin/marketplace.json" in wf
+    assert re.search(r"@anthropic-ai/claude-code@\d+\.\d+\.\d+", wf), "バージョン未固定"
+    assert "timeout-minutes:" in wf
+    assert "cancel-in-progress: true" in wf
+
+
+def test_external_issue_opt_in_is_described_consistently() -> None:
+    """外部起票の扱いを「使わない」で終わらせず、opt-in の実装と一致させること。
+
+    data-boundary skill と loop.md 冒頭が「外部 issue を受け付ける repo では使わない」と
+    断じる一方、loop.md の起票者チェックは `tasuki:accepted` の opt-in を実装していた。
+    共通規範が最も強い禁止を述べると、読み手は実装済みの経路を禁止機能と解する。
+    """
+    boundary = (ROOT / "skills/data-boundary/SKILL.md").read_text()
+    loop = (ROOT / "commands/loop.md").read_text()
+    for text, name in ((boundary, "data-boundary"), (loop, "loop.md")):
+        assert "tasuki:accepted" in text, name
+        assert "外部からの issue を受け付けるリポジトリでは tasuki を使わない" not in text, name
+    # 境界の残る範囲(コメントは opt-in で守れない)を明示していること
+    assert "コメント" in boundary
+    assert "コメントまで信頼できないリポジトリでは使わない" in loop
+
+
+def test_verifier_declares_every_input_its_steps_need() -> None:
+    """verifier の入力宣言が、自分の手順が要求する入力を漏らさないこと。
+
+    「入力は実行結果と成功基準・打ち切り条件のみ」と宣言しながら、手順1は PR の
+    ブランチ名を、手順3は子 issue 要件を、統合の子では親 issue 本文を要求していた。
+    宣言だけを読んで動く新規セッションは手順を実行できない。
+    """
+    verifier = (ROOT / "agents/verifier.md").read_text()
+    for token in ("対象 PR のブランチ名", "受け入れ条件", "親 issue 本文"):
+        assert token in verifier, token
+    # 判定基準の版を固定する(worker のブランチ側の写しを読まない)
+    assert "default branch の版を読む" in verifier
+    # 呼び出し側(loop.md)が同じものを渡すこと
+    loop = (ROOT / "commands/loop.md").read_text()
+    assert "子 issue の要件(目的、受け入れ条件、成功基準、打ち切り条件)" in loop
+
+
+def test_low_confidence_escalation_matches_the_gate_models() -> None:
+    """low の行き先を「上位モデルで再判定」だけにしないこと。
+
+    受理 / 分割 / 統合は標準が opus であり昇格先が無い。手順書は orchestrator が
+    裁定すると定めているのに、判定者本人が読む定義は再判定だけを書いていた。
+    """
+    for path in ("skills/baton-contract/SKILL.md", "agents/gate-reviewer.md"):
+        text = (ROOT / path).read_text()
+        assert "orchestrator" in text, path
+        assert "最上位" in text, path
