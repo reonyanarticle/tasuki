@@ -1448,3 +1448,56 @@ def test_integration_branch_repair_is_not_a_mechanism() -> None:
     roadmap = (ROOT / "docs/ROADMAP.md").read_text()
     assert "### 統合ブランチの自己修復を持たない理由(v1 の判断)" in roadmap
     assert "実例が出るまで設計しない" in roadmap
+
+
+def test_model_names_are_aliases_without_generation() -> None:
+    """モデルの世代番号を文書に固定しないこと。
+
+    契約と agent 定義は alias(haiku / sonnet / opus / fable)で書き、
+    世代交代のたびに書き換える箇所を持たない(DESIGN.md のレイヤードレート構造)。
+    「Fable 5」のような版つき表記は、次の世代が出た瞬間に古くなる二重管理である。
+    """
+    pattern = re.compile(r"\b(Fable|Opus|Sonnet|Haiku)\s*\d")
+    offenders = [
+        f"{path.relative_to(ROOT)}:{i}: {line.strip()}"
+        for path in _WRITING_TARGETS
+        for i, line in _prose_lines(path)
+        if pattern.search(line)
+    ]
+    assert not offenders, "\n".join(offenders)
+
+
+def test_roadmap_verification_items_are_sequential_and_cited() -> None:
+    """実装時検証事項が連番で、Claude Code の仕様に依存する項目は出典 URL を持つこと。
+
+    CLAUDE.md は「仕様を根拠に断定を書くときは、この一覧へ出典 URL つきで登録してから書く」と
+    定める。登録の形式(連番、出典)を機械で固定し、一覧を経ない仕様前提の混入を検める。
+    """
+    roadmap = (ROOT / "docs/ROADMAP.md").read_text()
+    start = roadmap.index("## 実装時検証事項")
+    end = roadmap.index("### 検証結果", start)
+    section = roadmap[start:end]
+    numbers = [int(n) for n in re.findall(r"^(\d+)\. ", section, re.M)]
+    assert numbers == list(range(1, len(numbers) + 1)), numbers
+    # Fable 5.1 の設計レビューで登録した3件は subagent 仕様に依存する
+    for topic in (
+        "`effort:` フィールド",
+        "ツール縮小",
+        "`SendMessage` による完了済み subagent の再開",
+    ):
+        item = next(line for line in section.split("\n") if topic in line)
+        assert "https://code.claude.com/docs/en/sub-agents" in item, topic
+
+
+def test_loop_forbids_resuming_workers_with_sendmessage() -> None:
+    """差し戻しと回収モードの委譲で、完了済み worker を SendMessage で再開しないこと。
+
+    差し戻し再実行は新規セッションで行う(観点「コンテキスト衛生」)。SendMessage は
+    前セッションのコンテキストごと再開するため、この規定の抜け道になる。
+    2c(実装)と 2e(内側ループの出口)の両方に禁止があることを固定する。
+    """
+    loop = (ROOT / "commands/loop.md").read_text()
+    sec_2c = loop[loop.index("### 2c. 実装") : loop.index("### 2d.")]
+    sec_2e = loop[loop.index("### 2e. 内側ループの出口") : loop.index("### 2f.")]
+    assert "完了済みの worker を `SendMessage` で再開しない" in sec_2c
+    assert "`SendMessage` で元の worker を再開する経路も使わない" in sec_2e

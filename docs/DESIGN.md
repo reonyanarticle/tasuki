@@ -233,7 +233,7 @@ v1 では **worker を Sonnet に置き、コストの支配項を worker レー
 
 | 層 | ロール | モデル | 根拠 |
 |---|---|---|---|
-| 統括 | orchestrator | Fable 5 | 極少トークン、最高判断。計画、依存グラフ、委譲、エスカレーション裁定のみ。**ゲート判定は兼ねない**(maker/checker 分離とレート戦略の両方が崩れるため) |
+| 統括 | orchestrator | Fable 系の現行モデル | 極少トークン、最高判断。計画、依存グラフ、委譲、エスカレーション裁定のみ。**ゲート判定は兼ねない**(maker/checker 分離とレート戦略の両方が崩れるため) |
 | 高レバレッジ判定 | 受理 / 分割 / 統合ゲートの reviewer | Opus | 親 issue あたり1回程度の低頻度。誤 PASS の下流コスト最大 |
 | 中頻度判定 | 成果ゲートの reviewer | Sonnet(Opus へ昇格可) | 意味検証だが毎反復発生 |
 | 高頻度照合 | 着手ゲートの reviewer | Haiku(Sonnet へ昇格可) | チェックリスト照合。門前払いが機械処理済 |
@@ -242,8 +242,9 @@ v1 では **worker を Sonnet に置き、コストの支配項を worker レー
 
 実装上、reviewer は `tasuki-gate-reviewer` の1つであり、モデルは orchestrator が起動ごとに指定する。
 昇格は同じ agent を上位モデルで呼び直すことであり、agent を切り替えることではない。
+モデルは契約と agent 定義のどちらでも alias(`haiku` / `sonnet` / `opus` / `fable`)で書き、版を固定しない(alias は現行世代を指すため、世代交代のたびに書き換える箇所を持たない)。
 ゲート別の判定基準は `tasuki:gate-review` skill の「ゲート別の特記事項」が単一の正である。
-orchestrator のモデルはメインセッションのモデルそのものであり、plugin からは強制できない(`/tasuki:loop` の実行時に Fable 5 を選ぶことを推奨とする)。
+orchestrator のモデルはメインセッションのモデルそのものであり、plugin からは強制できない(`/tasuki:loop` の実行時に Fable 系の現行モデルを選ぶことを推奨とする)。
 
 ### エスカレーション規則(非対称ルール)
 
