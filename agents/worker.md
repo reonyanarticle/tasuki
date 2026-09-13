@@ -3,7 +3,7 @@ name: tasuki-worker
 description: tasuki の worker。着手ゲートを通過した子 issue を worktree 上で実装し、self-verify を経て draft PR を作成し、レポートを書いて掃除する。worker と worktree は1対1。 /tasuki:loop の手順からのみ呼ばれる(自動委譲の対象にしない)。
 model: sonnet
 isolation: worktree
-tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent は subagent のネスト上限の範囲で使える
+tools: Bash, Read, Edit, Write, Glob, Grep, Skill, Agent   # Agent は subagent のネスト上限の範囲で使える(バックグラウンド起動では渡されないことがある)
 ---
 
 あなたは tasuki の worker である。
@@ -83,7 +83,8 @@ worker の worktree はループ終了時に消えるため、worktree 内にし
 
 対象リポジトリの `.claude/agents/` にある subagent へ、作業の一部を委譲してよい(専用のテストランナーやドメイン特化 agent 等)。
 tasuki 自身の agent(gate-reviewer、verifier 等)は worker から呼ばない(ループの構造とゲート判定は orchestrator が管理する)。
-導入先がネストを無効にしている場合は Agent ツールが使えないので、委譲せずすべて自分で行う。
+導入先がネストを無効にしている場合や、並行(バックグラウンド)起動で Agent ツールが渡されていない場合は、委譲せずすべて自分で行う。
+Agent が無いこと自体を理由にした task-question は出さない(受け入れ条件や前提がその subagent の実行を要求している場合は、通常どおり task-question として報告する)。
 
 ## 差し戻しを受けたとき
 

@@ -372,7 +372,7 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 本設計は Claude Code の機能仕様に依存する記述を含む。
 以下は策定時点の理解であり、**実装着手時に必ず docs.claude.com の現行ドキュメントで確認し、差異があれば docs を先に修正する**(思い込みでの実装開始を門前払いする)。
 
-1. subagent frontmatter の `model:` フィールド。指定可能な値と、Fable 5 のモデル名文字列。指定不可の場合はメインセッション= orchestrator とする代替構成(レート構造は維持可能、[DESIGN.md](DESIGN.md) 参照)
+1. subagent frontmatter の `model:` フィールド。指定可能な値と、Fable 系を指す alias の有無。指定不可の場合はメインセッション= orchestrator とする代替構成(レート構造は維持可能、[DESIGN.md](DESIGN.md) 参照)
 2. subagent の `isolation: worktree` 設定。記法と挙動(worktree の自動作成と掃除の範囲)
 3. plugin.json のスキーマ。commands / agents / skills / hooks の配置規約とマニフェスト書式
 4. subagent からの `gh` CLI 利用。allowed-tools の指定方法と、Bash 許可の粒度(`Bash(gh *)` 等)
@@ -383,10 +383,13 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 9. **Agent 起動時の `model` 指定**と agent 定義の `model` の優先順位(同上)
 10. **`claude plugin validate` の対象解決**。marketplace manifest を同梱したリポジトリでパスを渡すと marketplace だけを検証し、plugin manifest を検証しない(両方を明示指定する必要がある)。`--strict` の有無と出力形式(指摘行の書式)もここに含む(https://code.claude.com/docs/en/plugins)
 11. **CI が固定している `@anthropic-ai/claude-code` のバージョン**。上げるときは `--strict` が存在すること、指摘行の書式が変わっていないこと、上の項目10の対象解決が変わっていないことを確かめてから上げる(固定しないと供給網が緩み、上げないと新しい検証規則が効かない)
+12. **subagent frontmatter の `effort:` フィールド**。受け付ける値、省略時にセッションの effort を継承するか、モデルごとに使えない値があるか(haiku は effort 非対応と見ている)。継承するなら、レイヤードレート構造の費用の調整点は「モデル × effort」であり、契約かゲート定義のどちらで effort を持つかが次の設計判断になる(https://code.claude.com/docs/en/sub-agents)
+13. **並行(バックグラウンド)起動した subagent のツール縮小**。Claude Code は並行(バックグラウンド)起動した subagent から組み込みツールの一部を外す。**外される一覧に `Agent` が含まれるか**を確かめる。含まれるなら、並行(バックグラウンド)起動される worker からプロジェクト subagent への委譲は実際には使えない(https://code.claude.com/docs/en/sub-agents)
+14. **`SendMessage` による完了済み subagent の再開**。完了した subagent を前回のコンテキストごと再開できるとされる。tasuki の差し戻しは新規セッションで行う設計であり、この経路は使わない(commands/loop.md の規定)。再開が許可設定で遮断されるのか、手順書の禁止だけが防いでいるのかを確かめる(https://code.claude.com/docs/en/sub-agents)
 
 ### 検証結果(確認した時点のもの。仕様は動くため、依存する記述を書くたびに現行仕様と突き合わせる)
 
-1. `model:` は `haiku` / `sonnet` / `opus` / `fable` を受け付け、省略時は `inherit`(メイン会話と同モデル)。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
+1. `model:` は `haiku` / `sonnet` / `opus` / `fable` の alias か、フルのモデル ID を受け付け、省略時は `inherit`(メイン会話と同モデル)。alias は現行世代を指す(出典: https://code.claude.com/docs/en/sub-agents)。版を固定しない方針は [DESIGN.md](DESIGN.md) のレイヤードレート構造に置く。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
 2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools:` で絞る。**絞り方はサブコマンド単位とする**(`Bash(gh issue:*)` のような形。`Bash(gh *)` のようなツール全体の前承認は使わない。理由と規則は [SECURITY.md](SECURITY.md) が正)
