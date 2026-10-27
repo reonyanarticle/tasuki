@@ -141,7 +141,7 @@ claude-security スキャン(7観点)を実施し、信頼境界の設計上の�
 
 アジャイル運用の難所分析で特定した2つのギャップを閉じた。
 
-- **再計画(loop:replan)**:走行中の親要件変更の正式経路。人間が親本文を編集して `loop:replan` を付けると、実行中の worker を走り切らせてから、受理ゲート再判定と decomposer の差分分割(維持 / 改訂 / 追加 / 撤回、取り込み済みへの波及は追い子)で計画を作り直す(loop.md §1d)
+- **再計画(loop:replan)**:走行中の親要件変更の正式経路。人間が親本文を編集して `loop:replan` を付けると、実行中の worker を走り切らせてから、受理ゲート再判定と decomposer の差分分割(維持 / 改訂 / 追加 / 撤回、取り込み済みへの波及は追い子)で計画を作り直す(現在の skills/loop-plan/SKILL.md の §1d(再計画))
 - **default branch の定点取り込み**:ループ外の開発(hotfix 等)との共存。run 開始時(任意)、レイヤー合流時、3c 入場前(必須)の3定点で default branch を統合ブランチへ merge し、conflict と赤はループが自分で直さず `loop:triage` で人間に渡す(下の「統合ブランチの自己修復を持たない理由」)。3c は merge-base が default 先端と一致するまで入れない(承認する差分とマージ結果を一致させる)。多親並走(v2)の前提部品でもある
 - 3c の承認コメントに「やらなかったこと」の親 issue 下書きを添える(起票は人間)
 - 出荷前レビューを人間起動から orchestrator の subagent 自動実行へ変更し、規模は契約の preship_review(full / scaled / manual)で制御する
@@ -352,6 +352,25 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 残る未検証: この E2E は着手ゲートまでで、実装から取り込みまでは通していない。
 条件付きシグナルが report フェーズ(数字の由来セット)でどう効くかは、成果ゲートを実走するまで分からない。
 
+### 手順の分割後の E2E 実施結果(tasuki-e2e-eval リポジトリ)
+
+手順を入口と節ごとの skill に分けた後の契約と plugin で、子の無い親1件(入力の正規化と2値判定の関数、子2件)を headless で完走させた。
+orchestrator は sonnet、権限は auto モードで回した。
+
+| 検証項目 | 結果 |
+|---|---|
+| 分割した手順が読み込まれるか | 達成。run の開始時に共通規則、停止装置、§0 の順で読み込み、以後も §1、§2、§3 の各節の skill をその節へ進む直前に読み込んだ |
+| 受理から統合、出荷前レビューまでの完走 | 達成。受理、分割、着手、成果、統合の各ゲートが PASS し、同じレイヤーの子2件を並行に実装して統合ブランチへ取り込んだ。親 PR は全緑で ready になり、triage は残らなかった |
+| 2g の取り込み時の conflict | 達成(実走での初発火)。並行の子が同じテストファイルを先に取り込み、後の子のマージが拒否された。`gate:outcome-passed` を外して新規 worker に解消させ、2d から 2f を通り直して取り込んだ |
+| 出荷前レビューの結果コメント | 達成。見出しとレビューした head の SHA を持つ結果コメントを1件投稿し、所見なしで承認材料の投稿と ready 化に進んだ |
+
+E2E で見つけて直したこと:
+
+- auto モードの分類器が子 PR の `gh pr merge` を止めた(上の実装時検証事項の項目17)。`/tasuki:loop-init` の権限の提案に、settings の allow 規則として置くことを加えた
+- 分割ゲートの reviewer が空の応答を返し、orchestrator が手順に無い判断で呼び直した。空または読めない verdict の扱い(1回だけ呼び直し、だめなら triage)をゲート共通の規則に加えた
+
+残る未検証: run の途中で compaction が起きなかったため、要約の後に節の skill を読み込み直す経路は実走していない。
+
 ## v1.5 候補(未着手)
 
 1. 分割案 YAML から冪等に起票と依存設定まで行う同梱スクリプト(shell 手作業の廃止。導入先に Python が無い場合の代替が論点)
@@ -360,6 +379,7 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 4. 条件付きシグナルの成果ゲートでの実走検証(評価を伴う子を実装から取り込みまで通し、report フェーズのシグナルが効くかを見る)
 5. `criteria_skills` を1例通す(導入先の skill を判定基準に混ぜる形は、契約に器だけがあり実例が0件である。0例のまま器を増やさないための順序として、次の器を足す前にここを1例にする)
 6. 導入先の `.tasuki/fixtures/` を回す runner(v1 は fixture の形式と手作業の較正手順だけを持ち、読む実体は tasuki 自身のリポジトリの `tests/test_llm_gates.py` にしかない。導入先で契約を変えたときの回帰を自動で検めたい)
+7. **状態の復元と機械チェックを、plugin の `bin/` に置く helper へ移す**(plugin の `bin/` は、plugin が有効な間 Bash の PATH に載る。出典: https://code.claude.com/docs/en/plugins-reference)。いまは「機械チェック、LLM なし」と書いた処理(必須欄の空チェック、再入点の決定、stale 回収の基準時刻、check-runs の fail-closed 判定、冪等コメントの同定)も、orchestrator の LLM が散文の手順を読んで実行している。修正履歴の多くはこの散文の状態機械のトレース漏れであり、同じ処理を決定的なコードに置けば、手順書はその出力を読んで委譲と判断だけを行う形に縮む。項目1(起票スクリプト)はこの一部である。core に置く道具は判定基準ではないので、[PHILOSOPHY.md](PHILOSOPHY.md) の「core 自身が動くために要る道具」の例外に当たる
 
 ## 未決事項
 
@@ -385,17 +405,29 @@ E2E の実績(2親8子、verifier がデータ分離を毎回確認)は、無条
 11. **CI が固定している `@anthropic-ai/claude-code` のバージョン**。上げるときは `--strict` が存在すること、指摘行の書式が変わっていないこと、上の項目10の対象解決が変わっていないことを確かめてから上げる(固定しないと供給網が緩み、上げないと新しい検証規則が効かない)
 12. **subagent frontmatter の `effort:` フィールド**。受け付ける値、省略時にセッションの effort を継承するか、モデルごとに使えない値があるか(haiku は effort 非対応と見ている)。継承するなら、レイヤードレート構造の費用の調整点は「モデル × effort」であり、契約かゲート定義のどちらで effort を持つかが次の設計判断になる(https://code.claude.com/docs/en/sub-agents)
 13. **並行(バックグラウンド)起動した subagent のツール縮小**。Claude Code は並行(バックグラウンド)起動した subagent から組み込みツールの一部を外す。**外される一覧に `Agent` が含まれるか**を確かめる。含まれるなら、並行(バックグラウンド)起動される worker からプロジェクト subagent への委譲は実際には使えない(https://code.claude.com/docs/en/sub-agents)
-14. **`SendMessage` による完了済み subagent の再開**。完了した subagent を前回のコンテキストごと再開できるとされる。tasuki の差し戻しは新規セッションで行う設計であり、この経路は使わない(commands/loop.md の規定)。再開が許可設定で遮断されるのか、手順書の禁止だけが防いでいるのかを確かめる(https://code.claude.com/docs/en/sub-agents)
+14. **`SendMessage` による完了済み subagent の再開**。完了した subagent を前回のコンテキストごと再開できるとされる。tasuki の差し戻しは新規セッションで行う設計であり、この経路は使わない(skills/loop-child/SKILL.md の 2c(実装)と 2e(内側ループの出口)の規定)。再開が許可設定で遮断されるのか、手順書の禁止だけが防いでいるのかを確かめる(https://code.claude.com/docs/en/sub-agents)
+15. **コマンドと skill の `allowed-tools` の意味**。列挙したツールを制限するのか、前承認するだけなのか。前承認の効く期間(https://code.claude.com/docs/en/skills)
+16. **自動 compaction 後に起動済みのコマンドと skill の本文がどれだけ残るか**。tasuki の手順書は1枚が長く、残る量が run の途中で手順を失うかどうかを決める(https://code.claude.com/docs/en/skills)
+17. **auto モードの分類器と、許可の規則の関係**。無人の run を auto モードで回すとき、どの操作が分類器に止められ、settings の allow 規則とコマンドの `allowed-tools` がそれを越えるか(https://code.claude.com/docs/en/permission-modes)
 
 ### 検証結果(確認した時点のもの。仕様は動くため、依存する記述を書くたびに現行仕様と突き合わせる)
 
 1. `model:` は `haiku` / `sonnet` / `opus` / `fable` の alias か、フルのモデル ID を受け付け、省略時は `inherit`(メイン会話と同モデル)。alias は現行世代を指す(出典: https://code.claude.com/docs/en/sub-agents)。版を固定しない方針は [DESIGN.md](DESIGN.md) のレイヤードレート構造に置く。plugin agent でも同じ。**さらに Agent の起動引数で `model` を渡すと、agent 定義の `model` より優先される**(追認済み。これによりモデル固定の変種を分ける必要は無い)
-2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし
+2. `isolation: worktree` は有効。worktree は自動作成され、変更がなければ自動で掃除される。agent 種別の制約なし。**base は既定で default branch であり、親セッションの `HEAD` ではない**(出典: https://code.claude.com/docs/en/sub-agents)。worker が統合ブランチを自分で fetch して base にする規定(agents/worker.md)はこのために要る
 3. plugin.json は `name` のみ必須。commands / agents / skills は規約ディレクトリから自動発見される(マニフェストへの列挙は不要)
 4. **差異あり**：agent frontmatter の `tools:` はツール名のみで、`Bash(gh *)` の粒度は書けない。粒度制御は permissions 設定か hooks 側。ただしコマンド(commands/*.md)の `allowed-tools:` は粒度指定可。対応として gate-reviewer には Bash を渡さず(orchestrator が issue 本文を渡す)、コマンド側は `allowed-tools:` で絞る。**絞り方はサブコマンド単位とする**(`Bash(gh issue:*)` のような形。`Bash(gh *)` のようなツール全体の前承認は使わない。理由と規則は [SECURITY.md](SECURITY.md) が正)
 5. **差異あり**：組み込みスラッシュコマンドは `claude -p` から呼べない。対応として形式ゲートの security は GitHub Action(`anthropics/claude-code-security-review`)のみを使う。同 Action は SARIF 非出力(PR コメント+ JSON 成果物)、`claude-api-key` が必須
 6. sub-issues と issue dependencies は REST / GraphQL とも GA。`gh` CLI はどちらも v2.94.0 からネイティブ対応(`--parent` / `--blocked-by` 等)。**`gh issue view --json subIssues` での読み取りも同じ v2.94.0 で入っている**(当初「読み取りは v2.95.0 以上」と書いていたが誤りだった。v2.94.0 のリリースノートが Issues 2.0 対応を掲げ、同タグの `pkg/cmd/issue/view/view.go` が `subIssues` を JSON 欄に列挙している。出典: https://github.com/cli/cli/releases/tag/v2.94.0)。それ未満は `gh api` フォールバック
 7. `.github/workflows/` への push には classic PAT で `workflow` scope、fine-grained / Apps で `workflows: write` が必要。Actions の `GITHUB_TOKEN` では不可。`gh auth refresh -s workflow` で付与できる。**E2E での追記**：この制約は OAuth token による HTTPS push に対するもので、SSH 鍵での push には適用されない(実地確認済み)。前提チェックは protocol が https のときのみ scope を要求する
+
+以下は項目12以降の結果である(番号は上の検証事項に対応する。項目8と9の結果は下の「設計への反映」にある)。
+
+12. `effort:` は subagent frontmatter で受け付け、Agent の起動ごとの `effort` 指定が frontmatter より優先される(環境変数 `CLAUDE_CODE_EFFORT_LEVEL` はさらに両者より優先される)。レイヤードレート構造の調整点は「モデル × effort」になりうるが、契約にはまだ持たせていない(出典: https://code.claude.com/docs/en/sub-agents)
+13. **差異あり**:並行(バックグラウンド)起動の絞り込みは `Agent` を外さない(`Agent` はネストの条件にだけ従う)。background の subagent が権限を要するツールを呼ぶと、確認はメインセッションに出る(自動では拒否されない。無人の run ではそこで止まる)(出典: https://code.claude.com/docs/en/sub-agents)
+14. `SendMessage` による再開を許可設定で遮断する方法は記載が無い。`Agent(...)` の許可規則は起動を対象とし、メッセージには効かない。**再開の禁止は手順書(skills/loop-child/SKILL.md の 2c(実装)と 2e(内側ループの出口))の規定だけが守っている**(出典: https://code.claude.com/docs/en/permissions)
+15. **差異あり**:`allowed-tools` は**前承認だけであり、制限しない**(列挙しないツールも呼べ、通常の権限設定に従う)。前承認は、そのコマンドを起動したターンの間だけ効き、人間が次のメッセージを送ると消える。ツールを使えなくするのは別の欄 `disallowed-tools` である(出典: https://code.claude.com/docs/en/skills)。tasuki の allowlist の絞り込みは「確認なしで走る範囲」を狭めるものであり、それ以外の操作を禁じる強制ではない([SECURITY.md](SECURITY.md))
+16. **差異あり**:自動 compaction は、起動済みの skill の最新の起動を要約の後に付け直すが、**各先頭 5,000 トークンまで**で、合計 25,000 トークンの枠を新しく起動した skill から埋める(古い skill は丸ごと落ちうる)。コマンドにも同じく効くかは明記が無い(コマンドと skill は同じ仕組みで動くとだけ書かれている)。内容が同じ skill を起動し直すと「読み込み済み」の短い注記だけが付くが、compaction の後については「skill を起動し直せば全文が戻る。重要な指示は SKILL.md の先頭近くに置く」と案内されている(出典: https://code.claude.com/docs/en/skills の「Skill content lifecycle」と「Claude stops following a skill」)。手順を1枚(約4.5万字、`claude plugin details` の推定で約1.1万トークン)で持っていた頃は、compaction の後に残るのが §2 の冒頭までであり、2a 以降(着手ゲートから出荷ゲート、統合、出荷前レビュー、停止装置)を失った orchestrator が記憶から再構成した手順で走り続けうる構造だった。**対処**:commands/loop.md を入口(節と skill の対応表と読み込みの規則)だけに縮め、節ごとの手順を skills/loop-{rules,restore,plan,child,merge,brake} に分けた。同じ推定で各節の skill は 5,000 トークン未満に収まる(最大の loop-child が約4.5k で、余裕は小さい。1字あたり約4分の1トークンで、tests/test_docs.py が字数で上限を見張る)。ただし付け直しの枠は新しく起動した skill から埋まり、古い skill は丸ごと落ちうるので、**要約の後に手順を取り戻す本体は、起動し直しの規則**(入口の規則3)であり、規則は入口と各節の skill の先頭の両方に置いて、どれが付け直されても残るようにした。一時停止の確認のように欠かせない規則は、使う節にも書く
+17. **差異あり**:auto モードの分類器は「人間が承認していない pull request のマージ」を既定で止める。settings の allow、ask、deny 規則に合う操作は分類器の前に決まり、`Bash(npm test)` のような狭い規則は auto モードでも残る(出典: https://code.claude.com/docs/en/permission-modes の「How the classifier evaluates actions」と「What the classifier blocks by default」)。コマンドの `allowed-tools` が分類器を越えるかは記載が無く、実地の E2E では `Bash(gh pr:*)` を前承認していても子 PR の `gh pr merge` が止められ、同じコマンドの呼び直しは通った(分類器の判定は呼び出しごとに揺れる)。そのため `/tasuki:loop-init` は、auto モードの導入先に `Bash(gh pr merge:*)` を settings の allow 規則として置くよう提案する。`-p` の run では、止められた操作は実行されないまま run が続く(同上の「Repeated-block thresholds」)
 
 **設計への反映**：orchestrator は agent ではなく、`/tasuki:loop` を実行するメインセッションが務める([DESIGN.md](DESIGN.md))。
 (**訂正**:当初この理由を「subagent は別の subagent を起動できないから」としていたが、これは誤りだった。現行仕様では subagent は既定でメインセッションの3階層下まで subagent を起動でき、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` はその上限を**下げる**設定である(`1` でネスト無効)。出典: https://code.claude.com/docs/en/sub-agents 。orchestrator をメインセッションに置く理由は、人間への報告と裁定の窓口であることに置き直した。)

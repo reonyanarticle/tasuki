@@ -115,7 +115,7 @@ gates:
 # checks-security はオプトイン(/tasuki:loop-init で選択時に追加。API キー課金が別途発生)
 enabled_gates: [intake, split, start, outcome, integration, checks-lint, checks-format, checks-typecheck, checks-test]
 
-preship_review:                   # 出荷前レビュー(loop.md 3c)のコスト制御
+preship_review:                   # 出荷前レビュー(/tasuki:loop の 3c)のコスト制御
   mode: scaled                    # full = 常に観点別5セッション / scaled = diff 規模で自動選択 / manual = 人間が起動
   fanout_threshold_lines: 200     # scaled のとき、観点別に分ける diff 行数の閾値
 ```
@@ -174,7 +174,7 @@ providers:
 ## issue テンプレート仕様
 
 必須欄の単一ソースは契約 YAML である。
-`/tasuki:loop-init` がファイルとして生成するのは親 issue / 子 issue / 子 PR の3つで、レポートと親 PR の承認コメントはテンプレートを持たず、実行時に契約から組み立てる(レポートは `tasuki:loop-report` skill、承認コメントは loop.md の 3c-2)。
+`/tasuki:loop-init` がファイルとして生成するのは親 issue / 子 issue / 子 PR の3つで、レポートと親 PR の承認コメントはテンプレートを持たず、実行時に契約から組み立てる(レポートは `tasuki:loop-report` skill、承認コメントは skills/loop-merge/SKILL.md の 3c-2)。
 
 | テンプレ | 必須欄 |
 |---|---|
@@ -182,7 +182,7 @@ providers:
 | 子 issue | 対応する親要件 / 目的 / 受け入れ条件 / 成功基準 / 打ち切り条件 / 予算(max_iterations)(導入先が repo override で欄を足してよい) |
 | レポート | 要件⇔結果の対応表 / 結論 / 期待値の根拠 / 再現手順(コマンドと環境) / 生データへのリンク / 参照した skill と委譲した subagent |
 | 子 PR 本文 | 概要 / 対応する親要件 / 受け入れ条件の充足 / 変更点 / 影響範囲と revert 可否 / 対応 issue / 検証方法 |
-| 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue(loop.md の 3c-2 が投稿する) |
+| 親 PR の承認コメント | 何が変わるか / 承認してほしい判断 / やらなかったこと / リスクと戻し方 / 対応 issue([skills/loop-merge/SKILL.md](../skills/loop-merge/SKILL.md) の 3c-2 が投稿する) |
 
 必須欄の空チェックが着手ゲートの門前払いに直結する。
 

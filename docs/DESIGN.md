@@ -39,7 +39,8 @@ tasuki/
 │   ├── loop-report/SKILL.md      # レポート作成手順(対応表必須)
 │   ├── plan-comment/SKILL.md     # 親 issue の計画コメント(図を描く条件を含む)
 │   ├── mermaid/SKILL.md          # 図種の決定手順と記法(汎用。tasuki 固有の判断は持たない)
-│   └── data-boundary/SKILL.md    # 入力を未検証データとして扱う共通規範(全 agent が参照)
+│   ├── data-boundary/SKILL.md    # 入力を未検証データとして扱う共通規範(全 agent が参照)
+│   └── loop-{rules,restore,plan,child,merge,brake}/SKILL.md  # /tasuki:loop の節ごとの手順(入口が読み込む。利用者は直接起動しない)
 ├── agents/
 │   ├── decomposer.md
 │   ├── gate-reviewer.md          # 全ゲート共通。モデルは呼び出しごとに指定。読み取り専用
@@ -48,7 +49,7 @@ tasuki/
 ├── commands/
 │   ├── draft.md                  # 親 issue の対話式起票支援
 │   ├── loop-init.md              # ブートストラップ
-│   ├── loop.md                   # ループ起動(親 issue 指定)。実行セッション= orchestrator
+│   ├── loop.md                   # ループ起動(親 issue 指定)の入口。節と skill の対応表と読み込みの規則だけを持つ
 │   └── loop-status.md            # 進行状況・メトリクス表示
 ├── packs/
 │   └── python/
@@ -112,10 +113,10 @@ orchestrator が依存グラフからレイヤーを作り、レイヤー内は 
 依存の循環はエラーとして検出し、報告して停止する。
 
 次レイヤーへの前進は、前レイヤーの全子が**統合ブランチ**へ取り込まれてからとする。
-統合ブランチが conflict または赤になったら、ループは自分で直さず `loop:triage` で人間に渡す(手順の正は [commands/loop.md](../commands/loop.md))。
+統合ブランチが conflict または赤になったら、ループは自分で直さず `loop:triage` で人間に渡す(手順の正は [skills/loop-merge/SKILL.md](../skills/loop-merge/SKILL.md) の §3a(レイヤーの合流))。
 合流点は統合ブランチの更新であり、人間のマージを待たない。
 **人間がマージするのは親 PR(統合ブランチ → default branch)の1回だけ**であり、default branch への反映は常に人間の手を経る。
-合流点([commands/loop.md](../commands/loop.md) の §3a(レイヤーの合流))は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
+合流点([skills/loop-merge/SKILL.md](../skills/loop-merge/SKILL.md) の §3a(レイヤーの合流))は同時に、再計画(loop:replan)の発効点と、default branch の定点取り込み(hotfix の合流)でもある。
 deploy と release の分離(feature flag)により、未完成の機能を理由にレイヤー実行を止めない。
 
 ```mermaid
@@ -143,7 +144,7 @@ flowchart TD
 
 ## ループ詳細フロー
 
-`/tasuki:loop` の1 run が通る経路である(手順の正は [commands/loop.md](../commands/loop.md)。この図は § 番号への地図)。
+`/tasuki:loop` の1 run が通る経路である(手順の正は [commands/loop.md](../commands/loop.md) を入口とする節ごとの skill。この図は § 番号への地図)。
 外側(run 全体)と内側(子1件)を2枚に分ける。
 
 ```mermaid
