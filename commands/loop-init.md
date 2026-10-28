@@ -289,6 +289,11 @@ jobs:
 **生成物が .gitignore で除外されているか検査する。** pack の `artifacts` が挙げるパターンが対象リポジトリの `.gitignore` に無ければ、追加を提案する。無いまま進むと、worker のコミットが生成物を巻き込み、ブランチ間で生成物どうしが競合する(E2E で2連続で発生した実害)。
 
 **checks-local の実行権限を提案する。** orchestrator は反復判定で pack の providers コマンドをローカル実行するため、そのコマンドに対応する権限を導入先の設定に追加するよう提案する(権限の文字列は pack の providers のコマンドから作る)。それ以外の実行許可は提案しない(checks-local は providers の宣言済みコマンドだけを実行し、リポジトリ内のスクリプトを直接実行する検査を持たない)。広い `Bash` を丸ごと許可しない(必要なコマンドだけに絞る)。
+**無人で回すなら、`/tasuki:loop` の `allowed-tools` と同じ gh と git のサブコマンドと Skill も、導入先の permissions 設定の allow 規則として置くよう提案する(手順の節は Skill ツールで読み込むため、Skill の確認で止まっても run は進まない)。** コマンドの `allowed-tools` は起動したターンだけ効く前承認であり、人間が途中で返信すると消えて、以後の操作が確認待ちで止まる(ROADMAP の実装時検証事項の項目15)。提案する文字列は `/tasuki:loop` の frontmatter から写し、それより広げない。
+**auto モードで回す導入先には、子 PR を統合ブランチへ取り込む `Bash(gh pr merge:*)` の allow 規則が特に要る。** auto モードの分類器は「人間が承認していない pull request のマージ」を既定で止めるが、settings の allow 規則に合う操作は分類器の手前で決まる(ROADMAP の実装時検証事項の項目17)。この規則が無いと、§2g(出荷ゲート)の取り込みが分類器に止められ、run がそこで止まるか、呼び直しのたびに通るかどうかが揺れる。
+ただし、この規則は親 PR を default branch へ入れる `gh pr merge` にも同じく合う(引数を問わない prefix の規則であり、マージ先を区別しない)。
+親 PR のマージを人間に残しているのは手順(orchestrator は親 PR をマージしない)であって、この規則ではない。
+規則を置くことを提案するときはこの点を利用者に伝え、default branch に機械的な歯止めを求める導入先には、branch protection で default branch へのマージに承認レビューを要求することを併せて提案する。
 
 **一覧の見え方を案内する。** 子 issue と子 PR は機械の作業単位であり、数が増える。issue 一覧は `is:open no:parent-issue` で親だけを表示でき、`-label:tasuki:child` でも子を除外できる。この検索例を README などに書いておくよう提案する。
 

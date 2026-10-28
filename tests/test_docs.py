@@ -6,7 +6,9 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
+from conftest import LOOP_PROCEDURE_FILES, ROOT, frontmatter, loop_procedure
+
+_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
 MD_FILES = [ROOT / "README.md", ROOT / "CLAUDE.md", *sorted((ROOT / "docs").glob("*.md"))]
 
@@ -84,7 +86,7 @@ def test_g3_flow_wiring() -> None:
     """成果ゲート の配線: return_to 拡張、g3-returned の付与、ready 化順序の文書整合。"""
     gates = (ROOT / "docs/GATES.md").read_text()
     assert "decomposer | worker | implementation" in gates
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "`gate:outcome-returned` を付け" in loop
     assert "2f を再判定" in loop
     ops = (ROOT / "docs/OPERATIONS.md").read_text()
@@ -93,7 +95,7 @@ def test_g3_flow_wiring() -> None:
 
 def test_phase3_full_loop_wiring() -> None:
     """フェーズ3の配線: 受理ゲート、decomposer 起動と起票、循環検出、レイヤー合流、統合ゲート。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "受理ゲート" in loop
     assert "`tasuki-decomposer` へ委譲" in loop
     assert "via tasuki-decomposer" in loop
@@ -136,7 +138,7 @@ def test_verdict_comment_human_readable() -> None:
     sk = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "人間可読" in sk
     assert "<details>" in sk
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "<details>" in loop and "生の JSON / YAML をそのまま貼らない" in loop
     # 受理と分割と統合の verdict 記録も人間可読へ揃え、旧表現を残さないこと
     assert "verdict は親 issue にコメントで記録する(冪等)。" not in loop
@@ -171,8 +173,10 @@ def test_plan_comment_skill_makes_diagram_conditional() -> None:
     assert "tasuki:mermaid" in sk  # skill 間の参照
     # 旧 skill と、4部構成の無条件強制が残っていないこと
     assert not (ROOT / "skills/plan-diagram").exists()
-    for path in ("commands/loop.md", "commands/loop-status.md"):
-        text = (ROOT / path).read_text()
+    for path, text in (
+        ("/tasuki:loop の手順", loop_procedure()),
+        ("commands/loop-status.md", (ROOT / "commands/loop-status.md").read_text()),
+    ):
         assert "tasuki:plan-comment" in text, path
         assert "plan-diagram" not in text, path
         assert "4部構成" not in text, path
@@ -181,7 +185,7 @@ def test_plan_comment_skill_makes_diagram_conditional() -> None:
 def test_gm_is_hybrid() -> None:
     """形式ゲート のハイブリッド化(checks-local / checks-ci)が docs と手順の両方に現れること。"""
     assert "checks-local" in (ROOT / "docs/OPERATIONS.md").read_text()
-    loop_text = (ROOT / "commands/loop.md").read_text()
+    loop_text = loop_procedure()
     assert "checks-local" in loop_text and "checks-ci" in loop_text
 
 
@@ -255,7 +259,7 @@ def test_baton_contract_covers_set_signals() -> None:
 
 def test_preship_review_phase_defined() -> None:
     """出荷前レビュー(5観点)と security スキャンの実施フェーズが定義されていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "### 3c. 出荷前レビュー(親 PR、最終コード評価)" in loop
     assert "/code-review" in loop
     assert "/claude-security:claude-security" in loop
@@ -307,7 +311,7 @@ def test_loop_command_keeps_least_privilege() -> None:
     checks-local の provider 実行に必要な権限は言語 pack が決めるため、core では
     宣言せず loop-init が導入先へ提案する。
     """
-    head = (ROOT / "commands/loop.md").read_text().split("---")[1]
+    head = loop_procedure().split("---")[1]
     allowed = next(line for line in head.split("\n") if line.startswith("allowed-tools:"))
     assert "Bash(" in allowed, allowed
     assert not any(tok.strip() == "Bash" for tok in allowed.split(":", 1)[1].split(",")), allowed
@@ -408,7 +412,7 @@ def test_common_gate_rules_are_single_source() -> None:
     受理ゲートにしかラベル整理が書かれておらず、他のゲートでは triage が
     滞留し続けていた。共通規則にすることで書き漏れを構造的に防ぐ。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "## ゲート共通の規則" in loop
     assert "### ラベルの整理" in loop and "### コメントは冪等に投稿する" in loop
     # 共通規則が個々のゲートより前にあること
@@ -424,7 +428,7 @@ def test_common_gate_rules_are_single_source() -> None:
 
 def test_degenerate_cases_documented() -> None:
     """縮退した形(子1件、依存なし、全マージ済み、子0件)の扱いが書かれていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "縮退した形の扱い" in loop
     for case in ("子が1件", "依存がまったく無い", "全子 issue がマージ済み", "子が0件"):
         assert case in loop, case
@@ -451,7 +455,7 @@ def test_operational_gaps_are_specified() -> None:
 
     Fable レビューで見つけた欠落。いずれも実運用で最初に踏む類のもの。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # 人間が理由を問わず引けるブレーキ
     assert "loop:pause" in loop
     assert "実行中の worker は完了まで走り切ってよい" in loop  # 強制中断はしない
@@ -473,7 +477,7 @@ def test_integration_branch_model() -> None:
     子 PR を人間が個別にマージする設計は「人間はループの外」という思想に反する。
     default branch への反映点は親 PR のマージだけとする。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "loop/parent-<親番号>" in loop  # 統合ブランチ
     assert "人間が最終的に見るのはこの親 PR だけ" in loop
     assert "人間は子 PR をマージしない" in loop
@@ -492,7 +496,7 @@ def test_replan_path_is_designed() -> None:
     経路が無いと、本文編集のズレは統合ゲートの孤児要件まで潜伏する。
     黙った自動追従(編集のたびに再分割)も、意図しない opus 消費になるため退ける。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "loop:replan" in loop
     assert "要件変更の検知" in loop  # §0 の機械検知(通知のみ)
     assert "再計画は行っていない" in loop  # ラベル無し編集は通知に留める
@@ -515,7 +519,7 @@ def test_base_sync_checkpoints_are_designed() -> None:
 
     定点が無いと親 PR の base が古いまま承認され、承認した差分とマージ結果がずれる。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "定点0" in loop and "定点1" in loop and "定点2" in loop
     assert "rebase はしない" in loop  # 子 PR の参照 SHA を書き換えない
     assert "merge-base が default branch の先端と一致していること" in loop  # 3c 入場条件
@@ -526,14 +530,14 @@ def test_base_sync_checkpoints_are_designed() -> None:
 
 def test_base_sync_does_not_flag_upstream_changes() -> None:
     """定点取り込みの検知が hotfix 由来の変更を worker の改変と誤認しないこと。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "default branch 側から来た変更" in loop
     assert "worker の改変と誤認しない" in loop
 
 
 def test_replan_refiling_matches_open_children_only() -> None:
     """replan の再起票の冪等判定が撤回済み(closed)の子に誤マッチしないこと。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "open の子だけと突き合わせる" in loop
 
 
@@ -542,7 +546,7 @@ def test_section0_numbering_consistent() -> None:
 
     項目挿入で番号が重複すると、§0.N の参照が別の項目を指したまま読める(実害を踏んだ)。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     sec0 = loop.split("## 0. ")[1].split("\n## ")[0]
     nums = [int(m) for m in re.findall(r"^(\d+)\. ", sec0, re.M)]
     assert nums == list(range(1, len(nums) + 1)), nums
@@ -574,7 +578,7 @@ def test_draft_command_is_designed() -> None:
 
 def test_field_review_fixes_are_designed() -> None:
     """実運用レビューで確定した修正が手順と agent 定義に反映されていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "インラインで渡す" in loop  # 被判定物の直前取得(揮発ファイル禁止)
     assert "ready 化してから統合ブランチへマージする" in loop  # 2g の draft 対応
     assert "空コミットを1つ置いてから" in loop  # 親 PR 作成の前提
@@ -604,7 +608,7 @@ def test_field_review_fixes_are_designed() -> None:
 
 def test_trace_review_findings_are_fixed() -> None:
     """第6観点「手順のトレース」の試走が検出した8欠陥の修正が残っていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "子 issue 本文と issue 番号、統合ブランチ名" in loop  # worker への受け渡し
     assert "`loop:triage` が付いた子には着手しない" in loop  # 裁定前の再実行防止
     assert "レビュー結果は親 PR のコメントに残す" in loop  # 3c の run またぎ
@@ -637,7 +641,7 @@ def test_conventions_live_in_rules() -> None:
 
 def test_preship_review_runs_in_subagents() -> None:
     """3c の5観点レビューは orchestrator が subagent で自動実行すること(人間の起動を待たない)。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "レビューは orchestrator が subagent で自動実行する" in loop
     assert "これは人間が起動するコマンドである" not in loop
     # セキュリティスキャンだけは人間案内のまま(別建て課金)
@@ -705,7 +709,7 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
     # draft の引数は自由文で、本文ファイル経由でしか使われないため対象外。
     assert "正の整数であることを確認" in (ROOT / "commands/loop-status.md").read_text()
     # 手順が使う操作は許可に含まれていること(絞り込みで機能を壊さない)
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     for grant in (
         "Bash(gh issue:*)",
         "Bash(gh pr:*)",
@@ -713,7 +717,10 @@ def test_commands_declare_data_boundary_and_least_privilege() -> None:
         "Bash(git worktree:*)",
         "Bash(git merge:*)",
         "Bash(git push:*)",
+        "Bash(git log:*)",  # 出荷前レビューの結果の有効性を first-parent の履歴で確かめる
+        "Bash(git merge-base:*)",
         "Write",
+        "Skill",  # 節の手順は Skill ツールで読み込む
     ):
         assert grant in loop.split("---")[1], grant  # frontmatter に存在する
     assert "許可されていない操作が必要になったら、実行せずに中断して報告する" in loop
@@ -741,7 +748,7 @@ def test_security_reflects_implemented_hardening() -> None:
     assert "allowlist の残余の遮断" in reserved
     assert "サブコマンド単位に絞るか hook" not in reserved  # 旧文(未実装扱い)が消えている
     # 実装の現物と一致していること
-    loop_front = (ROOT / "commands/loop.md").read_text().split("---")[1]
+    loop_front = loop_procedure().split("---")[1]
     assert "Bash(git *)" not in loop_front and "Bash(gh *)" not in loop_front
 
 
@@ -791,7 +798,7 @@ def test_loop_init_ships_via_bootstrap_pr() -> None:
 
 def test_code_review_round2_fixes() -> None:
     """2周目のレビュー所見(クラッシュ孤児、生存確認の権限、フォールバック等)の修正が残っていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "先に「⏳ 着手(run 識別つき)」コメントを1件残し、その直後に assign する" in loop
     for grant in ("Bash(ps:*)", "Bash(tail:*)"):
         assert grant in loop.split("---")[1], grant  # 長時間ジョブの生存確認に必要
@@ -806,14 +813,14 @@ def test_code_review_round2_fixes() -> None:
 
 def test_undone_items_have_issue_drafts() -> None:
     """3c の承認コメントが「やらなかったこと」の issue 下書きを添え、起票はしないこと。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "起票できる下書き" in loop
     assert "**起票はしない**" in loop
 
 
 def test_external_author_optin_is_designed() -> None:
     """外部起票の親は tasuki:accepted の opt-in が無ければループ対象外であること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "起票者の信頼チェック" in loop
     assert "author_association" in loop
     assert "tasuki:accepted" in loop
@@ -827,7 +834,7 @@ def test_external_author_optin_is_designed() -> None:
 
 def test_child_visibility_hygiene() -> None:
     """子 issue は機械の作業単位として、取り込み時に閉じ、一覧から絞れること(案C)。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "tasuki:child" in loop
     assert "子 issue を close する" in loop
     assert "保険として残す" in loop  # Closes 列挙の位置づけ
@@ -846,7 +853,7 @@ def test_parent_pr_is_designed_for_approval() -> None:
     ]
     for f in ("何が変わるか", "承認してほしい判断", "やらなかったこと", "リスクと戻し方"):
         assert f in fields, f
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # 裁量の決定を実装方針から親 PR へ集約する規則
     assert "承認してほしい判断" in loop
     assert "「選択と理由」から" in loop
@@ -865,7 +872,7 @@ def test_parent_pr_body_is_staged_and_traceable() -> None:
     検証が通る前に承認の文言を書くと、赤のまま「承認してほしい」と読める
     本文が世に出る。判断には出どころ(どの子)と検証点を必ず添える。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "前半(作成時から置く): 大観" in loop
     # 承認材料は本文の編集ではなく新規コメント(タイムラインの最後に現れる)
     assert "「新規コメント」として投稿する" in loop
@@ -885,7 +892,7 @@ def test_toc_adaptation_is_reflected() -> None:
     skill = (ROOT / "skills/gate-review/SKILL.md").read_text()
     assert "承認のサイズを検める" in skill  # 契約シグナルの照合として言い直した
     # C: レイヤー報告は覗いてよい任意のチェックポイント
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "覗いてよい任意のチェックポイント" in loop
 
 
@@ -909,7 +916,7 @@ def test_preship_review_recovers_from_crashed_review() -> None:
     自動実行の設定で「待ちを維持」を選ぶと、ラベルだけが残って親 PR が
     draft のまま無期限に止まり、triage inbox にも上がらない。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "コメントが無い場合の扱いは契約の `preship_review.mode` で分かれる" in loop
     assert "レビューを起動し直す" in loop
 
@@ -922,7 +929,7 @@ def test_providers_definition_has_a_home_in_the_target_repo() -> None:
     """
     init = (ROOT / "commands/loop-init.md").read_text()
     assert "`.tasuki/providers.yaml` へ書き出す" in init
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "`.tasuki/providers.yaml`" in loop
     # 導入先に存在しないパスを改変検知の対象にしない
     assert "packs/**/providers.yaml" not in loop
@@ -949,7 +956,8 @@ def test_section_references_carry_names() -> None:
     """
     pattern = re.compile(r"§[0-9]+(?:\.[0-9]+)?(?:[a-z](?:-[0-9])?)?")
     offenders = []
-    for path in sorted((ROOT / "commands").glob("*.md")):
+    procedure = [ROOT / rel for rel in LOOP_PROCEDURE_FILES]
+    for path in sorted({*(ROOT / "commands").glob("*.md"), *procedure}):
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
             if line.startswith("#") or "§番号" in line:  # 見出しと規約文そのものは除く
                 continue
@@ -999,7 +1007,7 @@ def test_final_trace_audit_findings_are_fixed() -> None:
 
     いずれも新規セッションが文字どおり歩くと詰まる箇所である。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # ブートストラップ PR 未マージのとき、作業ツリーを見て通過させない
     assert "作業ツリーを見てはならない" in loop
     # mechanical でも command を持たない provider はローカル実行しない
@@ -1025,7 +1033,7 @@ def test_gate_inputs_and_label_cleanup_are_complete() -> None:
     受け手が使うと宣言しているものを渡し手が渡していない、付けたラベルを外す手順が
     ゲート無効時に走らない、といった穴は run を止めるか triage を汚す。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # 統合ゲートにも契約を渡す(gate-reviewer は契約ファイルを自力で読めない)
     assert "契約の `gates.integration.phase` が指すフェーズの `receives` 定義" in loop
     # 出荷前レビューは AC / SC を照合するので子 issue の欄が要る
@@ -1087,7 +1095,7 @@ def test_subagent_nesting_claims_match_current_spec() -> None:
 
 def test_contract_consolidation_review_fixes() -> None:
     """契約一本化の変更に対する5観点レビュー所見の修正が残っていること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # 差し戻し委譲の入力(前提入力を毎回渡す。既存 PR の継続は maker 側の確認に依る)
     assert "差し戻しの委譲でも毎回渡す" in loop
     assert "既存 PR」を確認して行う" in loop
@@ -1124,7 +1132,7 @@ def test_report_fields_carry_meaning_comments() -> None:
 
 def test_mechanical_preflight_survives_gate_removal() -> None:
     """LLM 判定を外した契約でも、必須欄の空チェックは走ること。"""
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "`enabled_gates` に `start` が無くても走らせる" in loop
     assert "`preflight: template-fields` を持つ契約で走る" in loop  # 有無は契約から引く
     assert "人間が起票した子" in loop  # 分割ゲートを通っていない子は LLM 判定へ
@@ -1230,7 +1238,7 @@ def test_external_issue_opt_in_is_described_consistently() -> None:
     共通規範が最も強い禁止を述べると、読み手は実装済みの経路を禁止機能と解する。
     """
     boundary = (ROOT / "skills/data-boundary/SKILL.md").read_text()
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     init = (ROOT / "commands/loop-init.md").read_text()
     for text, name in ((boundary, "data-boundary"), (loop, "loop.md"), (init, "loop-init.md")):
         assert "tasuki:accepted" in text, name
@@ -1256,7 +1264,7 @@ def test_verifier_declares_every_input_its_steps_need() -> None:
     # 判定基準の版を固定する(worker のブランチ側の写しを読まない)
     assert "default branch の版を読む" in verifier
     # 呼び出し側(loop.md)が同じものを渡すこと
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "子 issue の要件(目的、受け入れ条件、成功基準、打ち切り条件)" in loop
 
 
@@ -1289,7 +1297,7 @@ def test_perspective_references_resolve_to_catalog_names() -> None:
     }
     assert len(names) == 25, sorted(names)
     # 出荷前レビューの観点は別の語彙(正は loop.md の 3c 表)。こちらも名前で引ける
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     preship = loop.split("| # | 観点 | 見るもの |")[1].split("\n\n")[0]
     names |= {
         line.split("|")[2].strip() for line in preship.splitlines() if line.count("|") >= 3
@@ -1325,7 +1333,7 @@ def test_procedure_can_actually_be_walked() -> None:
     git の制約(二重 checkout の拒否、生成物がある worktree の削除拒否)と、
     gh が返さない欄(author_association)は実測で確かめたものである。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     verifier = (ROOT / "agents/verifier.md").read_text()
     worker = (ROOT / "agents/worker.md").read_text()
     init = (ROOT / "commands/loop-init.md").read_text()
@@ -1427,7 +1435,7 @@ def test_integration_branch_repair_is_not_a_mechanism() -> None:
     漏れ1つになった(実際、粒度の不一致は着手ゲートが必ず差し戻す欠陥として
     現れた)。実走の例が0件のまま器を固定しない、という判断を守る。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "統合ブランチが直せない状態になったとき(conflict、または checks-local が赤)" in loop
     assert "**ループは自分で直さず、止めて人間に渡す。**" in loop
     assert "**自己修復の機構をループに持たせない。**" in loop
@@ -1496,8 +1504,148 @@ def test_loop_forbids_resuming_workers_with_sendmessage() -> None:
     前セッションのコンテキストごと再開するため、この規定の抜け道になる。
     2c(実装)と 2e(内側ループの出口)の両方に禁止があることを固定する。
     """
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     sec_2c = loop[loop.index("### 2c. 実装") : loop.index("### 2d.")]
     sec_2e = loop[loop.index("### 2e. 内側ループの出口") : loop.index("### 2f.")]
     assert "完了済みの worker を `SendMessage` で再開しない" in sec_2c
     assert "`SendMessage` で元の worker を再開する経路も使わない" in sec_2e
+
+
+def _numbered_rules(entry: str) -> dict[int, str]:
+    """入口の「読み込みの規則」を、番号から規則の1行への対応にして返す。"""
+    block = entry.split("**読み込みの規則**")[1].split("**この run の起動引数")[0]
+    return {int(n): line for n, line in re.findall(r"^(\d+)\. (.*)$", block, re.M)}
+
+
+def test_loop_procedure_survives_compaction() -> None:
+    """/tasuki:loop の手順が、会話の要約(compaction)の後も失われない構成であること。
+
+    compaction の後に付け直されるのは、起動済みの skill それぞれの先頭 5,000 トークンだけで、
+    合計 25,000 トークンの枠は新しく起動した skill から埋まる。起動し直せば全文が戻る
+    (https://code.claude.com/docs/en/skills 、ROADMAP の実装時検証事項の項目16)。
+    約4.5万字の手順を1枚で持つと、長い run の途中で §2 の 2a 以降を失った orchestrator が
+    記憶から再構成した手順で走り続ける。入口を小さく保ち、節は skill に分けて読み込み直す。
+    """
+    entry = (ROOT / "commands/loop.md").read_text()
+    # 日本語は1字が1トークン前後になるため、字数で余裕を持って上限を置く
+    assert len(entry) < 4000, len(entry)
+    rules = _numbered_rules(entry)
+    assert sorted(rules) == list(range(1, len(rules) + 1)), sorted(rules)
+    # 規則1: run の最初に共通規則と停止装置を読む(一時停止の確認は §0 から要る)
+    assert "`tasuki:loop-rules`" in rules[1] and "`tasuki:loop-brake`" in rules[1]
+    assert "`tasuki:loop-restore`" in rules[1]
+    # 規則2: 節へ進む直前に読み込む
+    assert "進む直前に" in rules[2]
+    # 規則3: 要約の後に読み込み直す(付け直しの枠から落ちやすい最初の skill も含める)
+    assert "要約" in rules[3] and "読み込み直す" in rules[3]
+    assert "`tasuki:loop-rules`" in rules[3] and "`tasuki:loop-brake`" in rules[3]
+    assert any("記憶から再構成しない" in line for line in rules.values())
+    # 読み込みに失敗したら黙って終わらず、親 issue に理由を残す
+    assert any("読み込みに失敗したら" in line and "親 issue" in line for line in rules.values())
+    # 引数は入口でしか置換されない(skill の中の $ARGUMENTS は skill 自身の引数になる)
+    assert "$ARGUMENTS" in entry
+    for rel in LOOP_PROCEDURE_FILES[1:]:
+        text = (ROOT / rel).read_text()
+        assert "$ARGUMENTS" not in text, rel
+        # 各節は付け直しの上限(5,000 トークン)に収まる大きさに保つ。`claude plugin details` の
+        # 推定では日本語の手順は1字あたり約4分の1トークンなので、字数で余裕を持って見張る。
+        # 超えたら節をさらに分ける(要約の後に付け直された写しが途中で切れる)
+        assert len(text) < 19000, (rel, len(text))
+
+
+def test_loop_entry_table_matches_section_skills() -> None:
+    """入口の対応表の各行が、実在する skill と、その skill が持つ節を正しく指すこと。
+
+    手順を連結して検めるテストは、節がどの skill にあるかを見ない。表と実体がずれると、
+    規則4(参照先の skill を読み込んでから従う)に従った orchestrator が別の skill を開く。
+    """
+    entry = (ROOT / "commands/loop.md").read_text()
+    table = entry.split("## 手順の読み込み")[1].split("**読み込みの規則**")[0]
+    rows = re.findall(r"^\| (.+?) \| `tasuki:(loop-[a-z]+)` \|$", table, re.M)
+    names = [name for _, name in rows]
+    assert names == [rel.split("/")[1] for rel in LOOP_PROCEDURE_FILES[1:]], names
+    for label, name in rows:
+        path = ROOT / "skills" / name / "SKILL.md"
+        fm = frontmatter(path)
+        # plugin skill の呼び名は name: から決まる(表の tasuki:<name> が解決できること)
+        assert fm["name"] == name, name
+        # orchestrator が Skill ツールで読み込むため、モデルからの起動を禁じない
+        assert not fm.get("disable-model-invocation"), name
+        assert fm.get("user-invocable") is False, name
+        body = _FRONTMATTER_RE.sub("", path.read_text(), count=1)
+        held = set(re.findall(r"^## (\d)\. ", body, re.M))
+        claimed = set(re.findall(r"§(\d)\(", label))
+        assert held == claimed, (name, held, claimed)
+        if not claimed:
+            assert "## ゲート共通の規則" in body, name
+
+
+def test_section_skills_share_the_reload_preamble() -> None:
+    """節の skill の冒頭の定型部(読み込み直しの規則)が、6つで一字一句同じであること。
+
+    どの skill が付け直されても規則が残るよう同じ文を各 skill に重ねている。
+    重ねた写しは一致をテストで固定する(ドキュメント規約の単一ソース)。
+    付け直しは先頭 5,000 トークンだけなので、定型部は本文より前に置く。
+    """
+    preambles = set()
+    for rel in LOOP_PROCEDURE_FILES[1:]:
+        body = _FRONTMATTER_RE.sub("", (ROOT / rel).read_text(), count=1)
+        head = body.split("\n## ")[0]
+        preamble = head.split("\n\n", 1)[1]  # 見出し(# ...)の後の段落
+        assert "読み込み直す" in preamble and "記憶から再構成しない" in preamble, rel
+        assert "`tasuki:loop-brake`" in preamble, rel
+        preambles.add(preamble)
+    assert len(preambles) == 1, preambles
+
+
+def test_loop_changes_from_the_redesign_review_are_fixed() -> None:
+    """再設計のレビューで見つかった手順の穴が、実行できる形で塞がれていること。"""
+    child = (ROOT / "skills/loop-child/SKILL.md").read_text()
+    merge = (ROOT / "skills/loop-merge/SKILL.md").read_text()
+    rules = (ROOT / "skills/loop-rules/SKILL.md").read_text()
+    plan = (ROOT / "skills/loop-plan/SKILL.md").read_text()
+    restore = (ROOT / "skills/loop-restore/SKILL.md").read_text()
+    # worker 起動の直前に一時停止を確かめる(§4 が要約で落ちてもブレーキが残る)
+    before_worker = child.split("#### 再入点の決定")[0]
+    assert "`loop:pause` と `loop:replan` を確認する" in before_worker
+    # 子 PR のマージ方式を明示する(非対話の gh pr merge は方式が無いと失敗する)
+    shipping = child.split("### 2g.")[1]
+    assert "`gh pr merge <PR> --merge`" in shipping
+    assert "`--delete-branch` は付けない" in shipping
+    assert "rebaseMergeAllowed" in shipping
+    # 出荷前レビューの結果は SHA で有効性を決め、ループ自身の取り込みでは無効にしない
+    state = merge.split("**状態の持ち方**")[1]
+    assert "SHA で比べる(時刻では比べない" in state
+    assert "--first-parent" in state and "merge-base --is-ancestor" in state
+    # 所見の triage は、理由の書き足しの後、結果コメントより先に付ける
+    # (間で落ちても受け入れと誤認せず、理由の無い triage も残さない)
+    assert "次に親 issue に `loop:triage` を付け、その後で**結果コメント" in merge
+    # 再入時は、レビューを起動する前に有効な結果を判定する
+    assert "レビューを起動する前に、下の「状態の持ち方」で有効なレビュー結果" in merge
+    # 人間が衝突を解消した merge は、取り込みとみなさずレビューし直す
+    assert "`git show --cc --format= <merge commit>` が空" in state
+    # manual では、現在の head の SHA を付けた出力だけを入力に数える
+    assert "SHA が現在の head と一致する出力だけ" in state
+    # 定点の取り込みは統合ブランチの最新から作り、HEAD を push する
+    assert "`git push origin HEAD:loop/parent-<親番号>`" in merge
+    # 外されている triage は人間の受け入れであり、付け直さない
+    assert "**`loop:triage` が外されている** → 人間が所見を直さずに受け入れた" in state
+    # 再レビューで所見が消えたら、前の所見の triage を外す
+    assert "所見で付けた `loop:triage`(前の結果コメント、" in state
+    # 沈黙の triage は、所見ありのときは外さずに引き継ぐ(評価順で受け入れと誤認しない)
+    assert "そのまま所見による停止の triage として引き継ぐ" in state
+    # ready 化の後に所見が出たら draft に戻す
+    assert "`gh pr ready --undo`" in state
+    # 親 PR の check-runs が全緑でないときの扱い
+    assert "§2g(出荷ゲート)の分類に従う" in merge
+    # エスカレーションの上限超過は、判定対象の issue に記録する(親のゲートでも子に付けない)
+    assert "**判定対象の issue**(子のゲートなら子 issue、親のゲートなら親 issue)" in rules
+    # 統合ゲートの提案を適用したら returned を外す(古い提案の再適用を防ぐ)
+    assert "`loop:triage` と `gate:integration-returned` を外し" in plan
+    # reviewer の空の応答や読めない verdict を、PASS とも差し戻しとも読まない(E2E で発生)
+    assert "判定が無かったものとして扱う" in rules
+    # auto モードの分類器は未承認 PR のマージを止めるので、allow 規則を提案する(E2E で発生)
+    init = (ROOT / "commands/loop-init.md").read_text()
+    assert "`Bash(gh pr merge:*)` の allow 規則" in init
+    # 識別子の無い開始コメントを引き継がない(二重起動の検知が効かなくなる)
+    assert "それを自分のものとして引き継がない" in restore

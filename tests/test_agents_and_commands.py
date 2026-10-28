@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import ROOT, frontmatter
+from conftest import ROOT, frontmatter, loop_procedure
 
 AGENT_FILES = sorted((ROOT / "agents").glob("*.md"))
 COMMAND_FILES = sorted((ROOT / "commands").glob("*.md"))
@@ -57,7 +57,7 @@ def test_reviewer_is_single_agent_with_per_call_model() -> None:
     """
     reviewers = [p for p in AGENT_FILES if "gate-reviewer" in p.name]
     assert [p.name for p in reviewers] == ["gate-reviewer.md"], reviewers
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     assert "判定モデルは呼び出しごとに指定する" in loop
     # モデルの正は契約であり、手順書はモデル名を持たない(契約が全ゲートに値を持つため、
     # 手順書に写した表は実行時に一度も使われず、導入先が値を変えると即座に嘘になる)
@@ -84,7 +84,7 @@ def test_command_and_skill_frontmatter(path: Path) -> None:
 def test_loop_references_existing_agents() -> None:
     """loop.md が委譲する agent 名は、実在する agent の name と一致すること。"""
     agent_names = {frontmatter(p)["name"] for p in AGENT_FILES}
-    loop_text = (ROOT / "commands/loop.md").read_text()
+    loop_text = loop_procedure()
     for name in (
         "tasuki-gate-reviewer",
         "tasuki-worker",
@@ -129,7 +129,7 @@ def test_verifier_status_contract() -> None:
     """verifier の status 列挙と loop.md の分岐が一致すること(drifting は status ではない)。"""
     verifier_text = (ROOT / "agents/verifier.md").read_text()
     assert '"met | continue | abort | waiting"' in verifier_text
-    loop_text = (ROOT / "commands/loop.md").read_text()
+    loop_text = loop_procedure()
     assert "drift_check" in loop_text, "loop.md は drift_check を先に判定する"
 
 

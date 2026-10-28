@@ -2,7 +2,7 @@
 
 tasuki の設計文書一式。
 設計の正はこの docs であり、コードと食い違いを見つけたら docs を直してから実装する。
-ただし**ループの手順そのものの正は [commands/loop.md](../commands/loop.md)** であり(docs は手順を説明する側)、開発規約の正は [.claude/rules/](../.claude/rules/) である。
+ただし**ループの手順そのものの正は [commands/loop.md](../commands/loop.md)(入口)と、そこから読み込む節ごとの skill(`skills/loop-{rules,restore,plan,child,merge,brake}`。worker 用の `loop-report` は含まない)** であり(docs は手順を説明する側)、開発規約の正は [.claude/rules/](../.claude/rules/) である。
 
 ## 読む順序
 

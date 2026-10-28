@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from conftest import ROOT
+from conftest import ROOT, loop_procedure
 from test_docs import _WRITING_TARGETS  # pyright: ignore[reportPrivateUsage]
 
 
@@ -213,7 +213,7 @@ def test_repo_override_may_add_required_fields() -> None:
     assert "必須欄(`templates`)の追加" in init
     # 追加したい欄を棚卸しで採取する手順があること
     assert "毎回テンプレが問いかけたい欄があるかをユーザーに確認する" in init
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     # 導入先が足した欄の意味が着手ゲートに届くこと
     assert "`child_issue_required_fields`(欄コメントを含む" in loop
     assert "`child_issue_required_fields`" in (ROOT / "skills/gate-review/SKILL.md").read_text()
@@ -235,7 +235,7 @@ def test_loop_contract_keys_exist_in_profiles() -> None:
 
     import yaml
 
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     referenced = set(
         re.findall(
             r"`(max_iterations_per_gate|max_inner_loop|wip_limit_prs|stale_assignment_minutes)`",
@@ -269,7 +269,7 @@ def test_loop_does_not_hardcode_phase_names() -> None:
     """loop.md がプロファイル固有のフェーズ名を直接書かないこと。"""
     import re
 
-    loop = (ROOT / "commands/loop.md").read_text()
+    loop = loop_procedure()
     hardcoded = re.findall(r"(?:decomposition|implementation|execution|analysis) フェーズ", loop)
     assert not hardcoded, hardcoded
     assert loop.count("phase`") >= 5  # 5つの abstraction ゲートすべてが契約から引く

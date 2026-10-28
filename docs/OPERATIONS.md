@@ -74,14 +74,14 @@ security-review Action の制約は4つある(採用時に README とドキュ�
 
 形式ゲートと成果ゲートを通っても、**コードの設計と正しさは誰も見ていない**。
 形式ゲートは機械判定、成果ゲートはレポートの形式照合であり、どちらも実装の良否を扱わない。
-そこで親 PR に対して、orchestrator が subagent でレビューを自動実行する(loop.md の 3c「出荷前レビュー」)。
+そこで親 PR に対して、orchestrator が subagent でレビューを自動実行する(`/tasuki:loop` の手順の 3c「出荷前レビュー」)。
 
 - 実行条件は「統合ゲート PASS、親 PR の check-runs 全緑、統合ブランチの merge-base が default branch の先端と一致」。反復のたびには行わず、フィーチャーの完成形(親 PR の全差分)に対して1回行う
 - 5観点(設計と統合、正しさと境界条件、テストの妥当性、複雑さと可読性、運用影響)を、契約の `preship_review` の規模で回す(既定 scaled: 小さい diff は1セッションに5観点、大きい diff は観点別5セッション。manual にすると従来どおり人間が起動する)
 - 変更が認証、権限、外部入力、秘密情報、CI 設定に触れるなら `/claude-security:claude-security` の実行を人間に案内する(別建ての API 課金が人間の判断に属するため、これは自動実行しない)
 - 所見はそのまま採用しない。orchestrator がどのツリーに対して走ったかを確認し、再現条件を確かめ、実在するものだけを worker への差し戻しにする
 
-観点の正は [commands/loop.md](../commands/loop.md) の出荷前レビュー節である。
+観点の正は [skills/loop-merge/SKILL.md](../skills/loop-merge/SKILL.md) の出荷前レビュー節である。
 
 ## issue に残す出力の原則
 
